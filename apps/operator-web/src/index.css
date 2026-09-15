@@ -1,0 +1,16 @@
+/* The whole theme lives in the shared kit so both PWAs stay identical. */
+@import '@suarza/ui/styles.css';
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  /* The operator works at a glance and often at arm's length from the screen;
+     nothing here should be small enough to lean in for. */
+  body {
+    font-size: 16px;
+  }
+}

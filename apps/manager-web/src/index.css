@@ -1,0 +1,25 @@
+/* The whole theme lives in the shared kit so both PWAs stay identical. */
+@import '@suarza/ui/styles.css';
+@import 'react-day-picker/style.css';
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  /* Match the date picker to the app's accent rather than its own default. */
+  .rdp-suarza {
+    --rdp-accent-color: hsl(var(--primary));
+    --rdp-accent-background-color: hsl(var(--primary) / 0.12);
+    --rdp-today-color: hsl(var(--primary));
+    margin: 0;
+  }
+
+  /* The operator works at a glance and often at arm's length from the screen;
+     nothing here should be small enough to lean in for. */
+  body {
+    font-size: 16px;
+  }
+}

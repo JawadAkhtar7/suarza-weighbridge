@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mirrors the `.tabular` helper in @suarza/ui's globals.css. Weights, slip
+   numbers and amounts are read at a glance and easily mis-transcribed, so
+   their digits must line up. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+body {
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+/* Urdu labels on the receipt. Nastaliq where the machine has it, naskh
+   otherwise — both are readable; the isolate stops the RTL run from dragging
+   the surrounding English around. */
+.urdu {
+  font-family:
+    'Noto Nastaliq Urdu',
+    'Jameel Noori Nastaleeq',
+    'Urdu Typesetting',
+    'Segoe UI',
+    system-ui,
+    sans-serif;
+  direction: rtl;
+  unicode-bidi: isolate;
+  line-height: 1.5;
+}

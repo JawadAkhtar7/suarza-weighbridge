@@ -1,0 +1,175 @@
+/**
+ * Operator app shell.
+ *
+ * Two modes, exactly as the brief describes them (§9): a truck is either
+ * arriving for its first weighing or coming back with a slip. The live-weight
+ * panel never leaves the screen, so whichever mode is open the operator can
+ * always see whether the number they are about to commit is real.
+ *
+ * Only the active mode is mounted — both modes bind the same function keys, and
+ * leaving the inactive one alive would make F9 ambiguous.
+ */
+
+import { useState } from 'react';
+import { Button, cn, toast } from '@suarza/ui';
+import type { Weighment } from '@suarza/shared';
+import { Plus, Settings, Undo2 } from 'lucide-react';
+import { LiveWeightPanel } from './components/live-weight-panel.js';
+import { WeightCapture, type CapturedWeight } from './components/weight-capture.js';
+import { NewWeighmentForm } from './components/new-weighment-form.js';
+import { SavedWeighment } from './components/saved-weighment.js';
+import { ReturnWeighment } from './components/return-weighment.js';
+import { SettingsPanel } from './components/settings-panel.js';
+import { useLiveWeight, useSyncStatus } from './hooks/use-live-weight.js';
+import type { AgentWarning } from './lib/api.js';
+
+type Mode = 'first' | 'second';
+
+export function App() {
+  const live = useLiveWeight();
+  const sync = useSyncStatus();
+
+  const [mode, setMode] = useState<Mode>('first');
+  const [captured, setCaptured] = useState<CapturedWeight | null>(null);
+  const [saved, setSaved] = useState<Weighment | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const switchMode = (next: Mode) => {
+    if (next === mode) return;
+    // A captured weight belongs to the pass it was taken for; carrying it
+    // across modes is how a first weight ends up recorded as a second one.
+    setCaptured(null);
+    setSaved(null);
+    setMode(next);
+  };
+
+  const handleSaved = (weighment: Weighment, warnings: AgentWarning[]) => {
+    setSaved(weighment);
+    setCaptured(null);
+
+    toast.success(`Saved — slip ${weighment.slip_number}`, {
+      description: `${weighment.customer_name} · ${weighment.vehicle_plate}`,
+    });
+
+    // Advice, not an error: a second open ticket for the same plate is
+    // unusual but legitimate, so it is surfaced and the save still stands.
+    for (const warning of warnings) {
+      toast.warning(warning.message, { duration: 8000 });
+    }
+  };
+
+  return (
+    <div className="min-h-full bg-muted/30">
+      <header className="border-b bg-background">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2.5 sm:px-6">
+          {/* The logo is the whole identity here — `mr-auto` moved onto it now
+              that the wording beside it is gone, so the nav still sits right. */}
+          <img
+            src="/logo.png"
+            srcSet="/logo.png 1x, /logo@3x.png 3x"
+            alt="Suarza International"
+            className="mr-auto h-12 w-auto"
+          />
+
+          <nav className="flex gap-1 rounded-md bg-muted p-1" aria-label="Weighing mode">
+            {/* Labels are the client's wording. The mode keys stay 'first' /
+                'second' because that is what the records and the receipts
+                mean — renaming those would make the code lie about the data. */}
+            <ModeButton active={mode === 'first'} onClick={() => switchMode('first')}>
+              <Plus className="h-4 w-4" />
+              First weight
+            </ModeButton>
+            <ModeButton active={mode === 'second'} onClick={() => switchMode('second')}>
+              <Undo2 className="h-4 w-4" />
+              Main
+            </ModeButton>
+          </nav>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Printing and receipt settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="h-5 w-5" />
+          </Button>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <div className="grid gap-6 lg:grid-cols-[minmax(320px,26rem)_1fr] lg:items-start">
+          <div className="space-y-4 lg:sticky lg:top-6">
+            <LiveWeightPanel
+              live={live}
+              pendingSyncCount={sync.pendingCount}
+              online={sync.online}
+            />
+
+            {/* In second-weight mode the capture control lives inside the
+                flow, next to the record it belongs to, so it isn't duplicated
+                here. */}
+            {mode === 'first' && !saved && (
+              <WeightCapture
+                live={live}
+                captured={captured}
+                onCapture={setCaptured}
+                onClear={() => setCaptured(null)}
+              />
+            )}
+          </div>
+
+          <div>
+            {mode === 'first' ? (
+              saved ? (
+                <SavedWeighment
+                  weighment={saved}
+                  onNext={() => {
+                    setSaved(null);
+                    setCaptured(null);
+                  }}
+                />
+              ) : (
+                <NewWeighmentForm captured={captured} onSaved={handleSaved} />
+              )
+            ) : (
+              <ReturnWeighment
+                live={live}
+                captured={captured}
+                onCapture={setCaptured}
+                onClearCapture={() => setCaptured(null)}
+              />
+            )}
+          </div>
+        </div>
+      </main>
+
+      <SettingsPanel open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </div>
+  );
+}
+
+function ModeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      aria-current={active ? 'page' : undefined}
+      onClick={onClick}
+      className={cn(
+        'gap-1.5 text-sm',
+        active && 'bg-background text-foreground shadow-sm hover:bg-background',
+      )}
+    >
+      {children}
+    </Button>
+  );
+}

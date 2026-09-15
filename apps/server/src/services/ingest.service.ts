@@ -1,0 +1,151 @@
+/**
+ * Agent → cloud ingest (brief §7.4, §11).
+ *
+ * Idempotent by construction: every document is keyed on the record's UUID, so
+ * a batch re-sent after a timeout upserts the same documents instead of
+ * duplicating them. The agent decides what to send; the cloud never invents or
+ * merges data.
+ */
+
+import type { AuditEntry, IngestResponse, Weighment } from '@suarza/shared';
+import { WeighmentModel } from '../models/weighment.model.js';
+import { AuditModel } from '../models/audit.model.js';
+
+/** Fields that come from the agent, with dates parsed for Mongo. */
+function toDocument(weighment: Weighment): Record<string, unknown> {
+  return {
+    slip_number: weighment.slip_number,
+    status: weighment.status,
+    station_id: weighment.station_id,
+    customer_name: weighment.customer_name,
+    customer_company: weighment.customer_company,
+    customer_phone: weighment.customer_phone ?? null,
+    vehicle_type: weighment.vehicle_type,
+    vehicle_plate: weighment.vehicle_plate,
+    container_number: weighment.container_number ?? null,
+    product: weighment.product,
+    first_weight_kg: weighment.first_weight_kg,
+    first_weight_at: new Date(weighment.first_weight_at),
+    first_weight_src: weighment.first_weight_src,
+    second_weight_kg: weighment.second_weight_kg,
+    second_weight_at: weighment.second_weight_at ? new Date(weighment.second_weight_at) : null,
+    second_weight_src: weighment.second_weight_src,
+    net_weight_kg: weighment.net_weight_kg,
+    amount_charged: weighment.amount_charged,
+    currency: weighment.currency,
+    operator_username: weighment.operator_username,
+    created_at: new Date(weighment.created_at),
+    updated_at: new Date(weighment.updated_at),
+    void_reason: weighment.void_reason,
+    voided_at: weighment.voided_at ? new Date(weighment.voided_at) : null,
+    synced_at: new Date(),
+  };
+}
+
+export interface IngestResult extends IngestResponse {
+  /** Ids skipped because the stored copy is already newer. */
+  skipped_ids: string[];
+  audit_inserted: number;
+}
+
+export async function ingest(
+  weighments: Weighment[],
+  auditEntries: AuditEntry[],
+): Promise<IngestResult> {
+  const acceptedIds: string[] = [];
+  const skippedIds: string[] = [];
+  const rejected: { id: string; reason: string }[] = [];
+
+  if (weighments.length > 0) {
+    // One read to find records the cloud already holds a NEWER copy of. Two
+    // batches can overlap on a retry, and an older copy arriving second must
+    // not undo a completion (brief §11: retries and reconnect sweeps).
+    const ids = weighments.map((w) => w.id);
+    const existing = await WeighmentModel.find({ _id: { $in: ids } })
+      .select({ _id: 1, updated_at: 1 })
+      .lean();
+
+    const storedUpdatedAt = new Map(
+      existing.map((doc) => [String(doc._id), new Date(doc.updated_at).getTime()]),
+    );
+
+    const operations = [];
+    for (const weighment of weighments) {
+      const stored = storedUpdatedAt.get(weighment.id);
+      const incoming = new Date(weighment.updated_at).getTime();
+
+      if (stored !== undefined && stored > incoming) {
+        // Already accepted from the agent's point of view — it must stop
+        // retrying this record, so it counts as accepted, not rejected.
+        skippedIds.push(weighment.id);
+        acceptedIds.push(weighment.id);
+        continue;
+      }
+
+      operations.push({
+        updateOne: {
+          filter: { _id: weighment.id },
+          update: { $set: toDocument(weighment) },
+          upsert: true,
+        },
+      });
+    }
+
+    if (operations.length > 0) {
+      try {
+        await WeighmentModel.bulkWrite(operations, { ordered: false });
+        for (const operation of operations) {
+          acceptedIds.push(String(operation.updateOne.filter._id));
+        }
+      } catch (error) {
+        // One bad record must not cost the whole batch: with ordered:false the
+        // rest were written, so only the failures are reported back.
+        const writeErrors = (error as { writeErrors?: { index: number; errmsg?: string }[] })
+          .writeErrors;
+        if (!writeErrors) throw error;
+
+        const failedIndexes = new Set(writeErrors.map((e) => e.index));
+        operations.forEach((operation, index) => {
+          const id = String(operation.updateOne.filter._id);
+          if (failedIndexes.has(index)) {
+            const failure = writeErrors.find((e) => e.index === index);
+            rejected.push({ id, reason: failure?.errmsg ?? 'Write failed' });
+          } else {
+            acceptedIds.push(id);
+          }
+        });
+      }
+    }
+  }
+
+  let auditInserted = 0;
+  if (auditEntries.length > 0) {
+    const auditOperations = auditEntries.map((entry) => ({
+      updateOne: {
+        filter: { _id: entry.id },
+        update: {
+          $set: {
+            weighment_id: entry.weighment_id,
+            action: entry.action,
+            actor_username: entry.actor_username,
+            detail: entry.detail,
+            at: new Date(entry.at),
+            synced_at: new Date(),
+          },
+        },
+        upsert: true,
+      },
+    }));
+
+    const result = await AuditModel.bulkWrite(auditOperations, { ordered: false });
+    auditInserted = result.upsertedCount;
+  }
+
+  return {
+    accepted_ids: acceptedIds,
+    skipped_ids: skippedIds,
+    rejected,
+    audit_inserted: auditInserted,
+    received_at: new Date().toISOString(),
+  };
+}

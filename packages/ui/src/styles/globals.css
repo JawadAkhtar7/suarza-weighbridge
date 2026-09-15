@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Suarza theme tokens.
+ *
+ * A neutral slate base with ONE brand accent (brief §9). The accent below is a
+ * deep industrial blue placeholder — when the client sends the logo, change
+ * only `--primary` / `--ring` here and both PWAs follow. Nothing else in the
+ * codebase hardcodes a brand colour.
+ *
+ * Contrast: --primary at 40% lightness against --primary-foreground (white)
+ * clears WCAG AA for body text, which matters because the operator reads this
+ * screen all day in a room with poor lighting.
+ */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Sampled from the Suarza logo: green #155932, orange #f68522. These
+       replace the placeholder blue now that the real mark exists. */
+    --primary: 146 62% 22%;
+    --primary-foreground: 0 0% 100%;
+    --brand-orange: 28 92% 55%;
+    --brand-orange-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Semantic states used by the live-weight panel and sync badges. */
+    --success: 152 62% 30%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 92% 38%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 146 62% 22%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 45% 12%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 45% 12%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 146 48% 48%;
+    --primary-foreground: 146 70% 10%;
+    --brand-orange: 28 92% 58%;
+    --brand-orange-foreground: 28 90% 12%;
+
+    --secondary: 217 33% 18%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 18%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 33% 18%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 51%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 152 55% 45%;
+    --success-foreground: 222 47% 11%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 222 47% 11%;
+
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 146 48% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+  }
+
+
+/* Urdu labels on the receipt. Nastaliq where the machine has it, naskh
+   otherwise — both are readable; the isolate stops the RTL run from dragging
+   the surrounding English around. */
+.urdu {
+  font-family:
+    'Noto Nastaliq Urdu',
+    'Jameel Noori Nastaleeq',
+    'Urdu Typesetting',
+    'Segoe UI',
+    system-ui,
+    sans-serif;
+  direction: rtl;
+  unicode-bidi: isolate;
+  line-height: 1.5;
+}
+
+  /* Weights, slip numbers and amounts are read at a glance and often
+     mis-transcribed — tabular figures keep digits aligned and unambiguous. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+}

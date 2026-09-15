@@ -1,0 +1,13 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+
+# Native/postinstall builds we explicitly trust. pnpm blocks all others by
+# default; better-sqlite3 and the serialport bindings must compile for the
+# agent, esbuild is vitest's/vite's bundler, and mongodb-memory-server
+# downloads a mongod binary so the server tests are hermetic.
+allowBuilds:
+  esbuild: true
+  better-sqlite3: true
+  "@serialport/bindings-cpp": true
+  mongodb-memory-server: true

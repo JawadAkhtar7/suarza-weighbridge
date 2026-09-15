@@ -1,0 +1,48 @@
+/**
+ * Server entrypoint (runs under PM2 on the DigitalOcean droplet — brief §14).
+ *
+ * The database connects before the HTTP listener opens: a server that accepts
+ * an ingest it cannot store would tell the agent a record was safe when it was
+ * not, and the agent would stop retrying it.
+ */
+
+import { loadConfig } from './config.js';
+import { connectDatabase, describeConnection, disconnectDatabase } from './db/connection.js';
+import { seedUsers } from './services/auth.service.js';
+import { buildApp } from './app.js';
+
+async function main(): Promise<void> {
+  const config = loadConfig();
+
+  await connectDatabase({ uri: config.MONGODB_URI });
+  console.info(`Connected to MongoDB: ${describeConnection()}`);
+
+  const created = await seedUsers();
+  if (created > 0) console.info(`Seeded ${created} user account(s)`);
+
+  const app = buildApp({ config, serveManagerWeb: config.SERVE_MANAGER_WEB });
+
+  const server = app.listen(config.PORT, () => {
+    console.info(`Suarza weighbridge server listening on port ${config.PORT}`);
+    console.info(`Public receipts at ${config.APP_DOMAIN}/r/:slip`);
+  });
+
+  let shuttingDown = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.info(`${signal} received — shutting down`);
+    server.close();
+    await disconnectDatabase();
+    process.exit(0);
+  };
+
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(signal, () => void shutdown(signal));
+  }
+}
+
+main().catch((error: unknown) => {
+  console.error(`Server failed to start: ${(error as Error).message}`);
+  process.exit(1);
+});

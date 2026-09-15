@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    // Node types cover vite.config.ts / tailwind.config.js; the vite ones cover
+    // import.meta.env and the PWA virtual modules.
+    "types": ["node", "vite/client", "vite-plugin-pwa/client"],
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src", "test", "vite.config.ts", "vitest.config.ts"]
+}
