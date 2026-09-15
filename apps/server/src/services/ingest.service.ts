@@ -11,6 +11,7 @@ import type { AuditEntry, IngestResponse, StationProfile, Weighment } from '@sua
 import { WeighmentModel } from '../models/weighment.model.js';
 import { AuditModel } from '../models/audit.model.js';
 import { StationModel } from '../models/station.model.js';
+import { postWeighmentCharges } from './ledger.service.js';
 
 /** Fields that come from the agent, with dates parsed for Mongo. */
 function toDocument(weighment: Weighment): Record<string, unknown> {
@@ -34,6 +35,7 @@ function toDocument(weighment: Weighment): Record<string, unknown> {
     net_weight_kg: weighment.net_weight_kg,
     amount_charged: weighment.amount_charged,
     currency: weighment.currency,
+    payment_status: weighment.payment_status,
     operator_username: weighment.operator_username,
     created_at: new Date(weighment.created_at),
     updated_at: new Date(weighment.updated_at),
@@ -183,6 +185,18 @@ export async function ingest(
           }
         });
       }
+    }
+  }
+
+  // The ledger follows the weighments. Deliberately after the write and inside
+  // its own guard: a weighbridge record reaching the cloud matters more than
+  // the ledger being instantly current, and the next batch re-posts anyway
+  // because the charge is keyed on the weighment id.
+  if (weighments.length > 0) {
+    try {
+      await postWeighmentCharges(weighments);
+    } catch (error) {
+      console.error('Ledger posting failed for this batch:', (error as Error).message);
     }
   }
 

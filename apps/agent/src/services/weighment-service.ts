@@ -115,6 +115,9 @@ export class WeighmentService {
 
         amount_charged: input.amount_charged,
         currency: DEFAULT_CURRENCY,
+        // Settled at pass 2, when the money actually changes hands. Until then
+        // the record carries the default and charges nothing to any ledger.
+        payment_status: 'PAID',
 
         operator_username: input.operator_username,
         created_at: at,
@@ -211,6 +214,7 @@ export class WeighmentService {
         second_weight_src: input.second_weight_src,
         net_weight_kg: net,
         amount_charged: input.amount_charged,
+        payment_status: input.payment_status,
         // Only these two may be corrected at pass 2; identity fields are locked.
         product: input.product ?? existing.product,
         container_number: input.container_number ?? existing.container_number ?? null,

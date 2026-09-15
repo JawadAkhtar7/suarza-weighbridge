@@ -295,7 +295,7 @@ export async function buildReceiptPdf({
     });
   });
 
-  const panelH = hasUrdu ? 54 : 38;
+  const panelH = hasUrdu ? 62 : 46;
   let panelY = y;
 
   if (isComplete) {
@@ -316,6 +316,19 @@ export async function buildReceiptPdf({
         width: panelW,
         align: 'center',
       });
+
+    // Whether it was actually paid — the question that gets argued about later.
+    const paid = weighment.payment_status === 'PAID';
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(6.5)
+      .fillColor(paid ? BRAND : INK)
+      .text(paid ? 'PAID' : 'ON ACCOUNT', panelX, panelY + (hasUrdu ? 50 : 34), {
+        width: panelW,
+        align: 'center',
+        characterSpacing: 0.5,
+      });
+
     panelY += panelH + GAP;
   }
 

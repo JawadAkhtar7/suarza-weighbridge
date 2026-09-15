@@ -9,6 +9,7 @@
 import { loadConfig } from './config.js';
 import { connectDatabase, describeConnection, disconnectDatabase } from './db/connection.js';
 import { seedUsers } from './services/auth.service.js';
+import { syncLedgerIndexes } from './models/ledger.model.js';
 import { buildApp } from './app.js';
 
 async function main(): Promise<void> {
@@ -23,6 +24,10 @@ async function main(): Promise<void> {
       ),
   });
   console.info(`Connected to MongoDB: ${describeConnection()}`);
+
+  // Before anything can write to the ledger: a stale index here silently
+  // rejects entries and the balances go quietly wrong.
+  await syncLedgerIndexes();
 
   const created = await seedUsers();
   if (created > 0) console.info(`Seeded ${created} user account(s)`);

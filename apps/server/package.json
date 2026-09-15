@@ -10,6 +10,7 @@
     "build:css": "tailwindcss -c tailwind.config.js -i src/receipt/receipt.tailwind.css -o dist/receipt.css --minify",
     "start": "node dist/index.js",
     "resolve-conflict": "tsx src/maintenance/resolve-slip-conflict.ts",
+    "backfill-ledger": "tsx src/maintenance/backfill-ledger.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

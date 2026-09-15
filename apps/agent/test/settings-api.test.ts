@@ -43,7 +43,7 @@ describe('GET /settings', () => {
   it('returns the current settings', async () => {
     const response = await app.inject({ url: '/settings' });
     expect(response.statusCode).toBe(200);
-    expect(response.json().print.paper_size).toBe('A5');
+    expect(response.json().print.paper_size).toBe('A4');
   });
 });
 
@@ -55,13 +55,13 @@ describe('PUT /settings', () => {
       url: '/settings',
       payload: {
         ...current,
-        print: { ...current.print, offset_top_mm: 12 },
+        company_phone: '+92 300 2222222',
         pricing: { truck: 450 },
       },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().print.offset_top_mm).toBe(12);
+    expect(response.json().company_phone).toBe('+92 300 2222222');
     expect((await app.inject({ url: '/settings' })).json().pricing.truck).toBe(450);
   });
 
@@ -82,6 +82,6 @@ describe('PUT /settings', () => {
       url: '/settings',
       payload: { print: { paper_size: 'FOOLSCAP' } },
     });
-    expect((await app.inject({ url: '/settings' })).json().print.paper_size).toBe('A5');
+    expect((await app.inject({ url: '/settings' })).json().print.paper_size).toBe('A4');
   });
 });

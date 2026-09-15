@@ -29,6 +29,7 @@ interface WeighmentRow {
   net_weight_kg: number;
   amount_charged: number;
   currency: string;
+  payment_status: string;
   operator_username: string;
   created_at: string;
   updated_at: string;
@@ -76,6 +77,7 @@ function rowToWeighment(row: WeighmentRow): WeighmentWithSync {
     net_weight_kg: row.net_weight_kg,
     amount_charged: row.amount_charged,
     currency: row.currency,
+    payment_status: row.payment_status as Weighment['payment_status'],
     operator_username: row.operator_username,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -102,7 +104,8 @@ const SELECT_ALL = `
          customer_phone, vehicle_type, vehicle_plate, container_number, product,
          first_weight_kg, first_weight_at, first_weight_src,
          second_weight_kg, second_weight_at, second_weight_src, net_weight_kg,
-         amount_charged, currency, operator_username, created_at, updated_at,
+         amount_charged, currency, payment_status, operator_username,
+         created_at, updated_at,
          void_reason, voided_at, synced, sync_attempts, last_attempt_at,
          sync_blocked_reason, sync_blocked_at
   FROM weighments
@@ -120,7 +123,8 @@ export class WeighmentRepository {
            vehicle_type, vehicle_plate, container_number, product,
            first_weight_kg, first_weight_at, first_weight_src,
            second_weight_kg, second_weight_at, second_weight_src, net_weight_kg,
-           amount_charged, currency, operator_username, created_at, updated_at,
+           amount_charged, currency, payment_status, operator_username,
+           created_at, updated_at,
            void_reason, voided_at, synced, sync_attempts, last_attempt_at
          ) VALUES (
            @id, @slip_number, @status, @station_id,
@@ -128,7 +132,8 @@ export class WeighmentRepository {
            @vehicle_type, @vehicle_plate, @container_number, @product,
            @first_weight_kg, @first_weight_at, @first_weight_src,
            @second_weight_kg, @second_weight_at, @second_weight_src, @net_weight_kg,
-           @amount_charged, @currency, @operator_username, @created_at, @updated_at,
+           @amount_charged, @currency, COALESCE(@payment_status, 'PAID'), @operator_username,
+           @created_at, @updated_at,
            @void_reason, @voided_at, 0, 0, NULL
          )`,
       )
@@ -193,6 +198,7 @@ export class WeighmentRepository {
     second_weight_src: string;
     net_weight_kg: number;
     amount_charged: number;
+    payment_status: string;
     product: string;
     container_number: string | null;
     updated_at: string;
@@ -205,6 +211,7 @@ export class WeighmentRepository {
                 second_weight_src = @second_weight_src,
                 net_weight_kg     = @net_weight_kg,
                 amount_charged    = @amount_charged,
+                payment_status    = COALESCE(@payment_status, 'PAID'),
                 product           = @product,
                 container_number  = @container_number,
                 status            = 'COMPLETED',

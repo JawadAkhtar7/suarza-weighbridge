@@ -9,7 +9,21 @@ import { VitePWA } from 'vite-plugin-pwa';
  * does not fail loudly — Vite's SPA fallback answers it with index.html and a
  * 200, and the app then tries to parse HTML as JSON and quietly shows nothing.
  */
-const API_ROUTES = ['/auth', '/weighments', '/analytics', '/suggestions', '/health', '/r'];
+const API_ROUTES = [
+  '/auth',
+  '/weighments',
+  '/analytics',
+  '/suggestions',
+  '/health',
+  '/r',
+  /*
+   * Everything added from the ledger onwards lives under `/api`, kept apart
+   * from the pages on purpose: `/ledger` is also a route in this app, and
+   * proxying that prefix wholesale sent a browser refresh on /ledger to the
+   * API, which answered "No route for GET /ledger" instead of serving the app.
+   */
+  '/api',
+];
 
 const SERVER_ORIGIN = process.env['SERVER_ORIGIN'] ?? 'http://127.0.0.1:4000';
 
@@ -55,6 +69,10 @@ export default defineConfig({
   optimizeDeps: { exclude: ['@suarza/ui', '@suarza/shared'] },
   server: {
     port: 5174,
+    // Vite refuses requests whose Host header it does not recognise, which is
+    // every tunnelled hostname. Opened up so the dev server can be reached
+    // through a tunnel while a remote client tests it.
+    allowedHosts: true,
     proxy: Object.fromEntries(
       API_ROUTES.map((route) => [route, { target: SERVER_ORIGIN, changeOrigin: true }]),
     ),

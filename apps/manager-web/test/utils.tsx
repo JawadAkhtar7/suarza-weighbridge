@@ -35,6 +35,7 @@ export function weighment(overrides: Partial<Weighment> = {}): Weighment {
     net_weight_kg: 12_000,
     amount_charged: 300,
     currency: 'PKR',
+  payment_status: 'PAID',
     operator_username: 'operator',
     created_at: '2026-09-14T09:00:00.000Z',
     updated_at: '2026-09-14T11:00:00.000Z',

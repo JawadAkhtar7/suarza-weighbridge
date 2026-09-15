@@ -33,6 +33,7 @@ export function toDto(doc: WeighmentDocument & { _id: string }): Weighment {
     net_weight_kg: doc.net_weight_kg,
     amount_charged: doc.amount_charged,
     currency: doc.currency,
+    payment_status: (doc.payment_status ?? 'PAID') as Weighment['payment_status'],
     operator_username: doc.operator_username,
     created_at: new Date(doc.created_at).toISOString(),
     updated_at: new Date(doc.updated_at).toISOString(),

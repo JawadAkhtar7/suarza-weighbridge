@@ -184,6 +184,13 @@ function DetailsRow({
             label="Amount Charged"
             urdu="چارج شدہ رقم"
             value={`${formatPKR(weighment.amount_charged)}/-`}
+            // On the paper, because "was this paid?" is the question that gets
+            // argued about later and the slip is the only thing both sides hold.
+            footer={
+              weighment.payment_status === 'PAID'
+                ? { text: 'Paid', urdu: 'ادا شدہ', tone: 'paid' }
+                : { text: 'On account', urdu: 'ادھار', tone: 'due' }
+            }
           />
         )}
 
@@ -212,7 +219,17 @@ function DetailRow({ label, urdu, value }: { label: string; urdu: string; value:
   );
 }
 
-function Panel({ label, urdu, value }: { label: string; urdu: string; value: string }) {
+function Panel({
+  label,
+  urdu,
+  value,
+  footer,
+}: {
+  label: string;
+  urdu: string;
+  value: string;
+  footer?: { text: string; urdu: string; tone: 'paid' | 'due' };
+}) {
   return (
     <div className={cn('rounded-md border px-3 py-3.5 text-center', BRAND_BORDER, PRINT_PLAIN)}>
       <p className={cn('text-[9px] font-bold uppercase leading-none tracking-wide', BRAND, 'print:text-black')}>
@@ -225,6 +242,19 @@ function Panel({ label, urdu, value }: { label: string; urdu: string; value: str
       {/* As big as the net weight — it is read just as often, and by the person
           paying it. */}
       <p className="tabular mt-1 text-2xl font-bold leading-none">{value}</p>
+
+      {footer && (
+        <p
+          className={cn(
+            'mt-1.5 inline-block rounded border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+            footer.tone === 'paid' ? cn(BRAND_BORDER, BRAND) : 'border-black/50 text-black',
+            PRINT_PLAIN,
+          )}
+        >
+          {footer.text}
+          <span className="urdu ml-1 text-[9px] leading-relaxed">{footer.urdu}</span>
+        </p>
+      )}
     </div>
   );
 }

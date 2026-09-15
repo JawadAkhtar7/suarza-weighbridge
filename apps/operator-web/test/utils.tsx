@@ -55,6 +55,7 @@ export function weighment(overrides: Record<string, unknown> = {}) {
     net_weight_kg: 0,
     amount_charged: 300,
     currency: 'PKR',
+  payment_status: 'PAID',
     operator_username: 'operator',
     created_at: '2026-09-14T09:00:00.000Z',
     updated_at: '2026-09-14T09:00:00.000Z',

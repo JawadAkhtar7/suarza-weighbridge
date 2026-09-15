@@ -17,6 +17,9 @@ export const API_PREFIXES = [
   '/suggestions',
   '/r/',
   '/health',
+  // Everything from the ledger onwards. Namespaced so a page route can never
+  // shadow an API one — `/ledger` is a page in the manager app.
+  '/api/',
 ];
 
 export function resolveManagerWebDir(override?: string): string | null {

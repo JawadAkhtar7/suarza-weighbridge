@@ -75,6 +75,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Vite refuses requests whose Host header it does not recognise, which is
+    // every tunnelled hostname. Opened up so the dev server can be reached
+    // through a tunnel while a remote client tests it.
+    allowedHosts: true,
     proxy: Object.fromEntries(
       AGENT_ROUTES.map((route) => [route, { target: AGENT_ORIGIN, changeOrigin: true }]),
     ),

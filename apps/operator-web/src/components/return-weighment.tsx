@@ -19,6 +19,7 @@ import {
   Input,
   Label,
   NumberInput,
+  cn,
   toast,
 } from '@suarza/ui';
 import {
@@ -26,6 +27,7 @@ import {
   netWeightAllUnits,
   parseAmount,
   type NetWeight,
+  type PaymentStatus,
   type Weighment,
 } from '@suarza/shared';
 import { Ban, CircleCheck, Loader2, Printer, RotateCcw, Save, TriangleAlert } from 'lucide-react';
@@ -68,6 +70,9 @@ export function ReturnWeighment({
   // product and container are here because they are genuinely settled at load
   // time, and the agent already accepts corrections to exactly these two.
   const [amount, setAmount] = useState('0');
+  // Defaults to paid: taking the money at the gate is the normal case, and the
+  // operator should only have to think about it when it is not.
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('PAID');
   const [product, setProduct] = useState('');
   const [containerNumber, setContainerNumber] = useState('');
 
@@ -120,6 +125,7 @@ export function ReturnWeighment({
         second_weight_kg: captured.kg,
         second_weight_src: captured.source,
         amount_charged: parseAmount(amount),
+        payment_status: paymentStatus,
         operator_username: DEFAULT_OPERATOR_USERNAME,
         product: product.trim() || undefined,
         container_number: containerNumber.trim() || undefined,
@@ -287,6 +293,46 @@ export function ReturnWeighment({
                     onChange={(event) => setAmount(event.target.value)}
                     className="h-12 pl-9 text-lg"
                   />
+                </div>
+              </div>
+
+              {/* Which way the money went. Asked here because this is the
+                  moment the customer is standing at the window — and because
+                  without it every weighing looked like an unpaid debt in the
+                  manager's ledger. */}
+              <div className="space-y-2">
+                <Label>Payment</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus('PAID')}
+                    className={cn(
+                      'rounded-md border-2 px-3 py-3 text-left transition-colors',
+                      paymentStatus === 'PAID'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-muted hover:border-muted-foreground/30',
+                    )}
+                  >
+                    <span className="block text-sm font-semibold">Paid now</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Customer has paid
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus('ON_ACCOUNT')}
+                    className={cn(
+                      'rounded-md border-2 px-3 py-3 text-left transition-colors',
+                      paymentStatus === 'ON_ACCOUNT'
+                        ? 'border-warning bg-warning/5'
+                        : 'border-muted hover:border-muted-foreground/30',
+                    )}
+                  >
+                    <span className="block text-sm font-semibold">Add to account</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Customer will pay later
+                    </span>
+                  </button>
                 </div>
               </div>
 

@@ -135,6 +135,18 @@ MIGRATIONS.push({
   `,
 });
 
+MIGRATIONS.push({
+  version: 4,
+  name: 'payment status on a weighment',
+  up: `
+    -- Did the customer pay at the gate, or is it going on their account?
+    -- Defaulted to PAID because that is the normal case, and because every
+    -- record that existed before this column was a cash weighing.
+    ALTER TABLE weighments ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'PAID'
+      CHECK (payment_status IN ('PAID', 'ON_ACCOUNT'));
+  `,
+});
+
 export function migrate(db: Database): number {
   const current = db.pragma('user_version', { simple: true }) as number;
   const pending = MIGRATIONS.filter((m) => m.version > current).sort(

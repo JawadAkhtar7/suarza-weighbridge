@@ -42,6 +42,8 @@ const weighmentSchema = new Schema(
 
     amount_charged: { type: Number, required: true, default: 0 },
     currency: { type: String, required: true, default: 'PKR' },
+    /** PAID at the weighbridge, or ON_ACCOUNT for the customer to settle later. */
+    payment_status: { type: String, enum: ['PAID', 'ON_ACCOUNT'], default: 'PAID' },
 
     operator_username: { type: String, required: true },
     created_at: { type: Date, required: true },

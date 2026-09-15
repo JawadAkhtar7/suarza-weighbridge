@@ -27,8 +27,9 @@ export const SEED_USERS: readonly SeedUser[] = [
 /** Route gating (brief §10). ADMIN sees everything, including Settings. */
 export const ROLE_CAPABILITIES: Record<UserRole, readonly string[]> = {
   OPERATOR: ['weighing'],
-  MANAGER: ['dashboard'],
-  ADMIN: ['weighing', 'dashboard', 'settings'],
+  // The ledger is the money side: managers keep it, operators never see it.
+  MANAGER: ['dashboard', 'ledger'],
+  ADMIN: ['weighing', 'dashboard', 'ledger', 'settings'],
 };
 
 export function roleCan(role: UserRole, capability: string): boolean {

@@ -31,6 +31,20 @@ const weightKg = z
   .max(200_000, 'Weight is implausibly large — check the indicator');
 
 /** Optional text fields arrive as '' from HTML inputs; treat that as absent. */
+/**
+ * PAID — settled at the weighbridge, nothing outstanding.
+ * ON_ACCOUNT — added to the customer's ledger, to be paid later.
+ */
+export const PAYMENT_STATUSES = ['PAID', 'ON_ACCOUNT'] as const;
+export const paymentStatusSchema = z.enum(PAYMENT_STATUSES);
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+/** The words the operator and the customer see. */
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  PAID: 'Paid now',
+  ON_ACCOUNT: 'On account',
+};
+
 const optionalText = z
   .string()
   .trim()
@@ -55,6 +69,17 @@ export const weighmentSchema = z.object({
   vehicle_plate: z.string().trim().min(1, 'Vehicle plate is required').max(32),
   container_number: optionalText,
   product: z.string().trim().min(1, 'Product is required').max(120),
+
+  /**
+   * Whether the customer settled at the weighbridge or left it on their
+   * account.
+   *
+   * Decided at completion, because that is when the money changes hands. It is
+   * what stops the ledger treating every weighing as a debt: most customers pay
+   * cash on the spot, and counting those as receivable would make "total owed
+   * to you" a number nobody could act on.
+   */
+  payment_status: paymentStatusSchema.default('PAID'),
 
   // Weights
   first_weight_kg: weightKg,
@@ -130,6 +155,8 @@ export const completeWeighmentSchema = z.object({
   second_weight_kg: weightKg,
   second_weight_src: weightSourceSchema.default('SERIAL'),
   amount_charged: z.number().finite().min(0),
+  /** Defaults to PAID: taking the money at the gate is the normal case. */
+  payment_status: paymentStatusSchema.default('PAID'),
   operator_username: z.string().trim().min(1).max(64).default('operator'),
   /** Identity fields stay locked after pass 1; only these may be corrected. */
   product: z.string().trim().min(1).max(120).optional(),

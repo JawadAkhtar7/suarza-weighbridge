@@ -7,6 +7,12 @@
 
 import type {
   Analytics,
+  CreateLedgerEntryInput,
+  LedgerCustomer,
+  LedgerEntry,
+  LedgerEntryWithBalance,
+  LedgerQuery,
+  LedgerSummary,
   LoginResponse,
   PaginatedWeighments,
   Weighment,
@@ -76,8 +82,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** Drops empty filters so the URL says what is actually being filtered on. */
-function toQueryString(query: Partial<WeighmentQuery>): string {
+/**
+ * Drops empty filters so the URL says what is actually being filtered on.
+ * Takes any flat query object — the weighment filters and the ledger's both.
+ */
+function toQueryString(query: Record<string, unknown>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value === undefined || value === null || value === '') continue;
@@ -105,7 +114,44 @@ export const api = {
   /** Names already in the records, for the filter typeahead. */
   suggestions: (field: 'customer_name' | 'customer_company', q: string) =>
     request<{ values: string[] }>(`/suggestions?${new URLSearchParams({ field, q }).toString()}`),
+
+  // --- Ledger --------------------------------------------------------------
+
+  ledgerSummary: () => request<LedgerSummary>('/api/ledger/summary'),
+
+  ledgerCustomers: (query: Partial<LedgerQuery>) =>
+    request<LedgerCustomerPage>(`/api/ledger/customers?${toQueryString(query)}`),
+
+  ledgerCustomer: (id: string) =>
+    request<{ customer: LedgerCustomer; entries: LedgerEntryWithBalance[] }>(
+      `/api/ledger/customers/${encodeURIComponent(id)}`,
+    ),
+
+  createLedgerCustomer: (body: { name: string; company: string; phone?: string }) =>
+    request<{ customer: LedgerCustomer }>('/api/ledger/customers', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  addLedgerEntry: (customerId: string, body: CreateLedgerEntryInput) =>
+    request<{ entry: LedgerEntry; customer: LedgerCustomer }>(
+      `/api/ledger/customers/${encodeURIComponent(customerId)}/entries`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+
+  voidLedgerEntry: (customerId: string, entryId: string, reason: string) =>
+    request<{ entry: LedgerEntry; customer: LedgerCustomer }>(
+      `/api/ledger/customers/${encodeURIComponent(customerId)}/entries/${encodeURIComponent(entryId)}/void`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    ),
 };
+
+export interface LedgerCustomerPage {
+  customers: LedgerCustomer[];
+  total: number;
+  page: number;
+  page_size: number;
+}
 
 /** Where the server streams the on-the-fly PDF from (brief §8). */
 export function receiptPdfUrl(slipNumber: string): string {

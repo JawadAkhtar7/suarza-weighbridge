@@ -88,6 +88,7 @@ export function weighment(overrides: Partial<Weighment> = {}): Weighment {
     vehicle_plate: 'LES-1234',
     container_number: undefined,
     product: 'Cement',
+    payment_status: 'PAID',
     first_weight_kg: 8000,
     first_weight_at: at,
     first_weight_src: 'SERIAL',
