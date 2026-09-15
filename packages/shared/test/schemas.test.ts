@@ -66,6 +66,43 @@ describe('createWeighmentSchema', () => {
   it('requires the identity fields the receipt depends on', () => {
     expect(createWeighmentSchema.safeParse({ first_weight_kg: 100 }).success).toBe(false);
   });
+
+  it('saves a customer who has no company', () => {
+    // Individuals turn up without one, and refusing the weighing over it only
+    // gets a placeholder typed into the field.
+    const parsed = createWeighmentSchema.parse({
+      customer_name: 'Ali Raza',
+      vehicle_type: 'truck',
+      vehicle_plate: 'LES-1234',
+      product: 'Cement',
+      first_weight_kg: 8000,
+    });
+    // Empty string, not undefined: every tier below keeps a plain `string`.
+    expect(parsed.customer_company).toBe('');
+  });
+
+  it('accepts a blank company typed as spaces', () => {
+    const parsed = createWeighmentSchema.parse({
+      customer_name: 'Ali Raza',
+      customer_company: '   ',
+      vehicle_type: 'truck',
+      vehicle_plate: 'LES-1234',
+      product: 'Cement',
+      first_weight_kg: 8000,
+    });
+    expect(parsed.customer_company).toBe('');
+  });
+
+  it('still demands a customer name — a receipt with no one on it is useless', () => {
+    const withoutName = {
+      customer_company: 'Raza Traders',
+      vehicle_type: 'truck',
+      vehicle_plate: 'LES-1234',
+      product: 'Cement',
+      first_weight_kg: 8000,
+    };
+    expect(createWeighmentSchema.safeParse(withoutName).success).toBe(false);
+  });
 });
 
 describe('completeWeighmentSchema', () => {

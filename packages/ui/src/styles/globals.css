@@ -122,6 +122,12 @@
   direction: rtl;
   unicode-bidi: isolate;
   line-height: 1.5;
+  /* Nastaliq hangs well below the baseline and sits tight under whatever is
+     above it. A couple of pixels of air stops the script colliding with the
+     English label it sits under — set here rather than per-usage, because the
+     `leading-*` utilities on those lines would otherwise have to be fought
+     one at a time. */
+  padding-block: 2px;
 }
 
   /* Weights, slip numbers and amounts are read at a glance and often

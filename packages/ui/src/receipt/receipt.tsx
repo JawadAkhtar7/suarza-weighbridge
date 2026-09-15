@@ -37,7 +37,6 @@
 import * as React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
-  KG_PER_MAUND,
   formatDateTimePkt,
   formatKg,
   formatPKR,
@@ -107,11 +106,11 @@ export function Receipt({
           </p>
         )}
 
-        <DetailsRow weighment={weighment} isComplete={isComplete} />
+        <DetailsRow weighment={weighment} isComplete={isComplete} receiptUrl={receiptUrl} />
 
         <WeightCards weighment={weighment} net={net} isComplete={isComplete} />
 
-        <FooterRow weighment={weighment} receiptUrl={receiptUrl} />
+        <FooterRow weighment={weighment} />
       </section>
 
       <ReceiptFooter company={company} />
@@ -138,16 +137,16 @@ function SlipRow({ weighment }: { weighment: Weighment }) {
       <div className="flex items-baseline gap-2">
         <span className="text-[9px] font-bold uppercase leading-none tracking-wide text-white print:text-black">
           Slip No.
-          <span className="urdu ml-1 text-[9px]">سلپ نمبر</span>
+          <span className="urdu ml-1 inline-block text-[9px] leading-relaxed">سلپ نمبر</span>
         </span>
         <span className="tabular text-xl font-bold leading-none">{weighment.slip_number}</span>
       </div>
 
       <div className="text-right">
         <p className="text-[8px] font-bold uppercase leading-none tracking-wide text-white print:text-black">
-          Date &amp; Time In
+          Date &amp; Time
         </p>
-        <p className="urdu text-[8px] leading-none">داخلے کی تاریخ و وقت</p>
+        <p className="urdu text-[8px] leading-relaxed">تاریخ و وقت</p>
         <p className="tabular text-[10px] font-semibold">
           {formatDateTimePkt(weighment.first_weight_at)}
         </p>
@@ -158,12 +157,20 @@ function SlipRow({ weighment }: { weighment: Weighment }) {
 
 /* ── Identity (left) + commercial (right) ──────────────────────────────── */
 
-function DetailsRow({ weighment, isComplete }: { weighment: Weighment; isComplete: boolean }) {
+function DetailsRow({
+  weighment,
+  isComplete,
+  receiptUrl,
+}: {
+  weighment: Weighment;
+  isComplete: boolean;
+  receiptUrl: string | null;
+}) {
   return (
     <div className="mt-2 grid grid-cols-[1.6fr_1fr] gap-2">
       <dl className={cn('rounded-md border px-3 py-2 text-[10.5px]', BRAND_BORDER, PRINT_PLAIN)}>
         <DetailRow label="Customer Name" urdu="کسٹمر کا نام" value={weighment.customer_name} />
-        <DetailRow label="Company" urdu="کمپنی" value={weighment.customer_company} />
+        <DetailRow label="Company" urdu="کمپنی" value={weighment.customer_company || '—'} />
         <DetailRow label="Vehicle Number" urdu="گاڑی نمبر" value={weighment.vehicle_plate} />
         <DetailRow label="Vehicle Type" urdu="گاڑی کی قسم" value={vehicleTypeLabel(weighment.vehicle_type)} />
         <DetailRow label="Container Number" urdu="کنٹینر نمبر" value={weighment.container_number ?? '—'} />
@@ -172,14 +179,6 @@ function DetailsRow({ weighment, isComplete }: { weighment: Weighment; isComplet
       </dl>
 
       <div className="space-y-2">
-        <Panel
-          label="Date & Time Out"
-          urdu="باہر جانے کی تاریخ و وقت"
-          value={
-            weighment.second_weight_at ? formatDateTimePkt(weighment.second_weight_at) : 'Pending'
-          }
-          small
-        />
         {isComplete && (
           <Panel
             label="Amount Charged"
@@ -187,6 +186,11 @@ function DetailsRow({ weighment, isComplete }: { weighment: Weighment; isComplet
             value={`${formatPKR(weighment.amount_charged)}/-`}
           />
         )}
+
+        {/* The QR sits here rather than along the bottom: this column has the
+            room, and the width it gives back at the foot of the slip goes to
+            the weight figures, which are what everyone actually reads. */}
+        <QrPanel receiptUrl={receiptUrl} />
       </div>
     </div>
   );
@@ -208,26 +212,19 @@ function DetailRow({ label, urdu, value }: { label: string; urdu: string; value:
   );
 }
 
-function Panel({
-  label,
-  urdu,
-  value,
-  small = false,
-}: {
-  label: string;
-  urdu: string;
-  value: string;
-  small?: boolean;
-}) {
+function Panel({ label, urdu, value }: { label: string; urdu: string; value: string }) {
   return (
-    <div className={cn('rounded-md border px-2 py-1.5 text-center', BRAND_BORDER, PRINT_PLAIN)}>
-      <p className={cn('text-[8px] font-bold uppercase leading-none tracking-wide', BRAND, 'print:text-black')}>
+    <div className={cn('rounded-md border px-3 py-3.5 text-center', BRAND_BORDER, PRINT_PLAIN)}>
+      <p className={cn('text-[9px] font-bold uppercase leading-none tracking-wide', BRAND, 'print:text-black')}>
         {label}
       </p>
-      <p className="urdu text-[8px] leading-none">{urdu}</p>
-      <p className={cn('tabular mt-0.5 font-bold leading-tight', small ? 'text-[10px]' : 'text-sm')}>
-        {value}
-      </p>
+      {/* `leading-loose`, not `leading-none`: Nastaliq descends well below its
+          baseline and was sitting on top of the label above it. The column has
+          the height to spare, so the panel takes it. */}
+      <p className="urdu mt-0.5 text-[10px] leading-loose">{urdu}</p>
+      {/* As big as the net weight — it is read just as often, and by the person
+          paying it. */}
+      <p className="tabular mt-1 text-2xl font-bold leading-none">{value}</p>
     </div>
   );
 }
@@ -268,25 +265,21 @@ function WeightCards({
           <Weight className="h-3.5 w-3.5" />
           <div className="text-center leading-none">
             <p className="text-[8px] font-bold uppercase tracking-wide">Net Weight</p>
-            <p className="urdu text-[8px]">خالص وزن</p>
+            <p className="urdu text-[8px] leading-relaxed">خالص وزن</p>
           </div>
         </div>
 
         <div className="px-2 py-1.5 text-center">
           {isComplete ? (
             <>
-              <p className="tabular text-lg font-bold leading-none">{formatKg(net.kg)}</p>
+              <p className="tabular text-2xl font-bold leading-none">{formatKg(net.kg)}</p>
               <p className="urdu text-[8px] leading-tight">کلوگرام</p>
               <div className="mt-1 border-t pt-1">
-                <p className="text-[7px] font-semibold uppercase leading-none">
-                  Net Weight Per {KG_PER_MAUND} Kg
+                <p className="tabular text-xl font-bold leading-none">
+                  {mann(net.maund)} <span className="text-[11px]">Mann</span>
+                  <span className="urdu ml-1 text-[10px]">(من)</span>
                 </p>
-                <p className="urdu text-[8px] leading-tight">فی {KG_PER_MAUND} کلوگرام پر وزن</p>
-                <p className="tabular text-base font-bold leading-none">
-                  {mann(net.maund)} <span className="text-[10px]">Mann</span>
-                  <span className="urdu ml-1 text-[9px]">(من)</span>
-                </p>
-                <p className="tabular text-[8px] leading-tight">{formatTon(net.ton)}</p>
+                <p className="tabular text-[9px] leading-tight">{formatTon(net.ton)}</p>
               </div>
             </>
           ) : (
@@ -321,13 +314,13 @@ function WeightCard({
         {icon}
         <div className="text-center leading-none">
           <p className="text-[8px] font-bold uppercase tracking-wide">{label}</p>
-          <p className="urdu text-[8px]">{urdu}</p>
+          <p className="urdu text-[8px] leading-relaxed">{urdu}</p>
         </div>
       </div>
 
       <div className="px-2 py-1.5 text-center">
         <p className="tabular text-[8px] leading-tight">{at ? formatDateTimePkt(at) : '—'}</p>
-        <p className="tabular text-base font-bold leading-tight">
+        <p className="tabular text-xl font-bold leading-tight">
           {kg === null ? 'pending' : formatKg(kg)}
         </p>
         <p className="urdu text-[8px] leading-tight">کلوگرام</p>
@@ -343,41 +336,44 @@ function WeightCard({
 
 /* ── QR + signature ────────────────────────────────────────────────────── */
 
-function FooterRow({
-  weighment,
-  receiptUrl,
-}: {
-  weighment: Weighment;
-  receiptUrl: string | null;
-}) {
-  return (
-    <div className={cn('mt-2 grid grid-cols-[auto_1fr] items-center gap-3 rounded-md border px-3 py-2', BRAND_BORDER, PRINT_PLAIN)}>
-      <div className="flex items-center gap-2">
-        {/* The class is the only stable way to tell the QR apart from the
-            lucide icons elsewhere on the receipt, which are also <svg>. */}
-        {receiptUrl && (
-          <QRCodeSVG className="receipt-qr" value={receiptUrl} size={54} level="M" marginSize={0} />
-        )}
-        <div>
-          {/* Without a QR there is nothing to scan, and an instruction to scan
-              a receipt that carries no code just makes the customer hunt. */}
-          {receiptUrl && (
-            <>
-              <p className="text-[9px] font-bold uppercase leading-[1.2] tracking-wide">
-                Scan to Verify
-              </p>
-              <p className="urdu text-left text-[8px] leading-[1.3]">تصدیق کے لیے اسکین کریں</p>
-            </>
-          )}
-          <p className="mt-1 text-[7px] leading-[1.2]">
-            Operator: {weighment.operator_username} · Station {weighment.station_id}
-          </p>
-        </div>
-      </div>
+/**
+ * The QR, in the right-hand column under the amount.
+ *
+ * Nothing is rendered at all without a URL: an instruction to scan a code that
+ * is not on the paper just sends the customer hunting for it.
+ */
+function QrPanel({ receiptUrl }: { receiptUrl: string | null }) {
+  if (!receiptUrl) return null;
 
-      <div className="text-center">
+  return (
+    <div className={cn('rounded-md border px-3 py-3 text-center', BRAND_BORDER, PRINT_PLAIN)}>
+      <p className={cn('text-[9px] font-bold uppercase leading-none tracking-wide', BRAND, 'print:text-black')}>
+        Scan to Verify
+      </p>
+      <p className="urdu mt-0.5 text-[10px] leading-loose">تصدیق کے لیے اسکین کریں</p>
+      {/* The class is the only stable way to tell the QR apart from the
+          lucide icons elsewhere on the receipt, which are also <svg>. */}
+      <QRCodeSVG
+        className="receipt-qr mx-auto mt-1.5"
+        value={receiptUrl}
+        size={68}
+        level="M"
+        marginSize={0}
+      />
+    </div>
+  );
+}
+
+function FooterRow({ weighment }: { weighment: Weighment }) {
+  return (
+    <div className={cn('mt-2 grid grid-cols-[1fr_auto] items-end gap-3 rounded-md border px-3 py-2', BRAND_BORDER, PRINT_PLAIN)}>
+      <p className="text-[7px] leading-[1.2]">
+        Operator: {weighment.operator_username} · Station {weighment.station_id}
+      </p>
+
+      <div className="w-[52mm] text-center">
         <p className="text-[9px] font-bold uppercase tracking-wide">Weighing Officer Signature</p>
-        <p className="urdu text-[8px]">وزن کرنے والے افسر کے دستخط</p>
+        <p className="urdu text-[8px] leading-relaxed">وزن کرنے والے افسر کے دستخط</p>
         <p className="mt-3 border-t border-dashed border-black/60 pt-0.5 text-[7px]">&nbsp;</p>
       </div>
     </div>

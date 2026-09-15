@@ -134,26 +134,28 @@ export function renderReceiptPage({ weighment, company, pageUrl }: ReceiptPageOp
 
   const slip = encodeURIComponent(weighment.slip_number);
 
+  // Laid out to match the operator's /print page exactly — same controls above
+  // the slip, same 150mm column, same plain white card. Two pages showing the
+  // same receipt should not look like two different documents.
   const body = `
 <main class="mx-auto w-full max-w-[150mm]">
-  <div class="overflow-hidden rounded-lg bg-white shadow-lg">${receiptHtml}</div>
-
-  <div class="print-hidden mt-4 flex flex-col items-center gap-2">
-    <div class="flex w-full gap-2">
-      <button
-        id="print-receipt"
-        type="button"
-        class="inline-flex flex-1 items-center justify-center gap-2 rounded-md border-2 border-[#155932] bg-white px-4 py-3 text-base font-semibold text-[#155932] shadow-sm"
-      >Print</button>
-      <a
-        href="/r/${slip}/pdf"
-        class="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-[#155932] px-4 py-3 text-base font-semibold text-white no-underline shadow-sm"
-      >Download PDF</a>
-    </div>
-    <p class="text-center text-xs text-neutral-500">
-      Generated from the weighbridge record. Nothing is stored — this page is rebuilt each visit.
-    </p>
+  <div class="print-hidden mb-4 flex flex-wrap gap-2">
+    <button
+      id="print-receipt"
+      type="button"
+      class="inline-flex items-center justify-center gap-2 rounded-md bg-[#155932] px-4 py-2 text-sm font-semibold text-white shadow-sm"
+    >Print</button>
+    <a
+      href="/r/${slip}/pdf"
+      class="inline-flex items-center justify-center gap-2 rounded-md border border-[#155932] bg-white px-4 py-2 text-sm font-semibold text-[#155932] no-underline shadow-sm"
+    >Download PDF</a>
   </div>
+
+  <div class="bg-white shadow-sm">${receiptHtml}</div>
+
+  <p class="print-hidden mt-4 text-center text-xs text-neutral-500">
+    Generated from the weighbridge record. Nothing is stored — this page is rebuilt each visit.
+  </p>
 </main>
 <!-- An external file, not an inline handler: the page's CSP allows scripts
      from 'self' only, and inline handlers are exactly what that blocks. -->

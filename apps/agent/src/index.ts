@@ -32,6 +32,10 @@ async function main(): Promise<void> {
     sync_interval_seconds: config.SYNC_INTERVAL_SECONDS,
     backup_path: config.BACKUP_PATH,
     backup_interval_hours: config.BACKUP_INTERVAL_HOURS,
+    // The public receipt page is served by the cloud API, on the same host the
+    // agent already syncs to — so an unconfigured QR address defaults to it
+    // instead of printing slips with no QR at all.
+    receipt_base_url: config.CLOUD_API_URL,
   });
 
   // --- Sync worker ---------------------------------------------------------
@@ -47,6 +51,9 @@ async function main(): Promise<void> {
         baseUrl: config.CLOUD_API_URL,
         apiKey: config.CLOUD_API_KEY,
         stationId: config.STATION_ID,
+        // Read per send, so editing the address in Settings reaches the public
+        // receipt page on the next sync rather than on the next restart.
+        profile: () => settings.profile(),
       }),
       periodicMs: settings.get().sync_interval_seconds * 1000,
       onLog: (level, message) => log(`[sync:${level}] ${message}`),

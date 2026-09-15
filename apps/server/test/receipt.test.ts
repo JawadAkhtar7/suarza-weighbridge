@@ -29,6 +29,63 @@ afterEach(clearDatabase);
 
 const store = (record: Parameters<typeof ingest>[0][number]) => ingest([record], []);
 
+describe('whose company details the page shows', () => {
+  const profile = {
+    station_id: 'A',
+    company_name: 'Suarza International',
+    company_address: '2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur',
+    company_phone: '+923036537700',
+    company_logo_url: '/logo.png',
+    paper_size: 'A4' as const,
+    updated_at: '2026-09-15T10:00:00.000Z',
+  };
+
+  it("uses the station's own details, not the server's fallback", async () => {
+    // The whole point: the operator edits the address on the weighbridge PC,
+    // and the page behind the QR must match the paper the customer holds.
+    await ingest([completedWeighment({ slip_number: 'SI-000123' })], [], profile);
+
+    const { text } = await request(app).get('/r/SI-000123');
+    expect(text).toContain('2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur');
+    expect(text).toContain('+923036537700');
+    // The configured fallback must not leak through once the station has spoken.
+    expect(text).not.toContain('12 Industrial Road, Lahore');
+  });
+
+  it('falls back to COMPANY_* for a station that has never synced its settings', async () => {
+    await store(completedWeighment({ slip_number: 'SI-000123' }));
+
+    const { text } = await request(app).get('/r/SI-000123');
+    expect(text).toContain('12 Industrial Road, Lahore');
+  });
+
+  it('falls back field by field, so one blank does not undo the rest', async () => {
+    await ingest(
+      [completedWeighment({ slip_number: 'SI-000123' })],
+      [],
+      { ...profile, company_phone: '' },
+    );
+
+    const { text } = await request(app).get('/r/SI-000123');
+    expect(text).toContain('2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur');
+    expect(text).toContain('+92 300 0000000');
+  });
+
+  it('ignores a batch older than the details already stored', async () => {
+    await ingest([completedWeighment({ slip_number: 'SI-000123' })], [], profile);
+    // A queued batch from before the correction, arriving late after an outage.
+    await ingest([completedWeighment({ slip_number: 'SI-000124' })], [], {
+      ...profile,
+      company_address: 'The old address nobody uses any more',
+      updated_at: '2026-09-01T10:00:00.000Z',
+    });
+
+    const { text } = await request(app).get('/r/SI-000123');
+    expect(text).toContain('2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur');
+    expect(text).not.toContain('The old address nobody uses any more');
+  });
+});
+
 describe('GET /r/:slip — the page a driver scans', () => {
   it('renders the receipt for a completed weighment', async () => {
     await store(completedWeighment({ slip_number: 'SI-000123', customer_name: 'Ali Raza' }));

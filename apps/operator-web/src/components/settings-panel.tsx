@@ -267,7 +267,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               />
               <p className="text-xs text-muted-foreground">
                 The QR code points at <code>{draft.receipt_base_url || '…'}/r/SI-000123</code>.
-                Leave blank until the cloud server is live — no QR is printed without it.
+                Leave it as it is unless the receipt page is served from a different address than
+                the cloud server — this defaults to the cloud the station already syncs to.
               </p>
             </div>
           </section>

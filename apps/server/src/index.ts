@@ -14,7 +14,14 @@ import { buildApp } from './app.js';
 async function main(): Promise<void> {
   const config = loadConfig();
 
-  await connectDatabase({ uri: config.MONGODB_URI });
+  await connectDatabase({
+    uri: config.MONGODB_URI,
+    onRetry: (attempt, delayMs, reason) =>
+      console.warn(
+        `MongoDB not reachable (attempt ${attempt}): ${reason}\n` +
+          `Retrying in ${delayMs / 1000}s — a paused free-tier cluster takes a moment to wake.`,
+      ),
+  });
   console.info(`Connected to MongoDB: ${describeConnection()}`);
 
   const created = await seedUsers();
@@ -43,6 +50,15 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(`Server failed to start: ${(error as Error).message}`);
+  const message = (error as Error).message;
+  console.error(`Server failed to start: ${message}`);
+  // The message above is a timeout either way, so say which of the two very
+  // different causes it usually is rather than leaving it to be guessed.
+  if (/Server selection timed out/i.test(message)) {
+    console.error(
+      'MongoDB could not be reached. Usual causes: this machine is not in the\n' +
+        "Atlas IP access list, the cluster is paused, or there is no network.",
+    );
+  }
   process.exit(1);
 });

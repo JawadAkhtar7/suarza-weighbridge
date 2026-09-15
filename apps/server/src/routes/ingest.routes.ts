@@ -11,7 +11,7 @@ export function ingestRouter(apiKey: string): Router {
 
   router.post('/ingest', requireApiKey(apiKey), async (req, res) => {
     const payload = parse(ingestRequestSchema, req.body);
-    const result = await ingest(payload.weighments, payload.audit_entries);
+    const result = await ingest(payload.weighments, payload.audit_entries, payload.station);
 
     // The agent marks exactly the ids it gets back as synced, so this response
     // is what stops a record being retried forever.

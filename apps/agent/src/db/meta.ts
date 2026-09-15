@@ -45,4 +45,6 @@ export const META_KEYS = {
   slipCounter: 'slip_counter',
   lastSyncSuccessAt: 'last_sync_success_at',
   lastSyncError: 'last_sync_error',
+  /** When the settings were last edited, so the cloud can spot a stale copy. */
+  settingsUpdatedAt: 'settings_updated_at',
 } as const;

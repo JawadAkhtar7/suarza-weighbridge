@@ -7,9 +7,10 @@
  * merges data.
  */
 
-import type { AuditEntry, IngestResponse, Weighment } from '@suarza/shared';
+import type { AuditEntry, IngestResponse, StationProfile, Weighment } from '@suarza/shared';
 import { WeighmentModel } from '../models/weighment.model.js';
 import { AuditModel } from '../models/audit.model.js';
+import { StationModel } from '../models/station.model.js';
 
 /** Fields that come from the agent, with dates parsed for Mongo. */
 function toDocument(weighment: Weighment): Record<string, unknown> {
@@ -63,10 +64,57 @@ export interface IngestResult extends IngestResponse {
   audit_inserted: number;
 }
 
+/**
+ * Records what the station says its company details are.
+ *
+ * Guarded on the station's own edit time: batches can arrive out of order after
+ * an outage, and an old one must not undo a correction made since.
+ */
+async function storeStationProfile(station: StationProfile): Promise<void> {
+  await StationModel.updateOne(
+    { _id: station.station_id, updated_at: { $lte: new Date(station.updated_at) } },
+    {
+      $set: {
+        company_name: station.company_name,
+        company_address: station.company_address,
+        company_phone: station.company_phone,
+        company_logo_url: station.company_logo_url,
+        paper_size: station.paper_size,
+        updated_at: new Date(station.updated_at),
+        synced_at: new Date(),
+      },
+    },
+    { upsert: false },
+  );
+
+  // Separate insert, because the guarded update above matches nothing on a
+  // station the cloud has never heard of.
+  await StationModel.updateOne(
+    { _id: station.station_id },
+    {
+      $setOnInsert: {
+        company_name: station.company_name,
+        company_address: station.company_address,
+        company_phone: station.company_phone,
+        company_logo_url: station.company_logo_url,
+        paper_size: station.paper_size,
+        updated_at: new Date(station.updated_at),
+        synced_at: new Date(),
+      },
+    },
+    { upsert: true },
+  );
+}
+
 export async function ingest(
   weighments: Weighment[],
   auditEntries: AuditEntry[],
+  station?: StationProfile,
 ): Promise<IngestResult> {
+  // Before the weighments: a receipt rendered from this batch should already
+  // carry the details the same batch brought.
+  if (station) await storeStationProfile(station);
+
   const acceptedIds: string[] = [];
   const skippedIds: string[] = [];
   const rejected: { id: string; reason: string; permanent: boolean }[] = [];

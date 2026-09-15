@@ -88,24 +88,27 @@ JWT_SECRET=          # openssl rand -base64 48
 JWT_EXPIRES_IN=12h
 INGEST_API_KEY=      # openssl rand -hex 32 — must equal the agent's CLOUD_API_KEY
 
+# Fallback only — see the note below.
 COMPANY_NAME=Suarza International
 COMPANY_ADDRESS=
 COMPANY_PHONE=
 COMPANY_LOGO_URL=
 ```
 
-> ### Company details are set in two places
+> ### Company details are configured on the weighbridge PC, not here
 >
-> The `COMPANY_*` variables here brand the **public receipt page and the PDF**.
-> The same details are also in the operator app's Settings, where they brand the
-> **on-screen preview**.
+> Set them once, in the operator app's **Settings**. The agent sends them to the
+> cloud with every sync batch, and the public receipt page and PDF use what the
+> station that produced the slip reported — so the page behind a QR code always
+> matches the paper in the customer's hand.
 >
-> They ship identical, but if you change one and not the other, a customer's
-> downloaded PDF will disagree with what the operator saw. **Change both.**
+> The `COMPANY_*` variables are the answer for a station the cloud has never
+> heard from: a brand-new site, or a slip whose agent has not synced yet. Each
+> field falls back on its own, so a station that has filled in an address but
+> not a phone shows its real address and the fallback phone.
 >
-> (The agent cannot read the server's values — it has to work with no internet —
-> and the server cannot read the agent's, because a driver may scan a QR while
-> the weighbridge PC is switched off.)
+> Editing `COMPANY_*` will **not** change receipts for a station that has
+> already reported its own details. Change those in Settings.
 
 ---
 

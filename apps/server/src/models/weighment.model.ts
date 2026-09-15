@@ -23,7 +23,9 @@ const weighmentSchema = new Schema(
     station_id: { type: String, required: true },
 
     customer_name: { type: String, required: true },
-    customer_company: { type: String, required: true },
+    // Not `required`: Mongoose treats '' as missing, and a blank company is
+    // legitimate here.
+    customer_company: { type: String, default: '' },
     customer_phone: { type: String, default: null },
     vehicle_type: { type: String, required: true, enum: VEHICLE_TYPES },
     vehicle_plate: { type: String, required: true },

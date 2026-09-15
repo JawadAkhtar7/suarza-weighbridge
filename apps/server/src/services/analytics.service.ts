@@ -79,7 +79,10 @@ export async function getAnalytics(query: WeighmentQuery): Promise<Analytics> {
       ]),
 
       WeighmentModel.aggregate([
-        { $match: revenueMatch },
+        // Company is optional, and every customer who gave none would otherwise
+        // be grouped into a single nameless bucket — unrelated individuals
+        // added together, quite possibly topping the chart.
+        { $match: { ...revenueMatch, customer_company: { $nin: ['', null] } } },
         {
           $group: {
             _id: '$customer_company',

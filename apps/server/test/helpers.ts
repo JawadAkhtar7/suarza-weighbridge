@@ -11,6 +11,7 @@ import type { Express } from 'express';
 import { buildApp } from '../src/app.js';
 import { loadConfig, type ServerConfig } from '../src/config.js';
 import { WeighmentModel } from '../src/models/weighment.model.js';
+import { StationModel } from '../src/models/station.model.js';
 import { AuditModel } from '../src/models/audit.model.js';
 import { UserModel } from '../src/models/user.model.js';
 import { newId, nowUtc, type Weighment } from '@suarza/shared';
@@ -43,6 +44,9 @@ export async function clearDatabase(): Promise<void> {
     WeighmentModel.deleteMany({}),
     AuditModel.deleteMany({}),
     UserModel.deleteMany({}),
+    // Station profiles outlive a weighment, so leaving them would let one
+    // test's company details brand the next test's receipt.
+    StationModel.deleteMany({}),
   ]);
 }
 

@@ -10,6 +10,23 @@
   font-feature-settings: 'tnum';
 }
 
+/*
+ * The same base rules the two PWAs apply through @suarza/ui's globals.css.
+ *
+ * Without them this page renders the identical component visibly differently:
+ * `antialiased` thins every glyph, so text set at the same size looks smaller
+ * here than on the operator's /print page, and an uncoloured `border` utility
+ * falls back to currentColor (black) instead of the theme's light grey. Both
+ * were mistaken for a sizing difference between the two pages.
+ *
+ * The border colour is written out rather than pulled from `--border`, because
+ * this stylesheet is built without the shared preset and has no theme
+ * variables to read. It is the same value: hsl(214 32% 91%).
+ */
+* {
+  border-color: hsl(214 32% 91%);
+}
+
 body {
   font-family:
     Inter,
@@ -17,6 +34,11 @@ body {
     system-ui,
     -apple-system,
     sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings:
+    'rlig' 1,
+    'calt' 1;
 }
 
 /* Urdu labels on the receipt. Nastaliq where the machine has it, naskh
@@ -33,4 +55,10 @@ body {
   direction: rtl;
   unicode-bidi: isolate;
   line-height: 1.5;
+  /* Nastaliq hangs well below the baseline and sits tight under whatever is
+     above it. A couple of pixels of air stops the script colliding with the
+     English label it sits under — set here rather than per-usage, because the
+     `leading-*` utilities on those lines would otherwise have to be fought
+     one at a time. */
+  padding-block: 2px;
 }

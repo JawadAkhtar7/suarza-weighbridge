@@ -79,6 +79,10 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
       receiptUrl: settings?.receipt_base_url
         ? `${settings.receipt_base_url.replace(/\/+$/, '')}/r/${encodeURIComponent(record.slip_number)}`
         : null,
+      // A custom paper size describes the pre-printed pad, not a sheet the PDF
+      // can be produced on, so it falls back to the size the slip is drawn at.
+      paperSize:
+        settings && settings.print.paper_size !== 'CUSTOM' ? settings.print.paper_size : 'A5',
     });
 
     return reply

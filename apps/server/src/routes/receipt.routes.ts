@@ -15,18 +15,53 @@ import { normalizeSlipNumber } from '@suarza/shared';
 import type { ServerConfig } from '../config.js';
 import { findBySlip } from '../services/weighment.service.js';
 import { renderNotFoundPage, renderReceiptPage } from '../receipt/render-page.js';
-import { buildReceiptPdf, pdfFileName } from '@suarza/receipt-pdf';
+import { buildReceiptPdf, pdfFileName, type PdfPaperSize } from '@suarza/receipt-pdf';
+import { StationModel } from '../models/station.model.js';
 
 export function receiptRouter(config: ServerConfig): Router {
   const router = Router();
 
-  const company = {
+  /** Used until the station that made the slip has told us its own details. */
+  const fallbackCompany = {
     name: config.COMPANY_NAME,
     address: config.COMPANY_ADDRESS,
     phone: config.COMPANY_PHONE,
     // The bundled logo is the default; COMPANY_LOGO_URL overrides it.
     logoUrl: config.COMPANY_LOGO_URL || '/logo.png',
   };
+
+  /**
+   * The company details as the station that produced this slip knows them.
+   *
+   * They come from the agent's Settings screen and arrive with the sync
+   * batches, so the page behind a QR code shows exactly what is printed on the
+   * paper the customer is holding. COMPANY_* remains only as the answer for a
+   * station that has never synced.
+   *
+   * Each field falls back independently: a station that has filled in an
+   * address but not a phone should show the real address, not be pushed wholly
+   * back to placeholders.
+   */
+  async function companyFor(stationId: string | null | undefined) {
+    if (!stationId) return fallbackCompany;
+
+    const station = await StationModel.findById(stationId).lean();
+    if (!station) return fallbackCompany;
+
+    return {
+      name: station.company_name || fallbackCompany.name,
+      address: station.company_address || fallbackCompany.address,
+      phone: station.company_phone || fallbackCompany.phone,
+      logoUrl: station.company_logo_url || fallbackCompany.logoUrl,
+    };
+  }
+
+  /** The paper this slip's station prints on; A5 until it has told us. */
+  async function paperFor(stationId: string | null | undefined): Promise<PdfPaperSize> {
+    if (!stationId) return 'A5';
+    const station = await StationModel.findById(stationId).lean();
+    return (station?.paper_size as PdfPaperSize | undefined) ?? 'A5';
+  }
 
   const pageUrl = (slip: string) =>
     `${config.APP_DOMAIN.replace(/\/+$/, '')}/r/${encodeURIComponent(slip)}`;
@@ -55,9 +90,11 @@ export function receiptRouter(config: ServerConfig): Router {
       res
         .status(404)
         .type('html')
-        .send(renderNotFoundPage(slip || req.params.slip, company.name));
+        .send(renderNotFoundPage(slip || req.params.slip, fallbackCompany.name));
       return;
     }
+
+    const company = await companyFor(weighment.station_id);
 
     res
       .type('html')
@@ -81,14 +118,15 @@ export function receiptRouter(config: ServerConfig): Router {
       res
         .status(404)
         .type('html')
-        .send(renderNotFoundPage(slip || req.params.slip, company.name));
+        .send(renderNotFoundPage(slip || req.params.slip, fallbackCompany.name));
       return;
     }
 
     const pdf = await buildReceiptPdf({
       weighment,
-      company,
+      company: await companyFor(weighment.station_id),
       receiptUrl: pageUrl(weighment.slip_number),
+      paperSize: await paperFor(weighment.station_id),
     });
 
     res

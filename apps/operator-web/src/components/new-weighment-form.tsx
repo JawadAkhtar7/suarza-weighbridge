@@ -228,7 +228,7 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
               htmlFor="customer_company"
               label="Company"
               error={errors.customer_company?.message}
-              required
+              optional
             >
               <Input
                 id="customer_company"

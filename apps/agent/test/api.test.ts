@@ -108,6 +108,21 @@ describe('POST /weighments', () => {
     expect(row).toEqual({ slip_number: 'SI-000001', status: 'OPEN', first_weight_kg: 8000 });
   });
 
+  it('saves a customer with no company — the column is NOT NULL, so this must land', async () => {
+    const body = firstWeightBody();
+    delete (body as Record<string, unknown>).customer_company;
+
+    const response = await app.inject({ method: 'POST', url: '/weighments', payload: body });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().weighment.customer_company).toBe('');
+
+    // Straight from SQLite: an empty string satisfies NOT NULL, a null would not.
+    const row = db.prepare('SELECT customer_company FROM weighments').get() as {
+      customer_company: string;
+    };
+    expect(row.customer_company).toBe('');
+  });
+
   it('rejects a form with missing required fields and names them', async () => {
     const response = await app.inject({
       method: 'POST',

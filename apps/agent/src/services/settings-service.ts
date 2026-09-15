@@ -11,9 +11,14 @@
  * rest of the code does not expect.
  */
 
-import { stationSettingsSchema, type StationSettings } from '@suarza/shared';
+import {
+  nowUtc,
+  stationSettingsSchema,
+  type StationProfile,
+  type StationSettings,
+} from '@suarza/shared';
 import type { Db } from '../db/connection.js';
-import { MetaStore } from '../db/meta.js';
+import { MetaStore, META_KEYS } from '../db/meta.js';
 import { AppError } from '../errors.js';
 
 const SETTINGS_KEY = 'station_settings';
@@ -37,7 +42,18 @@ export class SettingsService {
     // A malformed blob falls back to defaults rather than throwing: the
     // operator must still be able to weigh trucks and fix the settings after.
     const base = parsed.success ? parsed.data : stationSettingsSchema.parse({});
-    return { ...base, ...(stored === null ? this.defaults : {}) };
+    const settings = { ...base, ...(stored === null ? this.defaults : {}) };
+
+    // A blank receipt address silently drops the QR from every slip the
+    // operator prints, while the manager's copy — built by the cloud from its
+    // own APP_DOMAIN — still has one. The agent already knows the cloud it
+    // syncs to, and the public receipt lives on that same host, so use it
+    // rather than making someone type the same domain into a second field.
+    if (!settings.receipt_base_url.trim() && this.defaults.receipt_base_url) {
+      settings.receipt_base_url = this.defaults.receipt_base_url;
+    }
+
+    return settings;
   }
 
   replace(input: unknown): StationSettings {
@@ -49,8 +65,32 @@ export class SettingsService {
     }
 
     this.meta.setJson(SETTINGS_KEY, result.data);
+    // Stamped here rather than sent as "now" at sync time: the cloud uses it to
+    // reject a batch older than what it already holds, which only works if the
+    // time describes the edit, not the transmission.
+    this.meta.set(META_KEYS.settingsUpdatedAt, nowUtc());
     for (const listener of this.listeners) listener(result.data);
     return result.data;
+  }
+
+  /**
+   * The company details as the cloud needs them, for the page behind the QR.
+   *
+   * Sent with every batch so the public receipt matches the printed one; see
+   * `stationProfileSchema`.
+   */
+  profile(): StationProfile {
+    const settings = this.get();
+    return {
+      station_id: settings.station_id,
+      company_name: settings.company_name,
+      company_address: settings.company_address,
+      company_phone: settings.company_phone,
+      company_logo_url: settings.company_logo_url,
+      paper_size: settings.print.paper_size === 'CUSTOM' ? 'A5' : settings.print.paper_size,
+      // Never edited on this station: epoch, so any real edit anywhere wins.
+      updated_at: this.meta.get(META_KEYS.settingsUpdatedAt) ?? new Date(0).toISOString(),
+    };
   }
 
   onChange(listener: (settings: StationSettings) => void): () => void {

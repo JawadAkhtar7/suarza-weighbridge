@@ -9,4 +9,4 @@
  */
 
 export { buildReceiptPdf, pdfFileName } from './build-pdf.js';
-export type { BuildPdfOptions, PdfCompany } from './build-pdf.js';
+export type { BuildPdfOptions, PdfCompany, PdfPaperSize } from './build-pdf.js';

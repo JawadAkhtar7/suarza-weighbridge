@@ -13,10 +13,35 @@ import { WEIGHMENT_STATUSES, USER_ROLES } from '../constants/domain.js';
  * that explains it can never arrive out of step. The upsert is keyed on `id`,
  * so re-sending a batch after a timeout is safe by construction (brief §7.4).
  */
+/**
+ * The company details printed on a receipt, as the station knows them.
+ *
+ * They travel with every ingest because the agent is where an operator edits
+ * them (Settings) and the cloud is where the customer reads them (the QR page
+ * and the PDF behind it). Configuring the same address in two places is how a
+ * printed slip and the page behind its own QR code end up disagreeing.
+ */
+export const stationProfileSchema = z.object({
+  station_id: z.string().min(1).max(16),
+  company_name: z.string().max(200),
+  company_address: z.string().max(400),
+  company_phone: z.string().max(100),
+  company_logo_url: z.string().max(500).default(''),
+  /** What this station prints on, so a downloaded PDF matches its paper. */
+  paper_size: z.enum(['A4', 'A5', 'LETTER']).default('A5'),
+  /** When the station last changed them, so a stale batch cannot overwrite. */
+  updated_at: z.string().datetime({ offset: true }),
+});
+
+export type StationProfile = z.infer<typeof stationProfileSchema>;
+
 export const ingestRequestSchema = z.object({
   station_id: z.string().min(1).max(16),
   weighments: z.array(weighmentSchema).max(200),
   audit_entries: z.array(auditEntrySchema).max(1000).default([]),
+  /** Optional: an older agent simply does not send it, and the cloud falls
+   *  back to its own COMPANY_* configuration. */
+  station: stationProfileSchema.optional(),
 });
 
 export type IngestRequest = z.infer<typeof ingestRequestSchema>;

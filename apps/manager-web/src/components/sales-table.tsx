@@ -75,7 +75,13 @@ export function SalesTable({
       cell: ({ row }) => (
         <div className="min-w-0">
           <p className="truncate font-medium">{row.original.customer_name}</p>
-          <p className="truncate text-xs text-muted-foreground">{row.original.customer_company}</p>
+          {/* Dropped entirely rather than shown as a dash: this is a subtitle,
+              and an empty line under every individual customer is just noise. */}
+          {row.original.customer_company && (
+            <p className="truncate text-xs text-muted-foreground">
+              {row.original.customer_company}
+            </p>
+          )}
         </div>
       ),
     },
@@ -189,9 +195,11 @@ export function SalesTable({
                   <div className="flex items-baseline justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{row.customer_name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {row.customer_company}
-                      </p>
+                      {row.customer_company && (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {row.customer_company}
+                        </p>
+                      )}
                     </div>
                     <span className="tabular shrink-0 font-semibold">
                       {formatPKR(row.amount_charged)}

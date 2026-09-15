@@ -46,7 +46,10 @@ export const weighmentSchema = z.object({
 
   // Customer / vehicle
   customer_name: z.string().trim().min(1, 'Customer name is required').max(120),
-  customer_company: z.string().trim().min(1, 'Company is required').max(120),
+  // Optional: plenty of customers are individuals with no company to give, and
+  // refusing the weighing over it would just get a placeholder typed in. Empty
+  // string rather than undefined, so every tier keeps a plain `string`.
+  customer_company: z.string().trim().max(120).default(''),
   customer_phone: optionalText,
   vehicle_type: vehicleTypeSchema,
   vehicle_plate: z.string().trim().min(1, 'Vehicle plate is required').max(32),
@@ -105,7 +108,10 @@ export const completedWeighmentSchema = weighmentSchema.superRefine((w, ctx) => 
 /** POST /weighments — pass 1. The agent mints id, slip number and timestamps. */
 export const createWeighmentSchema = z.object({
   customer_name: z.string().trim().min(1, 'Customer name is required').max(120),
-  customer_company: z.string().trim().min(1, 'Company is required').max(120),
+  // Optional: plenty of customers are individuals with no company to give, and
+  // refusing the weighing over it would just get a placeholder typed in. Empty
+  // string rather than undefined, so every tier keeps a plain `string`.
+  customer_company: z.string().trim().max(120).default(''),
   customer_phone: optionalText,
   vehicle_type: vehicleTypeSchema,
   vehicle_plate: z.string().trim().min(1, 'Vehicle plate is required').max(32),

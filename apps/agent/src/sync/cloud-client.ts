@@ -6,12 +6,20 @@
  * weighments and do nothing more.
  */
 
-import type { AuditEntry, IngestResponse, Weighment } from '@suarza/shared';
+import type { AuditEntry, IngestResponse, StationProfile, Weighment } from '@suarza/shared';
 
 export interface CloudClientOptions {
   baseUrl: string;
   apiKey: string;
   stationId: string;
+  /**
+   * The station's company details, read fresh on each send.
+   *
+   * A function rather than a value because Settings can be edited while the
+   * agent runs, and a snapshot taken at startup would keep publishing the old
+   * address until the next restart.
+   */
+  profile?: () => StationProfile | null;
   /** A stalled request must not wedge the worker; the retry will come round. */
   timeoutMs?: number;
 }
@@ -60,6 +68,9 @@ export function createCloudClient(options: CloudClientOptions): CloudClient {
           station_id: options.stationId,
           weighments,
           audit_entries: auditEntries,
+          // Rides along so the cloud's receipt page shows what this station
+          // prints, instead of whatever COMPANY_* on the server happens to say.
+          station: options.profile?.() ?? undefined,
         });
       } catch (error) {
         // No internet, DNS failure, timeout — the normal state at a factory
