@@ -53,6 +53,18 @@ export class SettingsService {
       settings.receipt_base_url = this.defaults.receipt_base_url;
     }
 
+    // Paper size and alignment are no longer operator-editable: every station
+    // prints A4 on pre-printed pads. Normalised on read so a station carrying
+    // an older stored value — A5, or an offset calibrated months ago — is not
+    // left with settings nothing can now correct.
+    settings.print = {
+      ...settings.print,
+      paper_size: 'A4',
+      offset_top_mm: 0,
+      offset_left_mm: 0,
+      scale_percent: 100,
+    };
+
     return settings;
   }
 

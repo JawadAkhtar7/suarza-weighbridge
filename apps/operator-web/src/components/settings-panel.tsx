@@ -24,33 +24,15 @@ import {
   Input,
   Label,
   NumberInput,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Separator,
   buildTestPrintStyle,
   cn,
 } from '@suarza/ui';
-import {
-  VEHICLE_TYPE_DEFS,
-  formatPKR,
-  paperSizeSchema,
-  priceFor,
-  type PaperSize,
-} from '@suarza/shared';
+import { VEHICLE_TYPE_DEFS, formatPKR, priceFor } from '@suarza/shared';
 import { Loader2, Printer, RotateCcw } from 'lucide-react';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
 import { defaultReceiptSettings, type ReceiptSettings } from '../lib/receipt-settings.js';
 import { TestPrintSheet } from './test-print-sheet.js';
-
-const PAPER_LABELS: Record<PaperSize, string> = {
-  A5: 'A5 (148 × 210 mm)',
-  A4: 'A4 (210 × 297 mm)',
-  LETTER: 'Letter (216 × 279 mm)',
-  CUSTOM: 'Custom size',
-};
 
 interface SettingsPanelProps {
   open: boolean;
@@ -83,9 +65,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     pageStyle: buildTestPrintStyle(draft.print),
   });
 
-  const setPrint = (patch: Partial<ReceiptSettings['print']>) =>
-    setDraft((current) => ({ ...current, print: { ...current.print, ...patch } }));
-
   const save = () => {
     // The provider owns the toast, because it is the thing that knows whether
     // the agent actually accepted the save.
@@ -105,88 +84,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
         <div className="space-y-6">
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Paper &amp; alignment</h3>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Paper size</Label>
-                <Select
-                  value={draft.print.paper_size}
-                  onValueChange={(value) => setPrint({ paper_size: paperSizeSchema.parse(value) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(PAPER_LABELS).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="scale">Scale (%)</Label>
-                <NumberInput
-                  id="scale"
-                  min={50}
-                  max={150}
-                  step="1"
-                  value={draft.print.scale_percent}
-                  onChange={(event) => setPrint({ scale_percent: Number(event.target.value) })}
-                />
-              </div>
-            </div>
-
-            {draft.print.paper_size === 'CUSTOM' && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="paper-width">Width (mm)</Label>
-                  <NumberInput
-                    id="paper-width"
-                    min={50}
-                    max={500}
-                    value={draft.print.custom_width_mm}
-                    onChange={(event) => setPrint({ custom_width_mm: Number(event.target.value) })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paper-height">Height (mm)</Label>
-                  <NumberInput
-                    id="paper-height"
-                    min={50}
-                    max={500}
-                    value={draft.print.custom_height_mm}
-                    onChange={(event) => setPrint({ custom_height_mm: Number(event.target.value) })}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="offset-top">Top offset (mm)</Label>
-                <NumberInput
-                  id="offset-top"
-                  min={-50}
-                  max={200}
-                  value={draft.print.offset_top_mm}
-                  onChange={(event) => setPrint({ offset_top_mm: Number(event.target.value) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="offset-left">Left offset (mm)</Label>
-                <NumberInput
-                  id="offset-left"
-                  min={-50}
-                  max={200}
-                  value={draft.print.offset_left_mm}
-                  onChange={(event) => setPrint({ offset_left_mm: Number(event.target.value) })}
-                />
-              </div>
-            </div>
+            <h3 className="text-sm font-semibold">Printing</h3>
 
             <div className="flex flex-wrap items-center gap-3">
               <Button type="button" variant="outline" onClick={() => testPrint()}>
@@ -194,8 +92,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 Test print
               </Button>
               <p className="text-xs text-muted-foreground">
-                Prints a dashed outline onto a blank pad sheet. Measure the gap and adjust the
-                offsets until it sits inside the blank area.
+                Prints a dashed outline onto a blank pad sheet, so you can check the slip lands
+                inside the blank area before using a real pad.
               </p>
             </div>
 
@@ -215,8 +113,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold">Receipt details</h3>
             <p className="text-xs text-muted-foreground">
-              Shown on the on-screen preview and on the web page behind the QR code. The printed
-              slip takes its header and footer from the pre-printed pad instead.
+              These appear on screen, in the PDF, and on the QR code page. Printed slips use your
+              pre-printed pad instead.
             </p>
 
             <div className="space-y-2">
@@ -237,24 +135,13 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="company-phone">Phone</Label>
-                <Input
-                  id="company-phone"
-                  value={draft.company_phone}
-                  onChange={(event) => setDraft({ ...draft, company_phone: event.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="company-logo">Logo URL</Label>
-                <Input
-                  id="company-logo"
-                  value={draft.company_logo_url}
-                  placeholder="Optional"
-                  onChange={(event) => setDraft({ ...draft, company_logo_url: event.target.value })}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-phone">Phone</Label>
+              <Input
+                id="company-phone"
+                value={draft.company_phone}
+                onChange={(event) => setDraft({ ...draft, company_phone: event.target.value })}
+              />
             </div>
 
             <div className="space-y-2">
@@ -278,8 +165,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold">Pricing</h3>
             <p className="text-xs text-muted-foreground">
-              The rate that auto-fills when a vehicle type is chosen. The amount on the weighing
-              form stays editable regardless.
+              Picking a vehicle type fills in this amount. You can still change it on the form.
             </p>
 
             <div className="grid gap-2 sm:grid-cols-2">
@@ -322,38 +208,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           <Separator />
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Station &amp; sync</h3>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="station-id">Station ID</Label>
-                <Input
-                  id="station-id"
-                  value={draft.station_id}
-                  onChange={(event) => setDraft({ ...draft, station_id: event.target.value })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Recorded on every weighment. Only matters with more than one bridge.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="sync-interval">Sync check (seconds)</Label>
-                <NumberInput
-                  id="sync-interval"
-                  min={30}
-                  max={3600}
-                  step="30"
-                  value={draft.sync_interval_seconds}
-                  onChange={(event) =>
-                    setDraft({ ...draft, sync_interval_seconds: Number(event.target.value) })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  A backstop only — records already sync the moment they are saved.
-                </p>
-              </div>
-            </div>
+            <h3 className="text-sm font-semibold">Backup</h3>
+            <p className="text-xs text-muted-foreground">
+              A spare copy of all weighing records. If this PC ever fails, the copy is your data.
+              Leave the folder blank to switch backups off.
+            </p>
 
             <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
               <div className="space-y-2">
@@ -361,7 +220,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <Input
                   id="backup-path"
                   value={draft.backup_path}
-                  placeholder="e.g. D:\\weighbridge-backups  (blank disables backups)"
+                  placeholder="e.g. D:\\weighbridge-backups"
                   onChange={(event) => setDraft({ ...draft, backup_path: event.target.value })}
                 />
               </div>
@@ -379,8 +238,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              A safe copy of the weighment database, taken while the agent keeps running. The last
-              14 copies are kept. Changing the folder takes effect when the agent next starts.
+              The last 14 copies are kept. A new folder takes effect next time the agent starts.
             </p>
           </section>
         </div>

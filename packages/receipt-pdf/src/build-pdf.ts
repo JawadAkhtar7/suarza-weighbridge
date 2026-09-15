@@ -416,11 +416,11 @@ export async function buildReceiptPdf({
   const footH = 44;
   box(left, y, width, footH);
 
-  doc.font('Helvetica').fontSize(6).fillColor(MUTED).text(
-    `Operator: ${weighment.operator_username}  ·  Station ${weighment.station_id}`,
-    left + 9,
-    y + 18,
-  );
+  doc
+    .font('Helvetica')
+    .fontSize(6)
+    .fillColor(MUTED)
+    .text(`Operator: ${weighment.operator_username}`, left + 9, y + 18);
 
   const signX = left + width * 0.52;
   const signW = width * 0.48 - 10;

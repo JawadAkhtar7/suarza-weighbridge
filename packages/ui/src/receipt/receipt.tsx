@@ -367,9 +367,9 @@ function QrPanel({ receiptUrl }: { receiptUrl: string | null }) {
 function FooterRow({ weighment }: { weighment: Weighment }) {
   return (
     <div className={cn('mt-2 grid grid-cols-[1fr_auto] items-end gap-3 rounded-md border px-3 py-2', BRAND_BORDER, PRINT_PLAIN)}>
-      <p className="text-[7px] leading-[1.2]">
-        Operator: {weighment.operator_username} · Station {weighment.station_id}
-      </p>
+      {/* No station on the slip: there is one weighbridge, so naming it told the
+          customer nothing. The id is still recorded against every weighment. */}
+      <p className="text-[7px] leading-[1.2]">Operator: {weighment.operator_username}</p>
 
       <div className="w-[52mm] text-center">
         <p className="text-[9px] font-bold uppercase tracking-wide">Weighing Officer Signature</p>
