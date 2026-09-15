@@ -59,7 +59,7 @@ const field = (label: RegExp) => screen.getByLabelText(label) as HTMLInputElemen
 const vehicleType = () => screen.getByLabelText(/vehicle type/i).textContent?.trim();
 
 async function pickCustomer(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText(/find an existing customer/i), 'ali');
+  await user.type(screen.getByLabelText(/search an existing customer/i), 'ali');
   await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
   await user.click(screen.getByText(/Ali Raza — Raza Traders/));
 }
@@ -67,7 +67,7 @@ async function pickCustomer(user: ReturnType<typeof userEvent.setup>) {
 describe('picking a customer', () => {
   it('offers matches from the directory', async () => {
     const user = setup();
-    await user.type(screen.getByLabelText(/find an existing customer/i), 'ali');
+    await user.type(screen.getByLabelText(/search an existing customer/i), 'ali');
 
     await waitFor(() => expect(screen.getByText(/Ali Raza — Raza Traders/)).toBeInTheDocument());
     expect(screen.getByText(/weighed 4 times here/i)).toBeInTheDocument();
@@ -90,11 +90,13 @@ describe('picking a customer', () => {
     expect(field(/product/i).value).toBe('Cement');
   });
 
-  it('clears the search box, so it does not look like a filter is stuck on', async () => {
+  it('keeps showing who was picked, so the operator can see their own choice', async () => {
+    // Clearing the box would leave the operator with no way to tell whether a
+    // customer was selected at all, or which of two similar names it was.
     const user = setup();
     await pickCustomer(user);
-    expect((screen.getByLabelText(/find an existing customer/i) as HTMLInputElement).value).toBe(
-      '',
+    expect((screen.getByLabelText(/search an existing customer/i) as HTMLInputElement).value).toBe(
+      'Ali Raza — Raza Traders',
     );
   });
 });
@@ -156,7 +158,7 @@ describe('a customer with gaps', () => {
 describe('a customer who has never been here', () => {
   it('never blocks typing a new name', async () => {
     const user = setup([]);
-    await user.type(screen.getByLabelText(/find an existing customer/i), 'Brand New');
+    await user.type(screen.getByLabelText(/search an existing customer/i), 'Brand New');
     await waitFor(() =>
       expect(screen.getByText(/no customer by that name yet/i)).toBeInTheDocument(),
     );

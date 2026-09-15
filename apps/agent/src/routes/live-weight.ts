@@ -31,6 +31,7 @@ export function registerLiveWeightRoutes(app: FastifyInstance, deps: AgentDeps):
       last_success_at: null,
       last_error: null,
       syncing: false,
+      blocked_count: deps.service.blockedSyncCount(),
     };
     return status;
   });

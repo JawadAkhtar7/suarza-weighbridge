@@ -49,6 +49,7 @@ export function useSyncStatus() {
   return {
     online: query.data?.online ?? false,
     pendingCount: query.data?.pending_count ?? 0,
+    blockedCount: query.data?.blocked_count ?? 0,
     lastError: query.data?.last_error ?? null,
     known: query.isSuccess,
   };

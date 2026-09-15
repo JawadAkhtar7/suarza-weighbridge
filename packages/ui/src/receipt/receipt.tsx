@@ -353,10 +353,22 @@ function FooterRow({
   return (
     <div className={cn('mt-2 grid grid-cols-[auto_1fr] items-center gap-3 rounded-md border px-3 py-2', BRAND_BORDER, PRINT_PLAIN)}>
       <div className="flex items-center gap-2">
-        {receiptUrl && <QRCodeSVG value={receiptUrl} size={54} level="M" marginSize={0} />}
+        {/* The class is the only stable way to tell the QR apart from the
+            lucide icons elsewhere on the receipt, which are also <svg>. */}
+        {receiptUrl && (
+          <QRCodeSVG className="receipt-qr" value={receiptUrl} size={54} level="M" marginSize={0} />
+        )}
         <div>
-          <p className="text-[9px] font-bold uppercase leading-[1.2] tracking-wide">Scan to Verify</p>
-          <p className="urdu text-left text-[8px] leading-[1.3]">تصدیق کے لیے اسکین کریں</p>
+          {/* Without a QR there is nothing to scan, and an instruction to scan
+              a receipt that carries no code just makes the customer hunt. */}
+          {receiptUrl && (
+            <>
+              <p className="text-[9px] font-bold uppercase leading-[1.2] tracking-wide">
+                Scan to Verify
+              </p>
+              <p className="urdu text-left text-[8px] leading-[1.3]">تصدیق کے لیے اسکین کریں</p>
+            </>
+          )}
           <p className="mt-1 text-[7px] leading-[1.2]">
             Operator: {weighment.operator_username} · Station {weighment.station_id}
           </p>

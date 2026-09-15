@@ -39,8 +39,9 @@ describe('GET /r/:slip — the page a driver scans', () => {
     expect(response.type).toBe('text/html');
     expect(response.text).toContain('SI-000123');
     expect(response.text).toContain('Ali Raza');
-    // Title-case in the markup; the `uppercase` class does the shouting.
-    expect(response.text).toContain('Weighbridge Slip');
+    // The slip number is labelled, not floating loose: the client's design has
+    // no title banner, so this label is what identifies the number on the page.
+    expect(response.text).toContain('Slip No.');
   });
 
   it('shows the branded soft form, header and footer included', async () => {
@@ -60,7 +61,9 @@ describe('GET /r/:slip — the page a driver scans', () => {
 
     expect(text).toContain('12,000 kg');
     expect(text).toContain('12.000 ton');
-    expect(text).toContain('300.000 maund');
+    // Maunds are shown as a trader reads them — `300 Mann`, not `300.000` —
+    // with the figure and its unit in one line of markup.
+    expect(text).toMatch(/300 <span[^>]*>Mann<\/span>/);
   });
 
   it('offers the PDF download', async () => {
@@ -75,7 +78,21 @@ describe('GET /r/:slip — the page a driver scans', () => {
     await store(completedWeighment({ slip_number: 'SI-000123' }));
     const { text } = await request(app).get('/r/SI-000123');
     expect(text).toMatch(/<style>[\s\S]+<\/style>/);
-    expect(text).not.toContain('<script');
+    // No external stylesheet: a blocked or slow CDN would leave the driver
+    // looking at unstyled markup.
+    expect(text).not.toMatch(/<link[^>]+rel="stylesheet"/);
+  });
+
+  it('loads its only script from this origin, so the CSP cannot break the buttons', async () => {
+    await store(completedWeighment({ slip_number: 'SI-000123' }));
+    const { text } = await request(app).get('/r/SI-000123');
+
+    // Print and Download need a script, and the server sets script-src 'self'.
+    // Inlining it would need a nonce or 'unsafe-inline'; a same-origin file
+    // needs neither. Any OTHER script source would be silently blocked.
+    const sources = [...text.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1]);
+    expect(sources).toEqual(['/r/receipt-page.js']);
+    expect(text).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/);
   });
 
   it('accepts the slip in the shorthand an operator might type', async () => {
@@ -88,8 +105,10 @@ describe('GET /r/:slip — the page a driver scans', () => {
     await store(weighment({ slip_number: 'SI-000200' }));
     const { text } = await request(app).get('/r/SI-000200');
 
-    expect(text).toContain('second weighing pending');
-    expect(text).not.toContain('Net weight');
+    expect(text).toContain('Pending second weighing');
+    // The net card keeps its heading but must carry no figure: a net weight on
+    // a half-finished ticket is a number someone could act on.
+    expect(text).not.toMatch(/<span[^>]*>Mann<\/span>/);
   });
 
   it('is never cached, so a corrected record is never shown stale', async () => {

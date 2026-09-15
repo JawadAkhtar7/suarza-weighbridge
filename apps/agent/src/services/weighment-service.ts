@@ -346,6 +346,28 @@ export class WeighmentService {
     return this.weighments.countUnsynced();
   }
 
+  /** Records the cloud permanently refused — quarantined, not retried. */
+  blockedSyncCount(): number {
+    return this.weighments.countBlocked();
+  }
+
+  listBlockedSync(): WeighmentWithSync[] {
+    return this.weighments.listBlocked();
+  }
+
+  /**
+   * Returns a quarantined record to the outbox once the conflict behind it has
+   * been cleared — typically the duplicate in the cloud having been removed.
+   */
+  retrySync(rawSlip: string): WeighmentWithSync {
+    const record = this.getBySlip(rawSlip);
+    this.weighments.unblock([record.id]);
+    // Same trigger a save uses, so the record goes back up immediately rather
+    // than waiting for the periodic sweep.
+    this.notifyChanged();
+    return this.weighments.findById(record.id)!;
+  }
+
   private notifyChanged(): void {
     try {
       this.options.onChange?.();

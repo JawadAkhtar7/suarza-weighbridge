@@ -119,6 +119,7 @@ export class SyncWorker {
       last_success_at: this.lastSuccessAt,
       last_error: this.lastError,
       syncing: this.running,
+      blocked_count: this.options.weighments.countBlocked(),
     };
   }
 
@@ -237,24 +238,54 @@ export class SyncWorker {
         auditEntries.filter((entry) => accepted.has(entry.weighment_id)).map((entry) => entry.id),
       );
 
-      if (response.rejected.length > 0) {
+      // A permanent rejection — a duplicate slip number, a document the cloud
+      // refuses — cannot come right on a retry. Quarantined, it stops costing a
+      // request every couple of minutes and stops blocking the records behind
+      // it. Transient rejections stay in the outbox and are retried as before.
+      const permanent = response.rejected.filter((r) => r.permanent);
+      const transient = response.rejected.filter((r) => !r.permanent);
+
+      if (permanent.length > 0) {
+        this.options.weighments.markBlocked(
+          permanent.map((r) => ({ id: r.id, reason: r.reason })),
+          nowUtc(),
+        );
         this.options.onLog?.(
           'error',
-          `Cloud rejected ${response.rejected.length} record(s): ${response.rejected
+          `Cloud permanently refused ${permanent.length} record(s); they will NOT be retried ` +
+            `until the conflict is resolved: ${permanent
+              .map((r) => `${r.id}: ${r.reason}`)
+              .join('; ')
+              .slice(0, 500)}`,
+        );
+      }
+
+      if (transient.length > 0) {
+        this.options.onLog?.(
+          'error',
+          `Cloud rejected ${transient.length} record(s): ${transient
             .map((r) => `${r.id}: ${r.reason}`)
             .join('; ')
             .slice(0, 500)}`,
         );
       }
 
-      if (acceptedIds.length === 0 && pending.length > 0) {
-        // Nothing moved, so looping again would spin forever on the same batch.
+      // "Moved" means the outbox is smaller than it was: stored, or quarantined.
+      // Anything else — including a cloud that confirms nothing and refuses
+      // nothing — would hand back the same batch on the next pass and spin.
+      const moved = acceptedIds.length > 0 || permanent.length > 0;
+      if (!moved && pending.length > 0) {
         this.fail(new CloudError('Cloud accepted none of the batch', null, true));
         return false;
       }
 
+      // Reaching here means the cloud answered and the outbox moved — either
+      // records were stored, or the poison ones were quarantined. Both are
+      // proof the link is up, so the operator must not be shown "offline".
       this.markOnline();
-      this.options.onLog?.('info', `Synced ${acceptedIds.length} record(s) to the cloud`);
+      if (acceptedIds.length > 0) {
+        this.options.onLog?.('info', `Synced ${acceptedIds.length} record(s) to the cloud`);
+      }
       return true;
     } catch (error) {
       this.fail(error);

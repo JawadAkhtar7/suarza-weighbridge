@@ -102,6 +102,7 @@ export function App() {
             <LiveWeightPanel
               live={live}
               pendingSyncCount={sync.pendingCount}
+              blockedSyncCount={sync.blockedCount}
               online={sync.online}
             />
 

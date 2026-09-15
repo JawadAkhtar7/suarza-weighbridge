@@ -102,16 +102,17 @@ describe('receipt 1 — after the first weight', () => {
     renderReceipt(base(), 'FIRST');
     expect(screen.getByText('SI-000123')).toBeInTheDocument();
     expect(screen.getByText('8,000 kg')).toBeInTheDocument();
-    expect(screen.getByText(/second weighing pending/i)).toBeInTheDocument();
+    expect(screen.getByText(/pending second weighing/i)).toBeInTheDocument();
   });
 
   it('carries no net weight, because there is not one yet', () => {
     renderReceipt(base(), 'FIRST');
-    expect(screen.queryByText(/net weight/i)).not.toBeInTheDocument();
-    // The second-weight row says so explicitly rather than printing "0 kg",
-    // which a customer could read as a real weighing.
+    // The net card keeps its heading — the layout is fixed — but must carry no
+    // figure: "0 kg" is something a customer could read as a real weighing.
+    expect(screen.getByText(/pending second weighing/i)).toBeInTheDocument();
     expect(screen.getByText('pending')).toBeInTheDocument();
     expect(screen.queryByText('0 kg')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mann')).not.toBeInTheDocument();
   });
 });
 
@@ -122,19 +123,21 @@ describe('receipt 2 — after completion', () => {
     expect(screen.getByText('20,000 kg')).toBeInTheDocument();
     expect(screen.getByText('12,000 kg')).toBeInTheDocument();
     expect(screen.getByText(/12\.000 ton/)).toBeInTheDocument();
-    expect(screen.getByText(/300\.000 maund/)).toBeInTheDocument();
+    // Maunds read as a trader says them: `300 Mann`, not `300.000 maund`.
+    expect(screen.getByText('Mann')).toBeInTheDocument();
+    expect(screen.getByText(/^300$/)).toBeInTheDocument();
   });
 
   it('shows the amount charged', () => {
     renderReceipt(completed(), 'SECOND');
-    expect(screen.getByText('Rs 300')).toBeInTheDocument();
+    expect(screen.getByText('Rs 300/-')).toBeInTheDocument();
   });
 });
 
 describe('honesty markers', () => {
   it('flags a manually entered weight on the paper, not just in the database', () => {
     renderReceipt(base({ first_weight_src: 'MANUAL' }), 'FIRST');
-    expect(screen.getByText(/\(manual\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/\(manual entry\)/i)).toBeInTheDocument();
   });
 
   it('carries no reprint marking — every copy reads as the receipt itself', () => {
@@ -157,8 +160,8 @@ describe('QR code', () => {
       'SECOND',
       'https://wb.example.com/r/SI-000123',
     );
-    expect(container.querySelector('svg')).not.toBeNull();
-    expect(screen.getByText(/scan for a copy/i)).toBeInTheDocument();
+    expect(container.querySelector('svg.receipt-qr')).not.toBeNull();
+    expect(screen.getByText(/scan to verify/i)).toBeInTheDocument();
   });
 
   it('encodes exactly the URL it is given, and nothing else', () => {
@@ -166,14 +169,18 @@ describe('QR code', () => {
     // must be byte-identical to one rendered directly from the same string,
     // and must differ for a different slip.
     const url = 'https://wb.example.com/r/SI-000123';
+    // Scoped to the QR: the receipt also renders lucide icons, which are <svg>
+    // too, and an icon's path would compare equal between any two receipts.
     const pathOf = (root: HTMLElement) =>
-      root.querySelector('svg path:last-of-type')?.getAttribute('d');
+      root.querySelector('svg.receipt-qr path:last-of-type')?.getAttribute('d');
 
     const receipt = renderReceipt(completed(), 'SECOND', url);
     const receiptPath = pathOf(receipt.container);
     receipt.unmount();
 
-    const reference = render(<QRCodeSVG value={url} size={76} level="M" marginSize={0} />);
+    const reference = render(
+      <QRCodeSVG className="receipt-qr" value={url} size={54} level="M" marginSize={0} />,
+    );
     expect(receiptPath).toBe(pathOf(reference.container));
     reference.unmount();
 
@@ -184,7 +191,8 @@ describe('QR code', () => {
   it('prints no QR at all when the cloud address is not configured', () => {
     // A QR that resolves nowhere on a customer's receipt is worse than none.
     const { container } = renderReceipt(completed(), 'SECOND', null);
-    expect(container.querySelector('svg')).toBeNull();
-    expect(screen.queryByText(/scan for a copy/i)).not.toBeInTheDocument();
+    expect(container.querySelector('svg.receipt-qr')).toBeNull();
+    // And no orphaned instruction to scan a code that is not there.
+    expect(screen.queryByText(/scan to verify/i)).not.toBeInTheDocument();
   });
 });

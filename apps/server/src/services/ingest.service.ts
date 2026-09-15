@@ -42,6 +42,21 @@ function toDocument(weighment: Weighment): Record<string, unknown> {
   };
 }
 
+/**
+ * Mongo error codes that no retry can fix.
+ *
+ * 11000 is a duplicate key — here, two different records claiming one slip
+ * number, which happens when an agent database is restored or rebuilt and the
+ * counter restarts over numbers the cloud already holds. 121 is document
+ * validation. Both need a human; neither improves by being sent again, and the
+ * agent has to be told so rather than left guessing from the message text.
+ */
+const PERMANENT_ERROR_CODES = new Set([11000, 121]);
+
+function isPermanent(error: { code?: number }): boolean {
+  return error.code !== undefined && PERMANENT_ERROR_CODES.has(error.code);
+}
+
 export interface IngestResult extends IngestResponse {
   /** Ids skipped because the stored copy is already newer. */
   skipped_ids: string[];
@@ -54,7 +69,7 @@ export async function ingest(
 ): Promise<IngestResult> {
   const acceptedIds: string[] = [];
   const skippedIds: string[] = [];
-  const rejected: { id: string; reason: string }[] = [];
+  const rejected: { id: string; reason: string; permanent: boolean }[] = [];
 
   if (weighments.length > 0) {
     // One read to find records the cloud already holds a NEWER copy of. Two
@@ -100,8 +115,9 @@ export async function ingest(
       } catch (error) {
         // One bad record must not cost the whole batch: with ordered:false the
         // rest were written, so only the failures are reported back.
-        const writeErrors = (error as { writeErrors?: { index: number; errmsg?: string }[] })
-          .writeErrors;
+        const writeErrors = (
+          error as { writeErrors?: { index: number; code?: number; errmsg?: string }[] }
+        ).writeErrors;
         if (!writeErrors) throw error;
 
         const failedIndexes = new Set(writeErrors.map((e) => e.index));
@@ -109,7 +125,11 @@ export async function ingest(
           const id = String(operation.updateOne.filter._id);
           if (failedIndexes.has(index)) {
             const failure = writeErrors.find((e) => e.index === index);
-            rejected.push({ id, reason: failure?.errmsg ?? 'Write failed' });
+            rejected.push({
+              id,
+              reason: failure?.errmsg ?? 'Write failed',
+              permanent: isPermanent(failure ?? {}),
+            });
           } else {
             acceptedIds.push(id);
           }

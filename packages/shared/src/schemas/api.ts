@@ -24,7 +24,21 @@ export type IngestRequest = z.infer<typeof ingestRequestSchema>;
 export const ingestResponseSchema = z.object({
   /** Ids the server has durably stored — the agent marks exactly these synced. */
   accepted_ids: z.array(z.string().uuid()),
-  rejected: z.array(z.object({ id: z.string(), reason: z.string() })).default([]),
+  rejected: z
+    .array(
+      z.object({
+        id: z.string(),
+        reason: z.string(),
+        /**
+         * True when re-sending this record can never succeed — a duplicate slip
+         * number, a document that fails validation. The agent must quarantine
+         * these instead of retrying: a permanent rejection retried on a backoff
+         * is an infinite loop that also blocks every record behind it.
+         */
+        permanent: z.boolean().default(false),
+      }),
+    )
+    .default([]),
   received_at: z.string().datetime({ offset: true }),
 });
 

@@ -30,6 +30,12 @@ export const syncStatusSchema = z.object({
   last_success_at: z.string().datetime({ offset: true }).nullable(),
   last_error: z.string().nullable(),
   syncing: z.boolean().default(false),
+  /**
+   * Records the cloud permanently refused. They are out of the retry loop, so
+   * they are NOT in pending_count — without their own number they would just
+   * disappear from the operator's view.
+   */
+  blocked_count: z.number().int().min(0).default(0),
 });
 
 export type SyncStatus = z.infer<typeof syncStatusSchema>;

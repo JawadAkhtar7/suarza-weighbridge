@@ -36,7 +36,9 @@ describe('the preview', () => {
     );
 
     expect(screen.getByText(/receipt 1 — first weight/i)).toBeInTheDocument();
-    expect(screen.getByText('Suarza International')).toBeInTheDocument();
+    // The soft form's branding is the logo itself — the header no longer
+    // repeats the company name as text beside it.
+    expect(screen.getByAltText('Suarza International')).toBeInTheDocument();
     expect(screen.getByText(/only the central block/i)).toBeInTheDocument();
   });
 });

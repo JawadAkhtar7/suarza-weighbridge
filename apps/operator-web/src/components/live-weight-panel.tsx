@@ -13,10 +13,17 @@ import { presentIndicatorState } from '../lib/indicator-state.js';
 interface LiveWeightPanelProps {
   live: LiveWeightResult;
   pendingSyncCount: number;
+  /** Records the cloud permanently refused; they are NOT in pendingSyncCount. */
+  blockedSyncCount: number;
   online: boolean;
 }
 
-export function LiveWeightPanel({ live, pendingSyncCount, online }: LiveWeightPanelProps) {
+export function LiveWeightPanel({
+  live,
+  pendingSyncCount,
+  blockedSyncCount,
+  online,
+}: LiveWeightPanelProps) {
   const presentation = presentIndicatorState(live.state);
   const signalLost = live.state === 'AGENT_DOWN' || live.state === 'DISCONNECTED';
 
@@ -80,6 +87,17 @@ export function LiveWeightPanel({ live, pendingSyncCount, online }: LiveWeightPa
             'Everything synced'
           )}
         </span>
+
+        {/* A refused record is out of the retry loop, so nothing else on this
+            screen would ever mention it again. Silence here would read as
+            "everything synced" while a weighing sat on this PC alone. */}
+        {blockedSyncCount > 0 && (
+          <span className="flex items-center gap-2 font-medium text-destructive">
+            <TriangleAlert className="h-4 w-4" />
+            {blockedSyncCount} record{blockedSyncCount === 1 ? '' : 's'} the cloud refused — needs
+            attention
+          </span>
+        )}
 
         {/* Said plainly, because it is the single most reassuring fact on the
             screen when the internet is down and the operator is wondering

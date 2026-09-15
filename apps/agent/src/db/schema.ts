@@ -121,6 +121,20 @@ MIGRATIONS.push({
   `,
 });
 
+MIGRATIONS.push({
+  version: 3,
+  name: 'outbox quarantine for permanently rejected records',
+  up: `
+    -- A record the cloud will never accept — a slip number another record
+    -- already holds, say, after this database was rebuilt and the counter
+    -- restarted. Retrying it forever is an infinite loop that also blocks every
+    -- record queued behind it, so the reason is stored and the record leaves
+    -- the outbox. NULL means "still in the normal retry path".
+    ALTER TABLE weighments ADD COLUMN sync_blocked_reason TEXT;
+    ALTER TABLE weighments ADD COLUMN sync_blocked_at TEXT;
+  `,
+});
+
 export function migrate(db: Database): number {
   const current = db.pragma('user_version', { simple: true }) as number;
   const pending = MIGRATIONS.filter((m) => m.version > current).sort(

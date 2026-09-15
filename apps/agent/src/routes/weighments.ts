@@ -128,6 +128,17 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
     return { weighment };
   });
 
+  /**
+   * The outbox quarantine: records the cloud permanently refused, and the way
+   * back out. Without these a blocked record would be invisible on the
+   * weighbridge PC and only recoverable by hand-editing SQLite.
+   */
+  app.get('/sync/blocked', () => ({ weighments: deps.service.listBlockedSync() }));
+
+  app.post<{ Params: SlipParams }>('/sync/blocked/:slip/retry', (request) => ({
+    weighment: deps.service.retrySync(request.params.slip),
+  }));
+
   app.post<{ Params: SlipParams }>('/weighments/:slip/reprint', (request) => {
     const input = parse(reprintWeighmentSchema, request.body);
     const { weighment, entry } = deps.service.recordReprint(request.params.slip, input);

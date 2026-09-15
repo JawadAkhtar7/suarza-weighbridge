@@ -37,6 +37,8 @@ interface WeighmentRow {
   synced: number;
   sync_attempts: number;
   last_attempt_at: string | null;
+  sync_blocked_reason: string | null;
+  sync_blocked_at: string | null;
 }
 
 /** Local-only sync bookkeeping, kept out of the synced DTO (brief §6). */
@@ -44,6 +46,9 @@ export interface SyncState {
   synced: boolean;
   sync_attempts: number;
   last_attempt_at: string | null;
+  /** Why the cloud will never take this record. NULL = still being retried. */
+  blocked_reason: string | null;
+  blocked_at: string | null;
 }
 
 export type WeighmentWithSync = Weighment & { sync: SyncState };
@@ -80,6 +85,8 @@ function rowToWeighment(row: WeighmentRow): WeighmentWithSync {
       synced: row.synced === 1,
       sync_attempts: row.sync_attempts,
       last_attempt_at: row.last_attempt_at,
+      blocked_reason: row.sync_blocked_reason,
+      blocked_at: row.sync_blocked_at,
     },
   };
 }
@@ -96,7 +103,8 @@ const SELECT_ALL = `
          first_weight_kg, first_weight_at, first_weight_src,
          second_weight_kg, second_weight_at, second_weight_src, net_weight_kg,
          amount_charged, currency, operator_username, created_at, updated_at,
-         void_reason, voided_at, synced, sync_attempts, last_attempt_at
+         void_reason, voided_at, synced, sync_attempts, last_attempt_at,
+         sync_blocked_reason, sync_blocked_at
   FROM weighments
 `;
 
@@ -241,18 +249,75 @@ export class WeighmentRepository {
 
   // --- Outbox (used by the sync worker in M6) -------------------------------
 
+  /**
+   * The outbox. Quarantined records are excluded: they are the ones the cloud
+   * has permanently refused, and leaving them here would mean the sweep picks
+   * the same doomed record first on every pass and never reaches the rest.
+   */
   listUnsynced(limit = 50): WeighmentWithSync[] {
     const rows = this.db
-      .prepare(`${SELECT_ALL} WHERE synced = 0 ORDER BY updated_at ASC LIMIT ?`)
+      .prepare(
+        `${SELECT_ALL} WHERE synced = 0 AND sync_blocked_reason IS NULL
+         ORDER BY updated_at ASC LIMIT ?`,
+      )
       .all(limit) as WeighmentRow[];
     return rows.map(rowToWeighment);
   }
 
   countUnsynced(): number {
-    const row = this.db.prepare('SELECT COUNT(*) AS n FROM weighments WHERE synced = 0').get() as {
-      n: number;
-    };
+    const row = this.db
+      .prepare(
+        'SELECT COUNT(*) AS n FROM weighments WHERE synced = 0 AND sync_blocked_reason IS NULL',
+      )
+      .get() as { n: number };
     return row.n;
+  }
+
+  countBlocked(): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS n FROM weighments WHERE sync_blocked_reason IS NOT NULL')
+      .get() as { n: number };
+    return row.n;
+  }
+
+  listBlocked(): WeighmentWithSync[] {
+    const rows = this.db
+      .prepare(`${SELECT_ALL} WHERE sync_blocked_reason IS NOT NULL ORDER BY updated_at ASC`)
+      .all() as WeighmentRow[];
+    return rows.map(rowToWeighment);
+  }
+
+  /**
+   * Takes records out of the retry loop. The reason is stored rather than
+   * discarded because it is the only thing that tells whoever looks later WHY
+   * a weighment never reached the cloud.
+   */
+  markBlocked(entries: { id: string; reason: string }[], at: string): void {
+    if (entries.length === 0) return;
+    const stmt = this.db.prepare(
+      `UPDATE weighments SET sync_blocked_reason = ?, sync_blocked_at = ?
+       WHERE id = ? AND synced = 0`,
+    );
+    this.db.transaction((batch: { id: string; reason: string }[]) => {
+      for (const entry of batch) stmt.run(entry.reason.slice(0, 500), at, entry.id);
+    })(entries);
+  }
+
+  /**
+   * Puts a quarantined record back in the outbox, for once the conflict behind
+   * it has been dealt with. Without this the only way out of quarantine would
+   * be hand-editing SQLite on the weighbridge PC.
+   */
+  unblock(ids: string[]): number {
+    if (ids.length === 0) return 0;
+    const stmt = this.db.prepare(
+      'UPDATE weighments SET sync_blocked_reason = NULL, sync_blocked_at = NULL WHERE id = ?',
+    );
+    return this.db.transaction((batch: string[]) => {
+      let changed = 0;
+      for (const id of batch) changed += stmt.run(id).changes;
+      return changed;
+    })(ids);
   }
 
   markSynced(ids: string[]): void {
