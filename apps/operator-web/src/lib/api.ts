@@ -15,6 +15,7 @@ import type {
   CreateWeighmentInput,
   LiveWeight,
   NetWeight,
+  SyncOutcome,
   SyncStatus,
   VoidWeighmentInput,
   Weighment,
@@ -59,7 +60,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(path, {
       ...init,
-      headers: { 'content-type': 'application/json', ...init?.headers },
+      headers: {
+        // Only when there IS a body. Fastify refuses an empty body that claims
+        // to be JSON — so a POST that carries nothing, like the sync buttons,
+        // was rejected before it reached its handler.
+        ...(init?.body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...init?.headers,
+      },
     });
   } catch {
     // The service is stopped, still starting, or the machine is mid-reboot.
@@ -117,6 +124,18 @@ export const agentApi = {
 
   getSyncStatus: () => request<SyncStatus>('/sync-status'),
 
+  // --- The manager's lists, pulled on demand -------------------------------
+
+  getVehicleTypes: () =>
+    request<{
+      vehicle_types: { key: string; label: string; rate_pkr: number }[];
+      last_synced_at: { customers: string | null; vehicle_types: string | null };
+    }>('/vehicle-types'),
+
+  syncCustomers: () => request<SyncOutcome>('/sync/customers', { method: 'POST' }),
+
+  syncVehicleTypes: () => request<SyncOutcome>('/sync/vehicle-types', { method: 'POST' }),
+
   createWeighment: (input: CreateWeighmentInput) =>
     request<CreateWeighmentResponse>('/weighments', {
       method: 'POST',
@@ -139,11 +158,15 @@ export const agentApi = {
     }),
 
   /** Recent weighments for the quick-pick list. */
-  listWeighments: (options: { status?: string; limit?: number } = {}) => {
+  listWeighments: (options: { status?: string; limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams();
     if (options.status) params.set('status', options.status);
     params.set('limit', String(options.limit ?? 20));
-    return request<{ rows: Weighment[]; count: number }>(`/weighments?${params.toString()}`);
+    if (options.offset) params.set('offset', String(options.offset));
+    // `total` is every record the filter matches, not just this page.
+    return request<{ rows: Weighment[]; count: number; total: number }>(
+      `/weighments?${params.toString()}`,
+    );
   },
 
   /** Customers this station has weighed before. */

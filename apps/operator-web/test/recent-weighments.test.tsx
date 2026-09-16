@@ -29,7 +29,8 @@ beforeEach(() => {
 });
 
 function setup(rows: ReturnType<typeof weighment>[]) {
-  mocked.listWeighments.mockResolvedValue({ rows, count: rows.length });
+  // `total` equals what was handed in, so these tests see a single full page.
+  mocked.listWeighments.mockResolvedValue({ rows, count: rows.length, total: rows.length });
   const onPick = vi.fn();
   renderWithQuery(<RecentWeighments onPick={onPick} />);
   return { onPick, user: userEvent.setup() };
@@ -71,13 +72,16 @@ describe('what it lists', () => {
     expect(screen.getByText(/^completed$/i)).toBeInTheDocument();
   });
 
-  it('puts the ones still needing work first', async () => {
-    // Completed first in the incoming data — the list must reorder.
+  it('renders the order the weighbridge sent, page by page', async () => {
+    // Ordering moved to the database when the list became paged: sorting a
+    // page after it arrives would strand an open ticket on a page nobody
+    // loaded. The guarantee that open tickets come first is asserted against
+    // the repository, in the agent's own tests.
     setup([done(), open()]);
     await screen.findByText('SI-000010');
 
     const slips = screen.getAllByText(/^SI-\d{6}$/).map((el) => el.textContent);
-    expect(slips).toEqual(['SI-000010', 'SI-000011']);
+    expect(slips).toEqual(['SI-000011', 'SI-000010']);
   });
 
   it('shows the first weight for an open ticket and the net for a finished one', async () => {

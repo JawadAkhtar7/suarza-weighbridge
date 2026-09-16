@@ -19,6 +19,8 @@ import {
   LogOut,
   Menu,
   PanelLeft,
+  Truck,
+  Users,
   X,
 } from 'lucide-react';
 import { useAuth } from '../hooks/use-auth.js';
@@ -43,6 +45,8 @@ const NAV: NavItem[] = [
     end: true,
   },
   { to: '/ledger', label: 'Ledger', description: 'Customer accounts', icon: BookOpen },
+  { to: '/customers', label: 'Customers', description: 'Names and companies', icon: Users },
+  { to: '/vehicle-types', label: 'Vehicle types', description: 'Rates per vehicle', icon: Truck },
 ];
 
 /**

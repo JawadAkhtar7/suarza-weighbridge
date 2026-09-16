@@ -47,4 +47,7 @@ export const META_KEYS = {
   lastSyncError: 'last_sync_error',
   /** When the settings were last edited, so the cloud can spot a stale copy. */
   settingsUpdatedAt: 'settings_updated_at',
+  /** When the operator last pulled each manager-kept list. */
+  customersSyncedAt: 'customers_synced_at',
+  vehicleTypesSyncedAt: 'vehicle_types_synced_at',
 } as const;

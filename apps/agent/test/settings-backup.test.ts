@@ -26,7 +26,7 @@ afterEach(() => {
 describe('SettingsService', () => {
   it('starts from the schema defaults', () => {
     const settings = new SettingsService(db).get();
-    expect(settings.print.paper_size).toBe('A4');
+    expect(settings.print.paper_size).toBe('A5');
     expect(settings.company_name).toBe('Suarza International');
   });
 
@@ -46,18 +46,18 @@ describe('SettingsService', () => {
   });
 
   it('normalises paper and alignment, which the operator can no longer edit', () => {
-    // The controls were removed once the station settled on A4 pads. A value
+    // The controls were removed once the station settled on A5 pads. A value
     // stored by an older version must not survive, or it would be stuck with
     // nothing in the app able to correct it.
     const service = new SettingsService(db);
     const current = service.get();
     service.replace({
       ...current,
-      print: { ...current.print, paper_size: 'A5', offset_top_mm: 14, scale_percent: 80 },
+      print: { ...current.print, paper_size: 'A4', offset_top_mm: 14, scale_percent: 80 },
     });
 
     const read = new SettingsService(db).get().print;
-    expect(read.paper_size).toBe('A4');
+    expect(read.paper_size).toBe('A5');
     expect(read.offset_top_mm).toBe(0);
     expect(read.scale_percent).toBe(100);
   });
@@ -72,13 +72,13 @@ describe('SettingsService', () => {
     const service = new SettingsService(db);
     expect(() => service.replace({ print: { paper_size: 'FOOLSCAP' } })).toThrow(AppError);
     // The stored settings are untouched.
-    expect(service.get().print.paper_size).toBe('A4');
+    expect(service.get().print.paper_size).toBe('A5');
   });
 
   it('falls back to defaults if the stored blob is unreadable', () => {
     // Weighing must keep working; settings can be fixed afterwards.
     db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('station_settings', '{not json');
-    expect(new SettingsService(db).get().print.paper_size).toBe('A4');
+    expect(new SettingsService(db).get().print.paper_size).toBe('A5');
   });
 
   it('tells listeners so the sync worker can pick up a new cadence', () => {

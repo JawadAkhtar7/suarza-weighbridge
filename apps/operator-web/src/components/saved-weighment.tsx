@@ -50,9 +50,9 @@ export function SavedWeighment({ weighment, onNext }: SavedWeighmentProps) {
             <Detail label="Company" value={weighment.customer_company || '—'} />
             <Detail
               label="Vehicle"
-              value={`${vehicleTypeLabel(weighment.vehicle_type)} · ${weighment.vehicle_plate}`}
+              value={`${vehicleTypeLabel(weighment.vehicle_type, weighment.vehicle_type_label)} · ${weighment.vehicle_plate}`}
             />
-            <Detail label="Product" value={weighment.product} />
+            <Detail label="Product" value={weighment.product || '—'} />
             <Detail
               label="First weight"
               value={

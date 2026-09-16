@@ -275,7 +275,7 @@ export async function buildReceiptPdf({
     ['Vehicle Type', 'گاڑی کی قسم', vehicleTypeLabel(weighment.vehicle_type)],
     ['Container Number', 'کنٹینر نمبر', weighment.container_number ?? '—'],
     ['Phone', 'فون نمبر', weighment.customer_phone ?? '—'],
-    ['Product', 'پروڈکٹ', weighment.product],
+    ['Product', 'پروڈکٹ', weighment.product || '—'],
   ];
 
   // Two lines per row once the Urdu is there, so the row has to grow with it.

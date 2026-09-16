@@ -14,9 +14,9 @@ export const paperSizeSchema = z.enum(['A4', 'A5', 'LETTER', 'CUSTOM']);
 export type PaperSize = z.infer<typeof paperSizeSchema>;
 
 export const printSettingsSchema = z.object({
-  // A4 everywhere: the station prints slips onto pre-printed A4 pads, and the
-  // size is no longer an option in the operator app.
-  paper_size: paperSizeSchema.default('A4'),
+  // A5 everywhere: the client's pre-printed pads are A5, and the size is no
+  // longer an option in the operator app.
+  paper_size: paperSizeSchema.default('A5'),
   /** Only used when paper_size is CUSTOM. Millimetres. */
   custom_width_mm: z.number().min(50).max(500).default(148),
   custom_height_mm: z.number().min(50).max(500).default(210),

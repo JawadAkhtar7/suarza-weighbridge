@@ -28,9 +28,9 @@ describe('buildReceiptUrl', () => {
 });
 
 describe('defaults', () => {
-  it('starts on A4 with no offsets — the one paper the station prints on', () => {
+  it('starts on A5 with no offsets — the one paper the station prints on', () => {
     const settings = defaultReceiptSettings();
-    expect(settings.print.paper_size).toBe('A4');
+    expect(settings.print.paper_size).toBe('A5');
     expect(settings.print.offset_top_mm).toBe(0);
     expect(settings.print.scale_percent).toBe(100);
   });

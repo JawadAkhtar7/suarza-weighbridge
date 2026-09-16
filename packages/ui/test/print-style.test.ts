@@ -22,11 +22,11 @@ describe('buildPageStyle', () => {
     expect(css).toMatch(new RegExp(`\\.${SOFT_ONLY_CLASS}\\s*\\{\\s*display:\\s*none`));
   });
 
-  it('defaults to A4 with no page margin of its own', () => {
-    // A4 since the station settled on one paper size and the control was
-    // removed from the operator app.
+  it('defaults to A5 with no page margin of its own', () => {
+    // A5 is the client's pre-printed pad, and the only size in use since the
+    // control was removed from the operator app.
     const css = buildPageStyle(settings());
-    expect(css).toContain('size: A4');
+    expect(css).toContain('size: A5');
     // Zero, so the operator's offsets are the only thing positioning the block.
     expect(css).toMatch(/@page\s*\{[^}]*margin:\s*0/);
   });

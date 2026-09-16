@@ -10,7 +10,7 @@
  * not erase the number they typed last week.
  */
 
-import type { Customer, VehicleType } from '@suarza/shared';
+import type { Customer, CustomerRecord as CustomerSyncRecord, VehicleType } from '@suarza/shared';
 import { newId, nowUtc } from '@suarza/shared';
 import type { Db } from './connection.js';
 
@@ -56,6 +56,9 @@ const SELECT_ALL = `
   FROM customers
 `;
 
+/** Everywhere the operator picks a customer, a removed one must not appear. */
+const LIVE = 'deleted = 0';
+
 export class CustomerRepository {
   constructor(private readonly db: Db) {}
 
@@ -85,7 +88,10 @@ export class CustomerRepository {
            name               = excluded.name,
            company            = excluded.company,
            weighment_count    = customers.weighment_count + 1,
-           last_seen_at       = excluded.last_seen_at`,
+           last_seen_at       = excluded.last_seen_at,
+           -- Weighing someone the manager had removed un-removes them: the
+           -- truck is on the bridge, so the account plainly still exists.
+           deleted            = 0`,
       )
       .run({
         id: newId(),
@@ -108,7 +114,7 @@ export class CustomerRepository {
       // millisecond would otherwise come back in arbitrary order, and the
       // "most recent" list would reshuffle itself between refreshes.
       const rows = this.db
-        .prepare(`${SELECT_ALL} ORDER BY last_seen_at DESC, rowid DESC LIMIT ?`)
+        .prepare(`${SELECT_ALL} WHERE ${LIVE} ORDER BY last_seen_at DESC, rowid DESC LIMIT ?`)
         .all(limit) as CustomerRow[];
       return rows.map(rowToCustomer);
     }
@@ -119,7 +125,8 @@ export class CustomerRepository {
     const rows = this.db
       .prepare(
         `${SELECT_ALL}
-         WHERE name LIKE @pattern ESCAPE '\\' OR company LIKE @pattern ESCAPE '\\'
+         WHERE ${LIVE}
+           AND (name LIKE @pattern ESCAPE '\\' OR company LIKE @pattern ESCAPE '\\')
          ORDER BY
            -- Prefix matches first: someone typing "Ali" wants Ali Raza before
            -- "Muhammad Ali Traders".
@@ -142,4 +149,88 @@ export class CustomerRepository {
     const row = this.db.prepare('SELECT COUNT(*) AS n FROM customers').get() as { n: number };
     return row.n;
   }
+}
+
+/**
+ * Applies a customer list pulled from the manager.
+ *
+ * Matched on name+company rather than on the cloud id, because the same person
+ * may already exist here from having been weighed before the manager ever
+ * entered them — and two rows for one customer is the failure this matching
+ * exists to prevent. The cloud id is recorded as it goes, so later syncs can be
+ * certain rather than inferring.
+ */
+export function applyCustomerSync(
+  db: Db,
+  records: CustomerSyncRecord[],
+): { added: number; updated: number; removed: number } {
+  let added = 0;
+  let updated = 0;
+  let removed = 0;
+
+  const find = db.prepare(
+    'SELECT id, name, company, phone, deleted FROM customers WHERE LOWER(name) = ? AND LOWER(company) = ?',
+  );
+  const insert = db.prepare(
+    `INSERT INTO customers (
+       id, name, company, phone, weighment_count, first_seen_at, last_seen_at,
+       cloud_id, deleted
+     ) VALUES (@id, @name, @company, @phone, 0, @at, @at, @cloud_id, @deleted)`,
+  );
+  const update = db.prepare(
+    `UPDATE customers
+        SET name = @name, company = @company,
+            phone = COALESCE(@phone, phone),
+            cloud_id = @cloud_id, deleted = @deleted
+      WHERE id = @id`,
+  );
+
+  db.transaction((batch: CustomerSyncRecord[]) => {
+    for (const record of batch) {
+      const name = record.name.trim();
+      const company = (record.company ?? '').trim();
+      if (!name) continue;
+
+      const deleted = record.deleted_at ? 1 : 0;
+      const existing = find.get(name.toLowerCase(), company.toLowerCase()) as
+        | { id: string; name: string; company: string; phone: string | null; deleted: number }
+        | undefined;
+
+      if (!existing) {
+        // A customer that arrives already removed is not news to anyone.
+        if (deleted) continue;
+        insert.run({
+          id: newId(),
+          name,
+          company,
+          phone: record.phone?.trim() || null,
+          at: nowUtc(),
+          cloud_id: record.id,
+          deleted,
+        });
+        added += 1;
+        continue;
+      }
+
+      const changed =
+        existing.name !== name ||
+        existing.company !== company ||
+        existing.deleted !== deleted ||
+        (record.phone != null && existing.phone !== record.phone);
+
+      update.run({
+        id: existing.id,
+        name,
+        company,
+        phone: record.phone?.trim() || null,
+        cloud_id: record.id,
+        deleted,
+      });
+
+      if (deleted && existing.deleted === 0) removed += 1;
+      else if (changed) updated += 1;
+    }
+  })(records);
+
+  return { added, updated, removed };
 }

@@ -8,7 +8,15 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@suarza/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+} from '@suarza/ui';
 import { normalizeSlipNumber } from '@suarza/shared';
 import { Loader2, Search } from 'lucide-react';
 import { useHotkeys } from '../hooks/use-hotkeys.js';
@@ -47,6 +55,9 @@ export function SlipSearch({ onSearch, isSearching, error, onErrorCleared }: Sli
     <Card>
       <CardHeader>
         <CardTitle>Enter slip number</CardTitle>
+        {/* Says where to find it, because a new operator's first question here
+            is "which number?" and the answer is in the driver's hand. */}
+        <CardDescription>It is printed at the top of the driver&rsquo;s slip.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <form
@@ -69,7 +80,12 @@ export function SlipSearch({ onSearch, isSearching, error, onErrorCleared }: Sli
             spellCheck={false}
             className="tabular h-16 text-3xl font-bold uppercase tracking-wide sm:flex-1"
           />
-          <Button type="submit" size="xl" disabled={isSearching || value.trim() === ''}>
+          <Button
+            type="submit"
+            variant="brand"
+            size="xl"
+            disabled={isSearching || value.trim() === ''}
+          >
             {isSearching ? <Loader2 className="animate-spin" /> : <Search />}
             Fetch
           </Button>

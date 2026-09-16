@@ -16,6 +16,7 @@ export * from './utils/id.js';
 export * from './schemas/weighment.js';
 export * from './schemas/audit.js';
 export * from './schemas/ledger.js';
+export * from './schemas/catalogue.js';
 export * from './schemas/live-weight.js';
 export * from './schemas/api.js';
 export * from './schemas/settings.js';

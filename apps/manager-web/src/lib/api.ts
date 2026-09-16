@@ -7,6 +7,9 @@
 
 import type {
   Analytics,
+  CreateCustomerInput,
+  CustomerRecord,
+  VehicleTypeRecord,
   CreateLedgerEntryInput,
   LedgerCustomer,
   LedgerEntry,
@@ -132,6 +135,49 @@ export const api = {
       `/api/ledger/customers/${encodeURIComponent(customerId)}/entries`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
+
+  // --- Customers and the rate card -----------------------------------------
+
+  customers: (q?: string) =>
+    request<{ customers: CustomerRecord[] }>(
+      `/api/customers${q ? `?q=${encodeURIComponent(q)}` : ''}`,
+    ),
+
+  createCustomer: (body: CreateCustomerInput) =>
+    request<{ customer: CustomerRecord }>('/api/customers', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  updateCustomer: (id: string, body: { name: string; company: string; phone?: string | null }) =>
+    request<{ customer: CustomerRecord }>(`/api/customers/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteCustomer: (id: string) =>
+    request<{ customer: CustomerRecord }>(`/api/customers/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
+  vehicleTypes: () => request<{ vehicle_types: VehicleTypeRecord[] }>('/api/vehicle-types'),
+
+  createVehicleType: (body: { label: string; rate_pkr: number }) =>
+    request<{ vehicle_type: VehicleTypeRecord }>('/api/vehicle-types', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  updateVehicleType: (id: string, body: { label: string; rate_pkr: number }) =>
+    request<{ vehicle_type: VehicleTypeRecord }>(`/api/vehicle-types/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteVehicleType: (id: string) =>
+    request<{ vehicle_type: VehicleTypeRecord }>(`/api/vehicle-types/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
 
   voidLedgerEntry: (customerId: string, entryId: string, reason: string) =>
     request<{ entry: LedgerEntry; customer: LedgerCustomer }>(

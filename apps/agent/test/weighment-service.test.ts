@@ -277,6 +277,49 @@ describe('recordReprint', () => {
   });
 });
 
+describe('the list the operator picks from', () => {
+  it('puts tickets still awaiting a second weight first', async () => {
+    // The operator's list is paged now, so this ordering has to come from the
+    // database: sorting a page in the browser would leave an open ticket
+    // stranded on a page nobody loaded, and open tickets are the whole reason
+    // that list exists.
+    const first = service.createFirstWeight(firstWeightInput({ vehicle_plate: 'LES-0001' })).weighment;
+    service.complete(first.slip_number, {
+      second_weight_kg: 20_000,
+      second_weight_src: 'SERIAL',
+      amount_charged: 300,
+      payment_status: 'PAID',
+      operator_username: 'operator',
+    });
+    const stillOpen = service.createFirstWeight(firstWeightInput({ vehicle_plate: 'LES-0002' })).weighment;
+
+    const rows = service.list({ limit: 10 });
+    expect(rows[0]!.slip_number).toBe(stillOpen.slip_number);
+    expect(rows[1]!.slip_number).toBe(first.slip_number);
+  });
+
+  it('counts every record, not just the page asked for', async () => {
+    // What tells a "Load more" button whether anything is left.
+    for (const plate of ['LES-0001', 'LES-0002', 'LES-0003']) {
+      service.createFirstWeight(firstWeightInput({ vehicle_plate: plate }));
+    }
+
+    expect(service.list({ limit: 2 })).toHaveLength(2);
+    expect(service.countWeighments()).toBe(3);
+  });
+
+  it('pages without repeating or skipping a record', async () => {
+    for (const plate of ['LES-0001', 'LES-0002', 'LES-0003', 'LES-0004']) {
+      service.createFirstWeight(firstWeightInput({ vehicle_plate: plate }));
+    }
+
+    const page1 = service.list({ limit: 2, offset: 0 }).map((row) => row.slip_number);
+    const page2 = service.list({ limit: 2, offset: 2 }).map((row) => row.slip_number);
+
+    expect(new Set([...page1, ...page2]).size).toBe(4);
+  });
+});
+
 describe('outbox bookkeeping', () => {
   it('marks every new and updated record as pending sync', () => {
     const { weighment } = service.createFirstWeight(firstWeightInput());

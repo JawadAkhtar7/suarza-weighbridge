@@ -31,7 +31,7 @@ import {
   type Weighment,
 } from '@suarza/shared';
 import { Ban, CircleCheck, Loader2, Printer, RotateCcw, Save, TriangleAlert } from 'lucide-react';
-import { agentApi, AgentApiError, type WeighmentResponse } from '../lib/api.js';
+import { agentApi, AgentApiError, printPageUrl, type WeighmentResponse } from '../lib/api.js';
 import { SlipSearch } from './slip-search.js';
 import { RecentWeighments } from './recent-weighments.js';
 import { WeighmentSummary } from './weighment-summary.js';
@@ -63,7 +63,6 @@ export function ReturnWeighment({
   const [voidOpen, setVoidOpen] = useState(false);
   // Bumped on every reprint so the receipt panel remounts and prints again —
   // a driver asking for a third copy must not be silently ignored.
-  const [reprintNonce, setReprintNonce] = useState(0);
   const refreshSyncStatus = useRefreshSyncStatus();
 
   // Editable at pass 2. Amount is the one the brief requires (§3 step 10);
@@ -83,14 +82,12 @@ export function ReturnWeighment({
     setProduct(response.weighment.product);
     setContainerNumber(response.weighment.container_number ?? '');
     setSearchError(null);
-    setReprintNonce(0);
   };
 
   const reset = () => {
     setRecord(null);
     setJustCompleted(false);
     setSearchError(null);
-    setReprintNonce(0);
     onClearCapture();
   };
 
@@ -190,9 +187,24 @@ export function ReturnWeighment({
       if (!record) throw new Error('Nothing to reprint');
       return agentApi.reprintWeighment(record.weighment.slip_number, receipt);
     },
-    onSuccess: () => {
-      setReprintNonce((n) => n + 1);
-      toast.success('Reprint sent to the printer');
+    onSuccess: (_response, receipt) => {
+      // Straight to the tab. It carries its own print and download buttons, so
+      // repeating the slip on this screen underneath was a second copy of
+      // something the operator is already looking at.
+      const tab = window.open(
+        printPageUrl(record!.weighment.slip_number, receipt),
+        '_blank',
+      );
+      if (tab) {
+        toast.success('Receipt opened in a new tab');
+      } else {
+        // A blocked popup looks like nothing happened, and the operator keeps
+        // pressing the button.
+        toast.error('The browser blocked the receipt tab', {
+          description: 'Allow pop-ups for this page, then press Reprint again.',
+          duration: 8000,
+        });
+      }
     },
     onError: (error) =>
       toast.error('Could not record the reprint', {
@@ -413,16 +425,6 @@ export function ReturnWeighment({
       {/* Receipt #2 — the full receipt, printed once the weighing completes. */}
       {justCompleted && (
         <ReceiptPanel weighment={weighment} net={record.net} variant="SECOND" autoPrint />
-      )}
-
-      {reprintNonce > 0 && (
-        <ReceiptPanel
-          key={reprintNonce}
-          weighment={weighment}
-          net={record.net}
-          variant={weighment.status === 'COMPLETED' ? 'SECOND' : 'FIRST'}
-          autoPrint
-        />
       )}
 
       <VoidDialog

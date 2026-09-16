@@ -1,9 +1,8 @@
 /** Cloud API contracts (brief §5, §11, §13-M5) shared by agent, server, manager app. */
 
 import { z } from 'zod';
-import { weighmentSchema } from './weighment.js';
+import { vehicleTypeSchema, weighmentSchema } from './weighment.js';
 import { auditEntrySchema } from './audit.js';
-import { VEHICLE_TYPES } from '../constants/vehicle-types.js';
 import { WEIGHMENT_STATUSES, USER_ROLES } from '../constants/domain.js';
 
 /**
@@ -80,7 +79,8 @@ export const dateRangeSchema = z.object({
 export const weighmentQuerySchema = dateRangeSchema.extend({
   customer_name: z.string().trim().max(120).optional(),
   customer_company: z.string().trim().max(120).optional(),
-  vehicle_type: z.enum(VEHICLE_TYPES).optional(),
+  // A key, not an enum — the catalogue is the manager's to change.
+  vehicle_type: vehicleTypeSchema.optional(),
   status: z.enum(WEIGHMENT_STATUSES).optional(),
   slip_number: z.string().trim().max(32).optional(),
   page: z.coerce.number().int().min(1).default(1),

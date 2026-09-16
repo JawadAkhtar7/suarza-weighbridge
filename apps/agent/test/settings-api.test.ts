@@ -43,7 +43,7 @@ describe('GET /settings', () => {
   it('returns the current settings', async () => {
     const response = await app.inject({ url: '/settings' });
     expect(response.statusCode).toBe(200);
-    expect(response.json().print.paper_size).toBe('A4');
+    expect(response.json().print.paper_size).toBe('A5');
   });
 });
 
@@ -82,6 +82,6 @@ describe('PUT /settings', () => {
       url: '/settings',
       payload: { print: { paper_size: 'FOOLSCAP' } },
     });
-    expect((await app.inject({ url: '/settings' })).json().print.paper_size).toBe('A4');
+    expect((await app.inject({ url: '/settings' })).json().print.paper_size).toBe('A5');
   });
 });

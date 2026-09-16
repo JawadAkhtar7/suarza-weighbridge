@@ -67,6 +67,17 @@ describe('createWeighmentSchema', () => {
     expect(createWeighmentSchema.safeParse({ first_weight_kg: 100 }).success).toBe(false);
   });
 
+  it('saves a weighing with no product named', () => {
+    // Plenty of loads are weighed without anyone naming what is on the truck.
+    const parsed = createWeighmentSchema.parse({
+      customer_name: 'Ali Raza',
+      vehicle_type: 'truck',
+      vehicle_plate: 'LES-1234',
+      first_weight_kg: 8000,
+    });
+    expect(parsed.product).toBe('');
+  });
+
   it('saves a customer who has no company', () => {
     // Individuals turn up without one, and refusing the weighing over it only
     // gets a placeholder typed into the field.
@@ -98,7 +109,6 @@ describe('createWeighmentSchema', () => {
       customer_company: 'Raza Traders',
       vehicle_type: 'truck',
       vehicle_plate: 'LES-1234',
-      product: 'Cement',
       first_weight_kg: 8000,
     };
     expect(createWeighmentSchema.safeParse(withoutName).success).toBe(false);

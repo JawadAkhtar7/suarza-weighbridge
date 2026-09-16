@@ -39,9 +39,9 @@ export function WeighmentSummary({ weighment }: { weighment: Weighment }) {
           <Detail label="Company" value={weighment.customer_company || '—'} />
           <Detail
             label="Vehicle"
-            value={`${vehicleTypeLabel(weighment.vehicle_type)} · ${weighment.vehicle_plate}`}
+            value={`${vehicleTypeLabel(weighment.vehicle_type, weighment.vehicle_type_label)} · ${weighment.vehicle_plate}`}
           />
-          <Detail label="Product" value={weighment.product} />
+          <Detail label="Product" value={weighment.product || '—'} />
           {weighment.container_number && (
             <Detail label="Container" value={weighment.container_number} />
           )}

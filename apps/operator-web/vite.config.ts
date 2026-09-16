@@ -17,6 +17,11 @@ const AGENT_ROUTES = [
   '/simulator',
   '/settings',
   '/customers',
+  // Pulling the manager's lists. Missing here, a browser refresh or a button
+  // press is answered by Vite's SPA fallback with index.html and a 200, which
+  // the client then reports as a 404 or as nothing at all.
+  '/sync/',
+  '/vehicle-types',
 ];
 
 const AGENT_ORIGIN = process.env['AGENT_ORIGIN'] ?? 'http://127.0.0.1:3100';

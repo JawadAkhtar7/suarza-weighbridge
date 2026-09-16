@@ -17,6 +17,7 @@ interface WeighmentRow {
   customer_company: string;
   customer_phone: string | null;
   vehicle_type: string;
+  vehicle_type_label: string;
   vehicle_plate: string;
   container_number: string | null;
   product: string;
@@ -64,7 +65,8 @@ function rowToWeighment(row: WeighmentRow): WeighmentWithSync {
     customer_company: row.customer_company,
     // The DTO treats an absent optional as `undefined`; SQLite stores NULL.
     customer_phone: row.customer_phone ?? undefined,
-    vehicle_type: row.vehicle_type as Weighment['vehicle_type'],
+    vehicle_type: row.vehicle_type,
+    vehicle_type_label: row.vehicle_type_label ?? '',
     vehicle_plate: row.vehicle_plate,
     container_number: row.container_number ?? undefined,
     product: row.product,
@@ -101,7 +103,8 @@ export function toDto(record: WeighmentWithSync): Weighment {
 
 const SELECT_ALL = `
   SELECT id, slip_number, status, station_id, customer_name, customer_company,
-         customer_phone, vehicle_type, vehicle_plate, container_number, product,
+         customer_phone, vehicle_type, vehicle_type_label, vehicle_plate,
+         container_number, product,
          first_weight_kg, first_weight_at, first_weight_src,
          second_weight_kg, second_weight_at, second_weight_src, net_weight_kg,
          amount_charged, currency, payment_status, operator_username,
@@ -120,7 +123,7 @@ export class WeighmentRepository {
         `INSERT INTO weighments (
            id, slip_number, status, station_id,
            customer_name, customer_company, customer_phone,
-           vehicle_type, vehicle_plate, container_number, product,
+           vehicle_type, vehicle_type_label, vehicle_plate, container_number, product,
            first_weight_kg, first_weight_at, first_weight_src,
            second_weight_kg, second_weight_at, second_weight_src, net_weight_kg,
            amount_charged, currency, payment_status, operator_username,
@@ -129,7 +132,8 @@ export class WeighmentRepository {
          ) VALUES (
            @id, @slip_number, @status, @station_id,
            @customer_name, @customer_company, @customer_phone,
-           @vehicle_type, @vehicle_plate, @container_number, @product,
+           @vehicle_type, COALESCE(@vehicle_type_label, ''), @vehicle_plate,
+           @container_number, COALESCE(@product, ''),
            @first_weight_kg, @first_weight_at, @first_weight_src,
            @second_weight_kg, @second_weight_at, @second_weight_src, @net_weight_kg,
            @amount_charged, @currency, COALESCE(@payment_status, 'PAID'), @operator_username,
@@ -212,7 +216,7 @@ export class WeighmentRepository {
                 net_weight_kg     = @net_weight_kg,
                 amount_charged    = @amount_charged,
                 payment_status    = COALESCE(@payment_status, 'PAID'),
-                product           = @product,
+                product           = COALESCE(@product, ''),
                 container_number  = @container_number,
                 status            = 'COMPLETED',
                 updated_at        = @updated_at,
@@ -242,6 +246,14 @@ export class WeighmentRepository {
       .run(update);
   }
 
+  /**
+   * A page of records, open tickets first.
+   *
+   * The ordering is done here rather than in the browser because the list is
+   * now paged: sorting a page after it arrives would leave an open ticket
+   * stranded on page three, when open tickets are the whole reason the operator
+   * looks at this list — they are the trucks still to come back.
+   */
   list(
     options: { status?: WeighmentStatus; limit?: number; offset?: number } = {},
   ): WeighmentWithSync[] {
@@ -249,9 +261,24 @@ export class WeighmentRepository {
     const where = status ? 'WHERE status = ?' : '';
     const params = status ? [status, limit, offset] : [limit, offset];
     const rows = this.db
-      .prepare(`${SELECT_ALL} ${where} ORDER BY first_weight_at DESC LIMIT ? OFFSET ?`)
+      .prepare(
+        `${SELECT_ALL} ${where}
+         ORDER BY CASE WHEN status = 'OPEN' THEN 0 ELSE 1 END, first_weight_at DESC
+         LIMIT ? OFFSET ?`,
+      )
       .all(...params) as WeighmentRow[];
     return rows.map(rowToWeighment);
+  }
+
+  /** How many records the same filter matches, so a pager knows when to stop. */
+  count(options: { status?: WeighmentStatus } = {}): number {
+    const { status } = options;
+    const where = status ? 'WHERE status = ?' : '';
+    const params = status ? [status] : [];
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS n FROM weighments ${where}`)
+      .get(...params) as { n: number };
+    return row.n;
   }
 
   // --- Outbox (used by the sync worker in M6) -------------------------------

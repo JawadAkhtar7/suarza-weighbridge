@@ -14,6 +14,7 @@ import type { ServerConfig } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import { ingestRouter } from './routes/ingest.routes.js';
 import { authRouter } from './routes/auth.routes.js';
+import { catalogueRouter } from './routes/catalogue.routes.js';
 import { ledgerRouter } from './routes/ledger.routes.js';
 import { managerRouter } from './routes/manager.routes.js';
 import { receiptRouter } from './routes/receipt.routes.js';
@@ -71,6 +72,7 @@ export function buildApp({
   app.use(authRouter({ secret: config.JWT_SECRET, expiresIn: config.JWT_EXPIRES_IN }));
   app.use(managerRouter(config.JWT_SECRET));
   app.use(ledgerRouter(config.JWT_SECRET));
+  app.use(catalogueRouter(config.JWT_SECRET, config.INGEST_API_KEY));
   app.use(receiptRouter(config));
 
   const webDir = serveManagerWeb ? resolveManagerWebDir(managerWebDir ?? undefined) : null;

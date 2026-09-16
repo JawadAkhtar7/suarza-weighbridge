@@ -15,6 +15,11 @@ export type AppErrorCode =
   | 'CANNOT_VOID_COMPLETED'
   | 'SIMULATOR_DISABLED'
   | 'NOT_FOUND'
+  // Pulling the manager's lists: the operator is watching a button, so these
+  // are separated to say whether to check the wiring or the connection.
+  | 'CLOUD_NOT_CONFIGURED'
+  | 'CLOUD_UNREACHABLE'
+  | 'CLOUD_REJECTED'
   | 'INTERNAL_ERROR';
 
 const STATUS_BY_CODE: Record<AppErrorCode, number> = {
@@ -26,6 +31,10 @@ const STATUS_BY_CODE: Record<AppErrorCode, number> = {
   CANNOT_VOID_COMPLETED: 409,
   SIMULATOR_DISABLED: 404,
   NOT_FOUND: 404,
+  CLOUD_NOT_CONFIGURED: 409,
+  // 503, not 500: nothing here is broken, the far end is simply not answering.
+  CLOUD_UNREACHABLE: 503,
+  CLOUD_REJECTED: 502,
   INTERNAL_ERROR: 500,
 };
 

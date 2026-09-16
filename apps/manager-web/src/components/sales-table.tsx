@@ -96,7 +96,7 @@ export function SalesTable({
         <div className="min-w-0">
           <p className="truncate">{row.original.vehicle_plate}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {vehicleTypeLabel(row.original.vehicle_type)}
+            {vehicleTypeLabel(row.original.vehicle_type, row.original.vehicle_type_label)}
           </p>
         </div>
       ),
@@ -214,7 +214,8 @@ export function SalesTable({
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span className="tabular">{formatDateTimePkt(row.first_weight_at)}</span>
                     <span>
-                      {vehicleTypeLabel(row.vehicle_type)} · {row.vehicle_plate}
+                      {vehicleTypeLabel(row.vehicle_type, row.vehicle_type_label)} ·{' '}
+                      {row.vehicle_plate}
                     </span>
                     {row.status === 'COMPLETED' && (
                       <span className="tabular font-medium text-foreground">

@@ -147,6 +147,36 @@ MIGRATIONS.push({
   `,
 });
 
+MIGRATIONS.push({
+  version: 5,
+  name: 'manager-kept customers and vehicle types',
+  up: `
+    -- What the vehicle type was called when the slip was made. Carried on the
+    -- record so a reprint after the manager renames a type still matches the
+    -- copy the customer walked away with.
+    ALTER TABLE weighments ADD COLUMN vehicle_type_label TEXT NOT NULL DEFAULT '';
+
+    -- Customers can now also come from the manager, not only from being
+    -- weighed. cloud_id links the two views of the same person; deleted is how
+    -- a removal travels, since a bridge that never saw it has no other way to
+    -- learn the customer is gone.
+    ALTER TABLE customers ADD COLUMN cloud_id TEXT;
+    ALTER TABLE customers ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;
+
+    -- The rate card, as the manager keeps it. The operator reads it and can no
+    -- longer edit it; this copy is what keeps the bridge working offline.
+    CREATE TABLE vehicle_types (
+      key        TEXT PRIMARY KEY,
+      label      TEXT NOT NULL,
+      rate_pkr   REAL NOT NULL DEFAULT 0,
+      deleted    INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX idx_vehicle_types_live ON vehicle_types (deleted) WHERE deleted = 0;
+  `,
+});
+
 export function migrate(db: Database): number {
   const current = db.pragma('user_version', { simple: true }) as number;
   const pending = MIGRATIONS.filter((m) => m.version > current).sort(

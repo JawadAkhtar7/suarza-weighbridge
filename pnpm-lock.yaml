@@ -434,9 +434,6 @@ importers:
       '@suarza/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@suarza/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -467,12 +464,6 @@ importers:
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.3.1
-        version: 18.3.1(react@18.3.1)
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -498,27 +489,15 @@ importers:
       '@types/qrcode':
         specifier: ^1.5.5
         version: 1.5.6
-      '@types/react':
-        specifier: ^18.3.12
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.3.1
-        version: 18.3.7(@types/react@18.3.31)
       '@types/supertest':
         specifier: ^6.0.2
         version: 6.0.3
-      concurrently:
-        specifier: ^9.1.0
-        version: 9.2.4
       mongodb-memory-server:
         specifier: ^10.1.2
         version: 10.4.3(supports-color@7.2.0)
       supertest:
         specifier: ^7.0.0
         version: 7.2.2(supports-color@7.2.0)
-      tailwindcss:
-        specifier: ^3.4.14
-        version: 3.4.19(tsx@4.23.13)
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@1.21.7)(postcss@8.5.28)(supports-color@7.2.0)(tsx@4.23.13)(typescript@5.9.3)
@@ -3133,11 +3112,6 @@ packages:
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
-  concurrently@9.2.4:
-    resolution: {integrity: sha512-TZ0CEhyzvFjgtAvHTusDMgj7wNdihCh7LLLrzdUOXIhdlnL2JBBGA9eJxR24rtqgmdjh3OA3hrN1rCHj6HM8qA==}
-    engines: {node: '>=18'}
-    hasBin: true
-
   confbox@0.1.8:
     resolution: {integrity: sha512-RMtmw0iFkeR4YV+fUOSucriAQNb9g8zFR52MWCtl+cCZOFRNL6zeB395vPzFhEjjn4fMxXudmELnl/KF/WrK6w==}
 
@@ -4953,9 +4927,6 @@ packages:
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
 
-  rxjs@7.8.2:
-    resolution: {integrity: sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==}
-
   safe-array-concat@1.1.4:
     resolution: {integrity: sha512-wtZlHyOje6OZTGqAoaDKxFkgRtkF9CnHAVnCHKfuj200wAgL+bSJhdsCD2l0Qx/2ekEXjPWcyKkfGb5CPboslg==}
     engines: {node: '>=0.4'}
@@ -5045,10 +5016,6 @@ packages:
   shebang-regex@3.0.0:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
-
-  shell-quote@1.9.0:
-    resolution: {integrity: sha512-Iov+JwFv/2HcTpcwNMKd8+IWNb8tboQJNQTkAY/LLVK7gGH9jy+LGkVqPxfekHl+yMmiqXszdGWXgkfml7hjqA==}
-    engines: {node: '>= 0.4'}
 
   side-channel-list@1.0.1:
     resolution: {integrity: sha512-mjn/0bi/oUURjc5Xl7IaWi/OJJJumuoJFQJfDDyO46+hBWsfaVM65TBHq2eoZBhzl9EchxOijpkbRC8SVBQU0w==}
@@ -5201,10 +5168,6 @@ packages:
   supports-color@7.2.0:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
-
-  supports-color@8.1.1:
-    resolution: {integrity: sha512-MpUEN2OodtUzxvKQl72cUF7RQ5EiHsGvSsVG0ia9c5RbWGL2CI4C7EpPS8UTBIplnlzZiNuV56w+FuNxy3ty2Q==}
-    engines: {node: '>=10'}
 
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
@@ -5725,10 +5688,6 @@ packages:
   yargs@15.4.1:
     resolution: {integrity: sha512-aePbxDmcYW++PaqBsJ+HYUFwCdv4LVvdnhBy78E57PIor8/OVvhMrADFFEDh8DHDFRv/O9i3lPhsENjO7QX0+A==}
     engines: {node: '>=8'}
-
-  yargs@17.7.2:
-    resolution: {integrity: sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==}
-    engines: {node: '>=12'}
 
   yargs@17.7.3:
     resolution: {integrity: sha512-GZtjxm/J/4TSxuL3FNYjCmLktBTnIw/rVmKSIyKeYAZpmJB2ig9VauCC5xsa82GNKVKDAqpOn3KVzNt0zmrU0g==}
@@ -8089,6 +8048,7 @@ snapshots:
       string-width: 4.2.3
       strip-ansi: 6.0.1
       wrap-ansi: 7.0.0
+    optional: true
 
   clone@2.1.2: {}
 
@@ -8115,15 +8075,6 @@ snapshots:
   component-emitter@1.3.1: {}
 
   concat-map@0.0.1: {}
-
-  concurrently@9.2.4:
-    dependencies:
-      chalk: 4.1.2
-      rxjs: 7.8.2
-      shell-quote: 1.9.0
-      supports-color: 8.1.1
-      tree-kill: 1.2.2
-      yargs: 17.7.2
 
   confbox@0.1.8: {}
 
@@ -10113,10 +10064,6 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
-  rxjs@7.8.2:
-    dependencies:
-      tslib: 2.8.1
-
   safe-array-concat@1.1.4:
     dependencies:
       call-bind: 1.0.9
@@ -10239,8 +10186,6 @@ snapshots:
       shebang-regex: 3.0.0
 
   shebang-regex@3.0.0: {}
-
-  shell-quote@1.9.0: {}
 
   side-channel-list@1.0.1:
     dependencies:
@@ -10437,10 +10382,6 @@ snapshots:
       - supports-color
 
   supports-color@7.2.0:
-    dependencies:
-      has-flag: 4.0.0
-
-  supports-color@8.1.1:
     dependencies:
       has-flag: 4.0.0
 
@@ -11063,6 +11004,7 @@ snapshots:
       ansi-styles: 4.3.0
       string-width: 4.2.3
       strip-ansi: 6.0.1
+    optional: true
 
   wrappy@1.0.2: {}
 
@@ -11077,7 +11019,8 @@ snapshots:
 
   y18n@4.0.3: {}
 
-  y18n@5.0.8: {}
+  y18n@5.0.8:
+    optional: true
 
   yallist@3.1.1: {}
 
@@ -11086,7 +11029,8 @@ snapshots:
       camelcase: 5.3.1
       decamelize: 1.2.0
 
-  yargs-parser@21.1.1: {}
+  yargs-parser@21.1.1:
+    optional: true
 
   yargs@15.4.1:
     dependencies:
@@ -11101,16 +11045,6 @@ snapshots:
       which-module: 2.0.1
       y18n: 4.0.3
       yargs-parser: 18.1.3
-
-  yargs@17.7.2:
-    dependencies:
-      cliui: 8.0.1
-      escalade: 3.2.0
-      get-caller-file: 2.0.5
-      require-directory: 2.1.1
-      string-width: 4.2.3
-      y18n: 5.0.8
-      yargs-parser: 21.1.1
 
   yargs@17.7.3:
     dependencies:

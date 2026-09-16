@@ -9,11 +9,21 @@
  */
 
 import { z } from 'zod';
-import { VEHICLE_TYPES } from '../constants/vehicle-types.js';
 import { WEIGHMENT_STATUSES, WEIGHT_SOURCES, DEFAULT_CURRENCY } from '../constants/domain.js';
 import { SLIP_NUMBER_REGEX } from '../utils/slip.js';
 
-export const vehicleTypeSchema = z.enum(VEHICLE_TYPES);
+/**
+ * A vehicle type key. A key, not one of a fixed set — the manager keeps the
+ * catalogue now, so a type added next year must be storable today. The agent
+ * checks it against the catalogue it has synced, which is a better check than
+ * an enum compiled into three tiers.
+ */
+export const vehicleTypeSchema = z
+  .string()
+  .trim()
+  .min(1, 'Vehicle type is required')
+  .max(40)
+  .regex(/^[a-z0-9_]+$/, 'Vehicle type must be a lower-case key');
 export const weighmentStatusSchema = z.enum(WEIGHMENT_STATUSES);
 export const weightSourceSchema = z.enum(WEIGHT_SOURCES);
 
@@ -66,9 +76,21 @@ export const weighmentSchema = z.object({
   customer_company: z.string().trim().max(120).default(''),
   customer_phone: optionalText,
   vehicle_type: vehicleTypeSchema,
+  /**
+   * What the type was called when the slip was made.
+   *
+   * Carried on the record rather than looked up, so a slip reprinted after the
+   * manager renames a type still reads the way the customer's copy does, and so
+   * a receipt can be rendered by a tier that has no catalogue.
+   */
+  vehicle_type_label: z.string().trim().max(80).default(''),
   vehicle_plate: z.string().trim().min(1, 'Vehicle plate is required').max(32),
   container_number: optionalText,
-  product: z.string().trim().min(1, 'Product is required').max(120),
+  // Optional, like the company: plenty of loads are weighed without anyone
+  // naming what is on the truck, and refusing the weighing over it would only
+  // get a placeholder typed in. Empty string rather than undefined, so every
+  // tier keeps a plain `string`.
+  product: z.string().trim().max(120).default(''),
 
   /**
    * Whether the customer settled at the weighbridge or left it on their
@@ -139,9 +161,21 @@ export const createWeighmentSchema = z.object({
   customer_company: z.string().trim().max(120).default(''),
   customer_phone: optionalText,
   vehicle_type: vehicleTypeSchema,
+  /**
+   * What the type was called when the slip was made.
+   *
+   * Carried on the record rather than looked up, so a slip reprinted after the
+   * manager renames a type still reads the way the customer's copy does, and so
+   * a receipt can be rendered by a tier that has no catalogue.
+   */
+  vehicle_type_label: z.string().trim().max(80).default(''),
   vehicle_plate: z.string().trim().min(1, 'Vehicle plate is required').max(32),
   container_number: optionalText,
-  product: z.string().trim().min(1, 'Product is required').max(120),
+  // Optional, like the company: plenty of loads are weighed without anyone
+  // naming what is on the truck, and refusing the weighing over it would only
+  // get a placeholder typed in. Empty string rather than undefined, so every
+  // tier keeps a plain `string`.
+  product: z.string().trim().max(120).default(''),
   first_weight_kg: weightKg,
   first_weight_src: weightSourceSchema.default('SERIAL'),
   amount_charged: z.number().finite().min(0).default(0),

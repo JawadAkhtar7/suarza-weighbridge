@@ -23,6 +23,7 @@ export function weighment(overrides: Partial<Weighment> = {}): Weighment {
     customer_company: 'Raza Traders',
     customer_phone: undefined,
     vehicle_type: 'truck',
+  vehicle_type_label: 'Truck',
     vehicle_plate: 'LES-1234',
     container_number: undefined,
     product: 'Cement',

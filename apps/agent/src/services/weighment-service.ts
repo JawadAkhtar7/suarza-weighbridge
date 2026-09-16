@@ -22,11 +22,13 @@ import {
   newId,
   normalizeSlipNumber,
   nowUtc,
+  vehicleTypeLabel,
 } from '@suarza/shared';
 import type { Db } from '../db/connection.js';
 import { WeighmentRepository, type WeighmentWithSync } from '../db/weighments.js';
 import { AuditRepository } from '../db/audit.js';
 import { CustomerRepository } from '../db/customers.js';
+import { VehicleTypeRepository } from '../db/vehicle-types.js';
 import { MetaStore, META_KEYS } from '../db/meta.js';
 import { AppError } from '../errors.js';
 
@@ -56,6 +58,7 @@ export class WeighmentService {
   private readonly weighments: WeighmentRepository;
   private readonly audit: AuditRepository;
   private readonly customers: CustomerRepository;
+  private readonly vehicleTypes_: VehicleTypeRepository;
   private readonly meta: MetaStore;
 
   constructor(
@@ -65,6 +68,7 @@ export class WeighmentService {
     this.weighments = new WeighmentRepository(db);
     this.audit = new AuditRepository(db);
     this.customers = new CustomerRepository(db);
+    this.vehicleTypes_ = new VehicleTypeRepository(db);
     this.meta = new MetaStore(db);
   }
 
@@ -101,6 +105,12 @@ export class WeighmentService {
         customer_company: input.customer_company,
         customer_phone: input.customer_phone,
         vehicle_type: input.vehicle_type,
+        // Resolved once, at the moment of weighing, from the catalogue this
+        // bridge has synced — so the slip keeps its wording for good.
+        vehicle_type_label:
+          input.vehicle_type_label?.trim() ||
+          this.vehicleTypes_.labelFor(input.vehicle_type) ||
+          vehicleTypeLabel(input.vehicle_type),
         vehicle_plate: input.vehicle_plate,
         container_number: input.container_number,
         product: input.product,
@@ -334,6 +344,10 @@ export class WeighmentService {
 
   // --- Queries --------------------------------------------------------------
 
+  countWeighments(options: Parameters<WeighmentRepository['count']>[0] = {}): number {
+    return this.weighments.count(options);
+  }
+
   list(options: Parameters<WeighmentRepository['list']>[0] = {}): WeighmentWithSync[] {
     return this.weighments.list(options);
   }
@@ -344,6 +358,11 @@ export class WeighmentService {
 
   auditTrail(weighmentId: string): AuditEntry[] {
     return this.audit.listForWeighment(weighmentId);
+  }
+
+  /** The rate card as last pulled from the manager. Read-only here. */
+  vehicleTypes(): ReturnType<VehicleTypeRepository['listActive']> {
+    return this.vehicleTypes_.listActive();
   }
 
   pendingSyncCount(): number {

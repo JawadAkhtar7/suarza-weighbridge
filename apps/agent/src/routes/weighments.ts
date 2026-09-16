@@ -40,7 +40,13 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
       limit: query.limit ? Number(query.limit) : undefined,
       offset: query.offset ? Number(query.offset) : undefined,
     });
-    return { rows: rows.map(toDto), count: rows.length };
+    // `total` is what lets the operator's list know whether a "Load more"
+    // button has anything left to load; `count` is just this page.
+    return {
+      rows: rows.map(toDto),
+      count: rows.length,
+      total: deps.service.countWeighments({ status: query.status as never }),
+    };
   });
 
   /**

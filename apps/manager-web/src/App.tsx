@@ -16,6 +16,8 @@ import { LoginPage } from './pages/login-page.js';
 import { Dashboard } from './pages/dashboard.js';
 import { LedgerPage } from './pages/ledger-page.js';
 import { LedgerCustomerPage } from './pages/ledger-customer-page.js';
+import { CustomersPage } from './pages/customers-page.js';
+import { VehicleTypesPage } from './pages/vehicle-types-page.js';
 
 function NoAccess() {
   const { user, signOut } = useAuth();
@@ -54,6 +56,8 @@ export function App() {
               capability should not be shown a page every call 403s on. */}
           {canSeeLedger && <Route path="ledger" element={<LedgerPage />} />}
           {canSeeLedger && <Route path="ledger/:customerId" element={<LedgerCustomerPage />} />}
+          {canSeeLedger && <Route path="customers" element={<CustomersPage />} />}
+          {canSeeLedger && <Route path="vehicle-types" element={<VehicleTypesPage />} />}
           {/* Anything else is a mistyped or stale URL; the dashboard is the
               safe landing place. */}
           <Route path="*" element={<Navigate to="/" replace />} />

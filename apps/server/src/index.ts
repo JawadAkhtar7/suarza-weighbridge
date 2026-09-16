@@ -10,6 +10,7 @@ import { loadConfig } from './config.js';
 import { connectDatabase, describeConnection, disconnectDatabase } from './db/connection.js';
 import { seedUsers } from './services/auth.service.js';
 import { syncLedgerIndexes } from './models/ledger.model.js';
+import { seedVehicleTypes } from './services/catalogue.service.js';
 import { buildApp } from './app.js';
 
 async function main(): Promise<void> {
@@ -28,6 +29,10 @@ async function main(): Promise<void> {
   // Before anything can write to the ledger: a stale index here silently
   // rejects entries and the balances go quietly wrong.
   await syncLedgerIndexes();
+
+  // A database with no rate card would hand every bridge an empty dropdown.
+  const seededTypes = await seedVehicleTypes();
+  if (seededTypes > 0) console.info(`Seeded ${seededTypes} vehicle type(s)`);
 
   const created = await seedUsers();
   if (created > 0) console.info(`Seeded ${created} user account(s)`);

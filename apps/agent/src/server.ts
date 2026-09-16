@@ -19,6 +19,7 @@ import { registerWeighmentRoutes } from './routes/weighments.js';
 import { registerSimulatorRoutes } from './routes/simulator.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import type { SettingsService } from './services/settings-service.js';
+import type { CatalogueSync } from './sync/catalogue-sync.js';
 import { registerOperatorWeb, resolveOperatorWebDir } from './static.js';
 
 /**
@@ -36,6 +37,8 @@ export interface AgentDeps {
   service: WeighmentService;
   syncStatus?: SyncStatusProvider;
   settings?: SettingsService;
+  /** Absent when no cloud is configured; the sync routes then say so. */
+  catalogueSync?: CatalogueSync;
   /** Explicit path to the Operator PWA build; auto-detected when omitted. */
   operatorWebDir?: string | null;
   /** Tests drive the API directly and have no web build to serve. */
@@ -70,6 +73,28 @@ export async function buildServer(deps: AgentDeps): Promise<FastifyInstance> {
     if (fastifyError.validation) {
       const appError = new AppError('VALIDATION_ERROR', fastifyError.message ?? 'Invalid request.');
       return reply.code(400).send(appError.toResponse());
+    }
+
+    /*
+     * Fastify's own 4xx — a malformed body, an unparseable content type.
+     *
+     * Reported as what it is rather than swallowed into a 500: the request was
+     * wrong, not the weighbridge, and "something went wrong on this PC" sent an
+     * operator looking at the machine when the caller was at fault. That is
+     * exactly how a sync button sending no body read as a broken agent.
+     */
+    const framework = error as { statusCode?: number; message?: string };
+    if (
+      typeof framework.statusCode === 'number' &&
+      framework.statusCode >= 400 &&
+      framework.statusCode < 500
+    ) {
+      request.log.warn({ err: error }, 'Rejected request');
+      const badRequest = new AppError(
+        'VALIDATION_ERROR',
+        framework.message || 'The weighbridge could not read that request.',
+      );
+      return reply.code(framework.statusCode).send(badRequest.toResponse());
     }
 
     request.log.error({ err: error }, 'Unhandled error');

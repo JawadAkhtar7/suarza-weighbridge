@@ -11,30 +11,29 @@
  */
 
 import { useState } from 'react';
-import { Button, cn, toast } from '@suarza/ui';
+import { Button, ThemeToggle, toast } from '@suarza/ui';
 import type { Weighment } from '@suarza/shared';
-import { Plus, Settings, Undo2 } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { LiveWeightPanel } from './components/live-weight-panel.js';
 import { WeightCapture, type CapturedWeight } from './components/weight-capture.js';
 import { NewWeighmentForm } from './components/new-weighment-form.js';
 import { SavedWeighment } from './components/saved-weighment.js';
 import { ReturnWeighment } from './components/return-weighment.js';
 import { SettingsPanel } from './components/settings-panel.js';
+import { ModeSwitch, type WeighingMode } from './components/mode-switch.js';
 import { useLiveWeight, useSyncStatus } from './hooks/use-live-weight.js';
 import type { AgentWarning } from './lib/api.js';
-
-type Mode = 'first' | 'second';
 
 export function App() {
   const live = useLiveWeight();
   const sync = useSyncStatus();
 
-  const [mode, setMode] = useState<Mode>('first');
+  const [mode, setMode] = useState<WeighingMode>('first');
   const [captured, setCaptured] = useState<CapturedWeight | null>(null);
   const [saved, setSaved] = useState<Weighment | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const switchMode = (next: Mode) => {
+  const switchMode = (next: WeighingMode) => {
     if (next === mode) return;
     // A captured weight belongs to the pass it was taken for; carrying it
     // across modes is how a first weight ends up recorded as a second one.
@@ -73,19 +72,7 @@ export function App() {
             className="mr-auto h-12 w-auto"
           />
 
-          <nav className="flex gap-1 rounded-md bg-muted p-1" aria-label="Weighing mode">
-            {/* Labels are the client's wording. The mode keys stay 'first' /
-                'second' because that is what the records and the receipts
-                mean — renaming those would make the code lie about the data. */}
-            <ModeButton active={mode === 'first'} onClick={() => switchMode('first')}>
-              <Plus className="h-4 w-4" />
-              First weight
-            </ModeButton>
-            <ModeButton active={mode === 'second'} onClick={() => switchMode('second')}>
-              <Undo2 className="h-4 w-4" />
-              Main
-            </ModeButton>
-          </nav>
+          <ThemeToggle />
 
           <Button
             variant="ghost"
@@ -98,7 +85,12 @@ export function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+        {/* Above everything: what is happening at the gate decides the rest of
+            the screen, and a returning truck is the moment an operator needs to
+            find this without hunting. */}
+        <ModeSwitch mode={mode} onChange={switchMode} />
+
         <div className="grid gap-6 lg:grid-cols-[minmax(320px,26rem)_1fr] lg:items-start">
           <div className="space-y-4 lg:sticky lg:top-6">
             <LiveWeightPanel
@@ -148,32 +140,5 @@ export function App() {
 
       <SettingsPanel open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
-  );
-}
-
-function ModeButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      aria-current={active ? 'page' : undefined}
-      onClick={onClick}
-      className={cn(
-        'gap-1.5 text-sm',
-        // The current mode is worth spotting at a glance from across the cabin.
-        active && 'bg-background text-brand shadow-sm ring-1 ring-brand/30 hover:bg-background',
-      )}
-    >
-      {children}
-    </Button>
   );
 }

@@ -123,6 +123,18 @@ describe('POST /weighments', () => {
     expect(row.customer_company).toBe('');
   });
 
+  it('saves a weighing with no product — the column is NOT NULL, so this must land', async () => {
+    const body = firstWeightBody();
+    delete (body as Record<string, unknown>).product;
+
+    const response = await app.inject({ method: 'POST', url: '/weighments', payload: body });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().weighment.product).toBe('');
+
+    const row = db.prepare('SELECT product FROM weighments').get() as { product: string };
+    expect(row.product).toBe('');
+  });
+
   it('rejects a form with missing required fields and names them', async () => {
     const response = await app.inject({
       method: 'POST',

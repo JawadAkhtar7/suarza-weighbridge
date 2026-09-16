@@ -5,9 +5,16 @@
  * that are going to come back, and clicking one is faster and less error-prone
  * than reading a dusty slip and typing six digits. Completed ones are there so
  * a driver asking for another copy can be found without a slip at all.
+ *
+ * Paged, in a box of its own height. A weighbridge accumulates records for
+ * years, and fetching them all would make the screen slower every month while
+ * pushing the rest of the page off the bottom. A page at a time keeps both the
+ * request and the layout the same size on day one and in year three, and the
+ * ordering is done by the database so an open ticket can never be stranded on
+ * a page nobody loaded.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Skeleton, cn } from '@suarza/ui';
 import {
   formatDateTimePkt,
@@ -16,7 +23,7 @@ import {
   type Weighment,
   type WeighmentStatus,
 } from '@suarza/shared';
-import { Clock, RefreshCw } from 'lucide-react';
+import { ChevronDown, Clock, Loader2, RefreshCw } from 'lucide-react';
 import { agentApi } from '../lib/api.js';
 
 const STATUS_VARIANT: Record<WeighmentStatus, 'secondary' | 'success' | 'destructive'> = {
@@ -31,31 +38,41 @@ const STATUS_LABEL: Record<WeighmentStatus, string> = {
   VOID: 'Voided',
 };
 
-/** Enough to cover a shift without turning into a scroll. */
-const LIMIT = 25;
+/** A page: enough to cover the trucks currently on site, small to fetch. */
+const PAGE_SIZE = 20;
 
 interface RecentWeighmentsProps {
   onPick: (slipNumber: string) => void;
 }
 
 export function RecentWeighments({ onPick }: RecentWeighmentsProps) {
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: ['recent-weighments'],
-    queryFn: () => agentApi.listWeighments({ limit: LIMIT }),
-    // Another operator on a second screen, or a record completed a moment ago,
-    // should show up without a manual refresh.
-    refetchInterval: 15_000,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      agentApi.listWeighments({ limit: PAGE_SIZE, offset: pageParam as number }),
+    getNextPageParam: (lastPage, pages) => {
+      const loaded = pages.reduce((sum, page) => sum + page.rows.length, 0);
+      return loaded < lastPage.total ? loaded : undefined;
+    },
+    /*
+     * Polls only while the operator is looking at the top of the list.
+     *
+     * Refetching an infinite query refetches EVERY loaded page, so an operator
+     * who has paged back through a month of records would otherwise fire a
+     * request per page every fifteen seconds. Someone reading history is not
+     * waiting for a truck to arrive, so the poll stops once they page back and
+     * resumes when they are back to one page.
+     */
+    refetchInterval: (q) => ((q.state.data?.pages.length ?? 1) > 1 ? false : 15_000),
     retry: false,
   });
 
-  const rows = query.data?.rows ?? [];
-  // Open tickets first — they are the ones that still need something doing.
-  const ordered = [...rows].sort((a, b) => {
-    if (a.status === b.status) return 0;
-    if (a.status === 'OPEN') return -1;
-    if (b.status === 'OPEN') return 1;
-    return 0;
-  });
+  const pages = query.data?.pages ?? [];
+  // Already ordered by the database: open tickets first, newest first within
+  // each group. Sorting here would only reorder the page in hand.
+  const ordered = pages.flatMap((page) => page.rows);
+  const total = pages[0]?.total ?? 0;
 
   return (
     <Card>
@@ -63,6 +80,7 @@ export function RecentWeighments({ onPick }: RecentWeighmentsProps) {
         <CardTitle className="flex items-center gap-2 text-base">
           <Clock className="h-4 w-4" />
           Recent weighments
+          {total > 0 && <span className="text-xs font-normal text-muted-foreground">({total})</span>}
         </CardTitle>
         <Button
           variant="ghost"
@@ -91,11 +109,37 @@ export function RecentWeighments({ onPick }: RecentWeighmentsProps) {
             Nothing weighed yet today.
           </p>
         ) : (
-          <ul className="max-h-[28rem] divide-y overflow-y-auto">
-            {ordered.map((row) => (
-              <RecentRow key={row.id} weighment={row} onPick={onPick} />
-            ))}
-          </ul>
+          <div className="h-[26rem] overflow-y-auto">
+            <ul className="divide-y">
+              {ordered.map((row) => (
+                <RecentRow key={row.id} weighment={row} onPick={onPick} />
+              ))}
+            </ul>
+
+            {/* Inside the scroll area, so it sits under the last row where the
+                operator's eye already is rather than pinned somewhere else. */}
+            <div className="p-3">
+              {query.hasNextPage ? (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => void query.fetchNextPage()}
+                  disabled={query.isFetchingNextPage}
+                >
+                  {query.isFetchingNextPage ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                  Load more
+                </Button>
+              ) : (
+                <p className="text-center text-xs text-muted-foreground">
+                  {ordered.length} of {total} shown — that is all of them.
+                </p>
+              )}
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -137,7 +181,7 @@ function RecentRow({
 
         <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
           <span>
-            {vehicleTypeLabel(weighment.vehicle_type)} · {weighment.vehicle_plate}
+            {vehicleTypeLabel(weighment.vehicle_type, weighment.vehicle_type_label)} · {weighment.vehicle_plate}
           </span>
           <span className="tabular">{formatDateTimePkt(weighment.first_weight_at)}</span>
         </div>

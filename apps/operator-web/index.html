@@ -7,6 +7,22 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <title>Suarza Weighbridge — Operator</title>
+    <!--
+      Applies a saved dark choice before the first paint, so a reload does not
+      flash light at someone working a night shift. Anything else — including a
+      first-time user — stays light. Kept in step with the hook in @suarza/ui
+      (THEME_BOOT_SCRIPT), which owns the key and the class name.
+    -->
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('suarza.theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.colorScheme = 'dark';
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -15,6 +15,7 @@ import { AuditRepository } from './db/audit.js';
 import { createWeightReader } from './indicator/index.js';
 import { WeighmentService } from './services/weighment-service.js';
 import { createCloudClient, SyncWorker } from './sync/index.js';
+import { CatalogueSync } from './sync/catalogue-sync.js';
 import { SettingsService } from './services/settings-service.js';
 import { BackupJob } from './backup.js';
 import { buildServer } from './server.js';
@@ -62,6 +63,17 @@ async function main(): Promise<void> {
     log('[sync:info] Cloud sync disabled — no CLOUD_API_URL/CLOUD_API_KEY configured');
   }
 
+  // The manager's lists, pulled on the operator's button. Absent with no cloud
+  // configured, which is a valid way to run a bridge.
+  const catalogueSync =
+    config.CLOUD_API_URL && config.CLOUD_API_KEY
+      ? new CatalogueSync({
+          db,
+          baseUrl: config.CLOUD_API_URL,
+          apiKey: config.CLOUD_API_KEY,
+        })
+      : undefined;
+
   const service = new WeighmentService(db, {
     stationId: config.STATION_ID,
     onChange: () => syncWorker?.requestSync(),
@@ -76,6 +88,7 @@ async function main(): Promise<void> {
     reader,
     service,
     settings,
+    catalogueSync,
     syncStatus: syncWorker ?? undefined,
     serveOperatorWeb: config.SERVE_OPERATOR_WEB,
   });

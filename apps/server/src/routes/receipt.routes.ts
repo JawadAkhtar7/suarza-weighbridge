@@ -10,13 +10,13 @@
  * request (brief §15 — no file storage, by design).
  */
 
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import { normalizeSlipNumber } from '@suarza/shared';
 import type { ServerConfig } from '../config.js';
 import { findBySlip } from '../services/weighment.service.js';
-import { renderNotFoundPage, renderReceiptPage } from '../receipt/render-page.js';
-import { buildReceiptPdf, pdfFileName, type PdfPaperSize } from '@suarza/receipt-pdf';
-import { StationModel } from '../models/station.model.js';
+import { renderNotFoundPage } from '../receipt/render-page.js';
+import { buildReceiptPdf, pdfFileName } from '@suarza/receipt-pdf';
+import { companyForStation, paperForStation } from '../services/station.service.js';
 
 export function receiptRouter(config: ServerConfig): Router {
   const router = Router();
@@ -31,83 +31,60 @@ export function receiptRouter(config: ServerConfig): Router {
   };
 
   /**
-   * The company details as the station that produced this slip knows them.
+   * A tighter CSP than the rest of the server runs, for the one page the whole
+   * internet can open.
    *
-   * They come from the agent's Settings screen and arrive with the sync
-   * batches, so the page behind a QR code shows exactly what is printed on the
-   * paper the customer is holding. COMPANY_* remains only as the answer for a
-   * station that has never synced.
-   *
-   * Each field falls back independently: a station that has filled in an
-   * address but not a phone should show the real address, not be pushed wholly
-   * back to placeholders.
+   * It became possible only when the print button went: the page now has no
+   * JavaScript at all, so it can say so. `script-src 'none'` means that even if
+   * something were ever injected into this markup, there is nothing to execute
+   * it. The allowances that remain are exactly what the page uses — its inline
+   * stylesheet, the logo, and the QR as a data URI.
    */
-  async function companyFor(stationId: string | null | undefined) {
-    if (!stationId) return fallbackCompany;
-
-    const station = await StationModel.findById(stationId).lean();
-    if (!station) return fallbackCompany;
-
-    return {
-      name: station.company_name || fallbackCompany.name,
-      address: station.company_address || fallbackCompany.address,
-      phone: station.company_phone || fallbackCompany.phone,
-      logoUrl: station.company_logo_url || fallbackCompany.logoUrl,
-    };
-  }
-
-  /** The paper this slip's station prints on; A5 until it has told us. */
-  async function paperFor(stationId: string | null | undefined): Promise<PdfPaperSize> {
-    if (!stationId) return 'A5';
-    const station = await StationModel.findById(stationId).lean();
-    return (station?.paper_size as PdfPaperSize | undefined) ?? 'A5';
-  }
+  const lockDown = (res: Response) =>
+    res.setHeader(
+      'Content-Security-Policy',
+      [
+        "default-src 'none'",
+        "img-src 'self' data:",
+        "style-src 'unsafe-inline'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'none'",
+      ].join('; '),
+    );
 
   const pageUrl = (slip: string) =>
     `${config.APP_DOMAIN.replace(/\/+$/, '')}/r/${encodeURIComponent(slip)}`;
 
   /**
-   * The public page's only script: one click handler.
+   * What a scanned QR code leads to: the PDF itself.
    *
-   * Served as a file rather than inlined because the page's CSP allows
-   * `script-src 'self'`, and loosening that to 'unsafe-inline' for one button
-   * on a page anyone on the internet can open is not a trade worth making.
+   * A redirect rather than a page with a download button. The driver scanned a
+   * code to get their receipt, and a page in between was a step that only ever
+   * had one thing on it worth pressing.
    */
-  router.get('/r/receipt-page.js', (_req, res) => {
-    res
-      .type('application/javascript')
-      .set('Cache-Control', 'public, max-age=3600')
-      .send("document.getElementById('print-receipt')?.addEventListener('click',()=>window.print());");
-  });
-
   router.get('/r/:slip', async (req, res) => {
     const slip = normalizeSlipNumber(req.params.slip);
     const weighment = slip ? await findBySlip(slip) : null;
 
     if (!weighment) {
       // 404 with a page, not a bare status: this is read on a phone by someone
-      // who just scanned a code, and "not synced yet" is a normal answer.
+      // who just scanned a code, and "not synced yet" is a normal answer that
+      // deserves an explanation rather than a browser error.
+      lockDown(res);
       res
         .status(404)
         .type('html')
+        .set('Cache-Control', 'no-store')
         .send(renderNotFoundPage(slip || req.params.slip, fallbackCompany.name));
       return;
     }
 
-    const company = await companyFor(weighment.station_id);
-
+    // 302, not 301: a slip corrected in the cloud must not keep being served
+    // from a redirect a phone cached permanently.
     res
-      .type('html')
-      // Regenerated every visit; caching it would show a stale receipt after a
-      // correction reached the cloud.
       .set('Cache-Control', 'no-store')
-      .send(
-        renderReceiptPage({
-          weighment,
-          company,
-          pageUrl: weighment.slip_number ? pageUrl(weighment.slip_number) : '',
-        }),
-      );
+      .redirect(302, `/r/${encodeURIComponent(weighment.slip_number)}/pdf`);
   });
 
   router.get('/r/:slip/pdf', async (req, res) => {
@@ -115,6 +92,7 @@ export function receiptRouter(config: ServerConfig): Router {
     const weighment = slip ? await findBySlip(slip) : null;
 
     if (!weighment) {
+      lockDown(res);
       res
         .status(404)
         .type('html')
@@ -124,9 +102,9 @@ export function receiptRouter(config: ServerConfig): Router {
 
     const pdf = await buildReceiptPdf({
       weighment,
-      company: await companyFor(weighment.station_id),
+      company: await companyForStation(weighment.station_id, fallbackCompany),
       receiptUrl: pageUrl(weighment.slip_number),
-      paperSize: await paperFor(weighment.station_id),
+      paperSize: await paperForStation(weighment.station_id),
     });
 
     res

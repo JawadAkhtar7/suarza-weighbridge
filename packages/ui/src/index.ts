@@ -16,6 +16,9 @@ export * from './components/ui/sonner.js';
 export * from './components/ui/table.js';
 export * from './components/ui/tabs.js';
 export * from './components/ui/textarea.js';
+export * from './components/ui/theme-toggle.js';
+
+export * from './hooks/use-theme.js';
 
 // Domain component, shared because the operator printout, the manager
 // dashboard reprint and the public QR page must all render the same receipt.

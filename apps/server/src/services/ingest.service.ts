@@ -23,6 +23,7 @@ function toDocument(weighment: Weighment): Record<string, unknown> {
     customer_company: weighment.customer_company,
     customer_phone: weighment.customer_phone ?? null,
     vehicle_type: weighment.vehicle_type,
+    vehicle_type_label: weighment.vehicle_type_label,
     vehicle_plate: weighment.vehicle_plate,
     container_number: weighment.container_number ?? null,
     product: weighment.product,

@@ -175,7 +175,7 @@ function DetailsRow({
         <DetailRow label="Vehicle Type" urdu="گاڑی کی قسم" value={vehicleTypeLabel(weighment.vehicle_type)} />
         <DetailRow label="Container Number" urdu="کنٹینر نمبر" value={weighment.container_number ?? '—'} />
         <DetailRow label="Phone" urdu="فون نمبر" value={weighment.customer_phone ?? '—'} />
-        <DetailRow label="Product" urdu="پروڈکٹ" value={weighment.product} />
+        <DetailRow label="Product" urdu="پروڈکٹ" value={weighment.product || '—'} />
       </dl>
 
       <div className="space-y-2">

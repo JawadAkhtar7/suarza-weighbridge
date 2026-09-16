@@ -13,7 +13,7 @@ import type { InferSchemaType, Model } from 'mongoose';
 // Mongoose is CommonJS: Node's ESM interop does not expose every named
 // export, so the runtime values come off the default export.
 const { Schema, model, models } = mongoose;
-import { VEHICLE_TYPES, WEIGHMENT_STATUSES, WEIGHT_SOURCES } from '@suarza/shared';
+import { WEIGHMENT_STATUSES, WEIGHT_SOURCES } from '@suarza/shared';
 
 const weighmentSchema = new Schema(
   {
@@ -27,10 +27,16 @@ const weighmentSchema = new Schema(
     // legitimate here.
     customer_company: { type: String, default: '' },
     customer_phone: { type: String, default: null },
-    vehicle_type: { type: String, required: true, enum: VEHICLE_TYPES },
+    // A key, not an enum: the manager keeps the catalogue, so a type added
+    // next year has to be storable without redeploying three tiers.
+    vehicle_type: { type: String, required: true },
+    /** What it was called at the time, so a reprint matches the original. */
+    vehicle_type_label: { type: String, default: '' },
     vehicle_plate: { type: String, required: true },
     container_number: { type: String, default: null },
-    product: { type: String, required: true },
+    // Not `required`: Mongoose treats '' as missing, and a blank product is
+    // legitimate here.
+    product: { type: String, default: '' },
 
     first_weight_kg: { type: Number, required: true },
     first_weight_at: { type: Date, required: true },

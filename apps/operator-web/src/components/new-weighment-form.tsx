@@ -28,10 +28,8 @@ import {
   toast,
 } from '@suarza/ui';
 import {
-  VEHICLE_TYPE_DEFS,
   createWeighmentSchema,
   formatPKR,
-  priceFor,
   type Customer,
   type VehicleType,
   type Weighment,
@@ -43,7 +41,7 @@ import { CustomerPicker } from './customer-picker.js';
 import { DEFAULT_OPERATOR_USERNAME, HOTKEYS } from '../lib/constants.js';
 import { useHotkeys } from '../hooks/use-hotkeys.js';
 import { useRefreshSyncStatus } from '../hooks/use-refresh-sync-status.js';
-import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
+import { useVehicleTypes } from '../hooks/use-vehicle-types.js';
 
 /** The weight comes from capture, not from a field, so it is omitted here. */
 const formSchema = createWeighmentSchema
@@ -65,7 +63,7 @@ function emptyValues(): FormValues {
     vehicle_plate: '',
     container_number: '',
     product: '',
-    amount_charged: priceFor(DEFAULT_VEHICLE),
+    amount_charged: 0,
   };
 }
 
@@ -77,10 +75,9 @@ interface NewWeighmentFormProps {
 export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
   const [amountEdited, setAmountEdited] = useState(false);
   const refreshSyncStatus = useRefreshSyncStatus();
-  // The rate card is a Settings value, not a constant — the shipped prices are
-  // placeholders until the client confirms theirs (brief §6, §14).
-  const { settings } = useReceiptSettings();
-  const pricing = settings.pricing;
+  // The rate card belongs to the manager now: this is the copy this bridge
+  // pulled, and nothing here can edit it.
+  const vehicleTypes = useVehicleTypes();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -89,14 +86,14 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
 
   // Settings arrive a moment after first paint; the amount follows once they
   // do, unless the operator has already typed over it.
-  const configuredDefaultPrice = priceFor(DEFAULT_VEHICLE, pricing);
+  const configuredDefaultPrice = vehicleTypes.rateFor(DEFAULT_VEHICLE);
   useEffect(() => {
     if (amountEdited || form.formState.isDirty) return;
     form.setValue('amount_charged', configuredDefaultPrice);
   }, [configuredDefaultPrice, amountEdited, form]);
 
   const vehicleType = form.watch('vehicle_type') as VehicleType;
-  const tablePrice = priceFor(vehicleType, pricing);
+  const tablePrice = vehicleTypes.rateFor(vehicleType);
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
@@ -105,6 +102,7 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
         ...createWeighmentSchema
           .omit({ first_weight_kg: true, first_weight_src: true, operator_username: true })
           .parse(values),
+        vehicle_type_label: vehicleTypes.labelFor(values.vehicle_type),
         first_weight_kg: captured.kg,
         first_weight_src: captured.source,
         operator_username: DEFAULT_OPERATOR_USERNAME,
@@ -186,7 +184,7 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
       if (customer.last_vehicle_type) {
         form.setValue('vehicle_type', customer.last_vehicle_type, { shouldValidate: true });
         if (!amountEdited) {
-          form.setValue('amount_charged', priceFor(customer.last_vehicle_type, pricing));
+          form.setValue('amount_charged', vehicleTypes.rateFor(customer.last_vehicle_type));
         }
       }
     }
@@ -249,7 +247,7 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
                   form.setValue('vehicle_type', value as VehicleType, { shouldValidate: true });
                   // Changing the vehicle type is a deliberate act, so the rate
                   // follows it. The field stays editable either way (brief §7.8).
-                  form.setValue('amount_charged', priceFor(value as VehicleType, pricing));
+                  form.setValue('amount_charged', vehicleTypes.rateFor(value));
                   setAmountEdited(false);
                 }}
               >
@@ -257,9 +255,9 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
                   <SelectValue placeholder="Select a vehicle type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {VEHICLE_TYPE_DEFS.map((def) => (
-                    <SelectItem key={def.key} value={def.key}>
-                      {def.label}
+                  {vehicleTypes.types.map((type) => (
+                    <SelectItem key={type.key} value={type.key}>
+                      {type.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -280,7 +278,7 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
               />
             </Field>
 
-            <Field htmlFor="product" label="Product" error={errors.product?.message} required>
+            <Field htmlFor="product" label="Product" error={errors.product?.message} optional>
               <Input id="product" {...form.register('product')} placeholder="Cement" />
             </Field>
 
@@ -318,7 +316,7 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
               hint={
                 amountEdited
                   ? `Edited — rate for this vehicle is ${formatPKR(tablePrice)}`
-                  : `Rate for ${VEHICLE_TYPE_DEFS.find((d) => d.key === vehicleType)?.label}`
+                  : `Rate for ${vehicleTypes.labelFor(vehicleType)}`
               }
             >
               <div className="relative">

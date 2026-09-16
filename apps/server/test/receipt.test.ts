@@ -17,6 +17,7 @@ import {
   weighment,
 } from './helpers.js';
 import { ingest } from '../src/services/ingest.service.js';
+import { companyForStation, paperForStation } from '../src/services/station.service.js';
 
 let app: Express;
 
@@ -40,35 +41,37 @@ describe('whose company details the page shows', () => {
     updated_at: '2026-09-15T10:00:00.000Z',
   };
 
+  const FALLBACK = {
+    name: 'Suarza International',
+    address: '12 Industrial Road, Lahore',
+    phone: '+92 300 0000000',
+    logoUrl: '/logo.png',
+  };
+
   it("uses the station's own details, not the server's fallback", async () => {
     // The whole point: the operator edits the address on the weighbridge PC,
-    // and the page behind the QR must match the paper the customer holds.
+    // and the receipt behind the QR must match the paper the customer holds.
     await ingest([completedWeighment({ slip_number: 'SI-000123' })], [], profile);
 
-    const { text } = await request(app).get('/r/SI-000123');
-    expect(text).toContain('2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur');
-    expect(text).toContain('+923036537700');
-    // The configured fallback must not leak through once the station has spoken.
-    expect(text).not.toContain('12 Industrial Road, Lahore');
+    const company = await companyForStation('A', FALLBACK);
+    expect(company.address).toBe('2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur');
+    expect(company.phone).toBe('+923036537700');
   });
 
   it('falls back to COMPANY_* for a station that has never synced its settings', async () => {
     await store(completedWeighment({ slip_number: 'SI-000123' }));
-
-    const { text } = await request(app).get('/r/SI-000123');
-    expect(text).toContain('12 Industrial Road, Lahore');
+    expect((await companyForStation('A', FALLBACK)).address).toBe('12 Industrial Road, Lahore');
   });
 
   it('falls back field by field, so one blank does not undo the rest', async () => {
-    await ingest(
-      [completedWeighment({ slip_number: 'SI-000123' })],
-      [],
-      { ...profile, company_phone: '' },
-    );
+    await ingest([completedWeighment({ slip_number: 'SI-000123' })], [], {
+      ...profile,
+      company_phone: '',
+    });
 
-    const { text } = await request(app).get('/r/SI-000123');
-    expect(text).toContain('2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur');
-    expect(text).toContain('+92 300 0000000');
+    const company = await companyForStation('A', FALLBACK);
+    expect(company.address).toBe('2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur');
+    expect(company.phone).toBe('+92 300 0000000');
   });
 
   it('ignores a batch older than the details already stored', async () => {
@@ -80,92 +83,61 @@ describe('whose company details the page shows', () => {
       updated_at: '2026-09-01T10:00:00.000Z',
     });
 
-    const { text } = await request(app).get('/r/SI-000123');
-    expect(text).toContain('2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur');
-    expect(text).not.toContain('The old address nobody uses any more');
+    expect((await companyForStation('A', FALLBACK)).address).toBe(
+      '2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur',
+    );
+  });
+
+  it('uses the paper the station prints on', async () => {
+    // The fixture says A4 deliberately: A5 is the default, so a station that
+    // reported something else is the only way to prove its choice travels.
+    await ingest([completedWeighment({ slip_number: 'SI-000123' })], [], profile);
+    expect(await paperForStation('A')).toBe('A4');
+    expect(await paperForStation('never-synced')).toBe('A5');
   });
 });
 
-describe('GET /r/:slip — the page a driver scans', () => {
-  it('renders the receipt for a completed weighment', async () => {
-    await store(completedWeighment({ slip_number: 'SI-000123', customer_name: 'Ali Raza' }));
+describe('GET /r/:slip — what a scanned QR leads to', () => {
+  it('sends the driver straight to the PDF', async () => {
+    // The whole simplification: a scan hands over the receipt rather than a
+    // page with one button on it.
+    await store(completedWeighment({ slip_number: 'SI-000123' }));
 
     const response = await request(app).get('/r/SI-000123');
 
-    expect(response.status).toBe(200);
-    expect(response.type).toBe('text/html');
-    expect(response.text).toContain('SI-000123');
-    expect(response.text).toContain('Ali Raza');
-    // The slip number is labelled, not floating loose: the client's design has
-    // no title banner, so this label is what identifies the number on the page.
-    expect(response.text).toContain('Slip No.');
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe('/r/SI-000123/pdf');
   });
 
-  it('shows the branded soft form, header and footer included', async () => {
-    // Opposite of the printed slip: here there is no pre-printed pad, so the
-    // page must carry the branding itself (brief §8).
+  it('never lets a phone cache that redirect', async () => {
+    // 302 and no-store together: a slip corrected in the cloud must not keep
+    // being served from a hop the phone remembered.
     await store(completedWeighment({ slip_number: 'SI-000123' }));
-    const { text } = await request(app).get('/r/SI-000123');
-
-    expect(text).toContain('Suarza International');
-    expect(text).toContain('12 Industrial Road, Lahore');
-    expect(text).toContain('valid without a signature');
-  });
-
-  it('shows the net weight in kg, ton and maund', async () => {
-    await store(completedWeighment({ slip_number: 'SI-000123', net_weight_kg: 12_000 }));
-    const { text } = await request(app).get('/r/SI-000123');
-
-    expect(text).toContain('12,000 kg');
-    expect(text).toContain('12.000 ton');
-    // Maunds are shown as a trader reads them — `300 Mann`, not `300.000` —
-    // with the figure and its unit in one line of markup.
-    expect(text).toMatch(/300 <span[^>]*>Mann<\/span>/);
-  });
-
-  it('offers the PDF download', async () => {
-    await store(completedWeighment({ slip_number: 'SI-000123' }));
-    const { text } = await request(app).get('/r/SI-000123');
-
-    expect(text).toContain('/r/SI-000123/pdf');
-    expect(text).toContain('Download PDF');
-  });
-
-  it('ships its stylesheet inline, because a phone may be on a bad connection', async () => {
-    await store(completedWeighment({ slip_number: 'SI-000123' }));
-    const { text } = await request(app).get('/r/SI-000123');
-    expect(text).toMatch(/<style>[\s\S]+<\/style>/);
-    // No external stylesheet: a blocked or slow CDN would leave the driver
-    // looking at unstyled markup.
-    expect(text).not.toMatch(/<link[^>]+rel="stylesheet"/);
-  });
-
-  it('loads its only script from this origin, so the CSP cannot break the buttons', async () => {
-    await store(completedWeighment({ slip_number: 'SI-000123' }));
-    const { text } = await request(app).get('/r/SI-000123');
-
-    // Print and Download need a script, and the server sets script-src 'self'.
-    // Inlining it would need a nonce or 'unsafe-inline'; a same-origin file
-    // needs neither. Any OTHER script source would be silently blocked.
-    const sources = [...text.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1]);
-    expect(sources).toEqual(['/r/receipt-page.js']);
-    expect(text).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/);
+    const response = await request(app).get('/r/SI-000123');
+    expect(response.headers['cache-control']).toContain('no-store');
   });
 
   it('accepts the slip in the shorthand an operator might type', async () => {
     await store(completedWeighment({ slip_number: 'SI-000123' }));
-    expect((await request(app).get('/r/si-000123')).status).toBe(200);
-    expect((await request(app).get('/r/123')).status).toBe(200);
+    // Both normalise to the same slip, and both end at the same PDF.
+    for (const typed of ['si-000123', '123']) {
+      const response = await request(app).get(`/r/${typed}`);
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toBe('/r/SI-000123/pdf');
+    }
   });
 
-  it('renders an open ticket without inventing a net weight', async () => {
+  it('hands over a PDF for an open ticket too', async () => {
+    // A first-weight slip carries a QR as well, and its receipt says the second
+    // weighing is pending rather than inventing a net weight.
     await store(weighment({ slip_number: 'SI-000200' }));
-    const { text } = await request(app).get('/r/SI-000200');
 
-    expect(text).toContain('Pending second weighing');
-    // The net card keeps its heading but must carry no figure: a net weight on
-    // a half-finished ticket is a number someone could act on.
-    expect(text).not.toMatch(/<span[^>]*>Mann<\/span>/);
+    const redirect = await request(app).get('/r/SI-000200');
+    expect(redirect.headers.location).toBe('/r/SI-000200/pdf');
+
+    const pdf = await request(app).get('/r/SI-000200/pdf');
+    expect(pdf.status).toBe(200);
+    expect(pdf.type).toBe('application/pdf');
   });
 
   it('is never cached, so a corrected record is never shown stale', async () => {
@@ -174,9 +146,9 @@ describe('GET /r/:slip — the page a driver scans', () => {
     expect(response.headers['cache-control']).toContain('no-store');
   });
 
-  it('asks search engines not to index a customer receipt', async () => {
-    await store(completedWeighment({ slip_number: 'SI-000123' }));
-    expect((await request(app).get('/r/SI-000123')).text).toContain('noindex');
+  it('asks search engines not to index the page it does still serve', async () => {
+    // Only the "not found" page is HTML now; the receipt itself is a download.
+    expect((await request(app).get('/r/SI-999999')).text).toContain('noindex');
   });
 });
 
@@ -278,7 +250,8 @@ describe('GET /r/:slip/pdf — built in memory, on the fly', () => {
 describe('the QR routes are public by design', () => {
   it('needs no token — the audience is a driver with a paper slip', async () => {
     await store(completedWeighment({ slip_number: 'SI-000123' }));
-    expect((await request(app).get('/r/SI-000123')).status).toBe(200);
+    // The scan redirects rather than 401s, and the PDF it lands on is served.
+    expect((await request(app).get('/r/SI-000123')).status).toBe(302);
     expect((await request(app).get('/r/SI-000123/pdf')).status).toBe(200);
   });
 

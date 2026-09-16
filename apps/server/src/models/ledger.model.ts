@@ -33,6 +33,14 @@ const ledgerCustomerSchema = new Schema(
     name: { type: String, required: true },
     company: { type: String, default: '' },
     phone: { type: String, default: null },
+    /**
+     * Set when the manager removes a customer; never a hard delete.
+     *
+     * Their weighings and ledger entries still point here, and a weighbridge
+     * that has not synced since has no way to learn about a row that simply
+     * vanished — so removal is a field that travels, not an absence.
+     */
+    deleted_at: { type: Date, default: null },
     created_at: { type: Date, required: true, default: () => new Date() },
     updated_at: { type: Date, required: true, default: () => new Date() },
   },

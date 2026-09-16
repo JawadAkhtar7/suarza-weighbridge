@@ -103,11 +103,18 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
     <div className="min-h-screen bg-muted/40 py-6">
       {/* Controls are print-hidden, so they never reach the paper. */}
       <div className="receipt-soft-only mx-auto mb-4 flex max-w-[150mm] flex-wrap gap-2 px-4">
-        <Button onClick={() => window.print()}>
+        {/* Both in the brand orange the operator screens use for the action
+            that carries you forward. Print is solid because it is what this tab
+            was opened to do; the download is the same colour, outlined. */}
+        <Button variant="brand" onClick={() => window.print()}>
           <Printer className="h-4 w-4" />
           Print
         </Button>
-        <Button variant="outline" asChild>
+        <Button
+          variant="outline"
+          className="border-brand text-brand hover:bg-brand/10 hover:text-brand"
+          asChild
+        >
           <a href={receiptPdfUrl(weighment.slip_number)} download>
             <Download className="h-4 w-4" />
             Download PDF
