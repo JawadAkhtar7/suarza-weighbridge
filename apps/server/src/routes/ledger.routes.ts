@@ -15,7 +15,6 @@
 
 import { Router } from 'express';
 import {
-  createLedgerCustomerSchema,
   createLedgerEntrySchema,
   ledgerQuerySchema,
   voidLedgerEntrySchema,
@@ -23,7 +22,6 @@ import {
 import { requireAuth, requireCapability } from '../middleware/auth.js';
 import {
   addEntry,
-  ensureCustomer,
   getCustomer,
   listCustomers,
   listEntries,
@@ -42,17 +40,6 @@ export function ledgerRouter(jwtSecret: string): Router {
 
   router.get('/api/ledger/customers', ...guard, async (req, res) => {
     res.json(await listCustomers(parse(ledgerQuerySchema, req.query)));
-  });
-
-  /** Opens an account before the customer has been weighed, for an advance. */
-  router.post('/api/ledger/customers', ...guard, async (req, res) => {
-    const input = parse(createLedgerCustomerSchema, req.body);
-    const customer = await ensureCustomer({
-      name: input.name,
-      company: input.company,
-      phone: input.phone ?? null,
-    });
-    res.status(201).json({ customer });
   });
 
   router.get<{ id: string }>('/api/ledger/customers/:id', ...guard, async (req, res) => {

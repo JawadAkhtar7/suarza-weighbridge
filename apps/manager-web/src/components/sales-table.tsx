@@ -25,11 +25,12 @@ import {
   formatPKR,
   vehicleTypeLabel,
   type PaginatedWeighments,
-  type Weighment,
+  type WeighmentRow,
   type WeighmentStatus,
 } from '@suarza/shared';
 import { ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { MD_BREAKPOINT, useMediaQuery } from '../hooks/use-media-query.js';
+import { CustomerId } from './ledger-bits.js';
 
 const STATUS_VARIANT: Record<WeighmentStatus, 'secondary' | 'success' | 'destructive'> = {
   OPEN: 'secondary',
@@ -43,7 +44,7 @@ interface SalesTableProps {
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
-  onSelect: (weighment: Weighment) => void;
+  onSelect: (weighment: WeighmentRow) => void;
 }
 
 export function SalesTable({
@@ -54,7 +55,7 @@ export function SalesTable({
   onPageChange,
   onSelect,
 }: SalesTableProps) {
-  const columns: ColumnDef<Weighment>[] = [
+  const columns: ColumnDef<WeighmentRow>[] = [
     {
       accessorKey: 'slip_number',
       header: 'Slip',
@@ -82,6 +83,9 @@ export function SalesTable({
               {row.original.customer_company}
             </p>
           )}
+          {/* The ledger account this weighing belongs to. Absent until the
+              account exists, which for an open ticket it does not. */}
+          {row.original.customer_id && <CustomerId id={row.original.customer_id} />}
         </div>
       ),
     },
@@ -200,6 +204,7 @@ export function SalesTable({
                           {row.customer_company}
                         </p>
                       )}
+                      {row.customer_id && <CustomerId id={row.customer_id} />}
                     </div>
                     <span className="tabular shrink-0 font-semibold">
                       {formatPKR(row.amount_charged)}

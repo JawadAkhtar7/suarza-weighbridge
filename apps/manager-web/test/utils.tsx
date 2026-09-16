@@ -51,7 +51,14 @@ export function page(
   pageNumber = 1,
   pageSize = 25,
 ): PaginatedWeighments {
-  return { rows, total, page: pageNumber, page_size: pageSize };
+  // The table shows the ledger account each weighing belongs to; the server
+  // resolves it per row, so a fixture supplies one too.
+  return {
+    rows: rows.map((row) => ({ ...row, customer_id: null })),
+    total,
+    page: pageNumber,
+    page_size: pageSize,
+  };
 }
 
 export function analytics(overrides: Partial<Analytics> = {}): Analytics {

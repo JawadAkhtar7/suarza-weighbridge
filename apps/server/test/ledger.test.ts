@@ -56,13 +56,27 @@ async function signIn(): Promise<string> {
 }
 
 const auth = () => ({ Authorization: `Bearer ${managerToken}` });
-const ALI = customerKey('Ali Raza', 'Raza Traders');
+const ALI_KEY = customerKey('Ali Raza', 'Raza Traders');
+
+/**
+ * The account's generated id, looked up by the key a weighing matches on.
+ *
+ * The id is the database's now, not `name|company`, so a test has to ask for it
+ * the same way the app does rather than being able to construct it.
+ */
+async function idFor(matchKey: string): Promise<string> {
+  const doc = await LedgerCustomerModel.findOne({ match_key: matchKey }).lean();
+  if (!doc) throw new Error(`No ledger account for ${matchKey}`);
+  return String(doc._id);
+}
+
+const aliId = () => idFor(ALI_KEY);
 
 describe('charges from weighings', () => {
   it('debits the customer when a weighing completes', async () => {
     await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
 
-    const customer = await getCustomer(ALI);
+    const customer = await getCustomer(await aliId());
     // Negative: the customer owes the business.
     expect(customer.balance_pkr).toBe(-300);
     expect(customer.total_charged_pkr).toBe(300);
@@ -73,7 +87,7 @@ describe('charges from weighings', () => {
     // so cash customers showed up under "total owed to you".
     await ingest([completedWeighment({ amount_charged: 300, payment_status: 'PAID' })], []);
 
-    const customer = await getCustomer(ALI);
+    const customer = await getCustomer(await aliId());
     expect(customer.balance_pkr).toBe(0);
     // Both sides are on the statement, so the weighing is still visible.
     expect(customer.total_charged_pkr).toBe(300);
@@ -90,16 +104,16 @@ describe('charges from weighings', () => {
 
   it('books a debt only when the weighing goes on account', async () => {
     await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
-    expect((await getCustomer(ALI)).balance_pkr).toBe(-300);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(-300);
   });
 
   it('clears the debt when a slip is corrected from on-account to paid', async () => {
     const record = completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' });
     await ingest([record], []);
-    expect((await getCustomer(ALI)).balance_pkr).toBe(-300);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(-300);
 
     await ingest([{ ...record, payment_status: 'PAID', updated_at: '2026-09-14T12:00:00.000Z' }], []);
-    expect((await getCustomer(ALI)).balance_pkr).toBe(0);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(0);
   });
 
   it('restores the debt when a paid slip is corrected to on-account', async () => {
@@ -110,9 +124,9 @@ describe('charges from weighings', () => {
       [],
     );
 
-    expect((await getCustomer(ALI)).balance_pkr).toBe(-300);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(-300);
     // The gate payment is voided, not deleted.
-    const entries = await listEntries(ALI);
+    const entries = await listEntries(await aliId());
     expect(entries.find((e) => e.kind === 'PAYMENT')?.voided).toBe(true);
   });
 
@@ -124,10 +138,10 @@ describe('charges from weighings', () => {
       [],
     );
 
-    const entries = await listEntries(ALI);
+    const entries = await listEntries(await aliId());
     expect(entries).toHaveLength(2);
     expect(entries.every((e) => e.voided)).toBe(true);
-    expect((await getCustomer(ALI)).balance_pkr).toBe(0);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(0);
   });
 
   it('posts a paid weighing once however many times the batch is re-sent', async () => {
@@ -136,12 +150,14 @@ describe('charges from weighings', () => {
     await ingest([record], []);
 
     expect(await LedgerEntryModel.countDocuments({ weighment_id: record.id })).toBe(2);
-    expect((await getCustomer(ALI)).balance_pkr).toBe(0);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(0);
   });
 
   it('posts nothing for a weighing that is still open', async () => {
     await ingest([weighment({ amount_charged: 300 })], []);
-    await expect(getCustomer(ALI)).rejects.toThrow();
+    // No charge, so no account was opened either — accounts exist because a
+    // customer was charged, not because they were weighed.
+    expect(await LedgerCustomerModel.countDocuments({ match_key: ALI_KEY })).toBe(0);
   });
 
   it('charges once however many times the batch is re-sent', async () => {
@@ -153,7 +169,7 @@ describe('charges from weighings', () => {
     await ingest([record], []);
 
     expect(await LedgerEntryModel.countDocuments({ kind: 'WEIGHING' })).toBe(1);
-    expect((await getCustomer(ALI)).balance_pkr).toBe(-300);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(-300);
   });
 
   it('follows a corrected amount rather than adding a second charge', async () => {
@@ -162,7 +178,7 @@ describe('charges from weighings', () => {
     await ingest([{ ...record, amount_charged: 450, updated_at: '2026-09-14T12:00:00.000Z' }], []);
 
     expect(await LedgerEntryModel.countDocuments({ kind: 'WEIGHING' })).toBe(1);
-    expect((await getCustomer(ALI)).balance_pkr).toBe(-450);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(-450);
   });
 
   it('drops the charge when the weighing is voided', async () => {
@@ -173,9 +189,9 @@ describe('charges from weighings', () => {
       [],
     );
 
-    expect((await getCustomer(ALI)).balance_pkr).toBe(0);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(0);
     // Still there, still visible — voiding is not deleting.
-    const entries = await listEntries(ALI);
+    const entries = await listEntries(await aliId());
     expect(entries).toHaveLength(1);
     expect(entries[0]!.voided).toBe(true);
   });
@@ -196,7 +212,7 @@ describe('charges from weighings', () => {
     );
 
     expect(await LedgerCustomerModel.countDocuments()).toBe(1);
-    expect((await getCustomer(ALI)).balance_pkr).toBe(-500);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(-500);
   });
 });
 
@@ -205,7 +221,7 @@ describe('payments and adjustments', () => {
     await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
 
     const response = await request(app)
-      .post(`/api/ledger/customers/${encodeURIComponent(ALI)}/entries`)
+      .post(`/api/ledger/customers/${encodeURIComponent(await aliId())}/entries`)
       .set(auth())
       .send({ direction: 'CREDIT', kind: 'PAYMENT', amount_pkr: 300 });
 
@@ -216,75 +232,69 @@ describe('payments and adjustments', () => {
   it('leaves the customer in credit when they pay more than they owe', async () => {
     await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
     await request(app)
-      .post(`/api/ledger/customers/${encodeURIComponent(ALI)}/entries`)
+      .post(`/api/ledger/customers/${encodeURIComponent(await aliId())}/entries`)
       .set(auth())
       .send({ direction: 'CREDIT', kind: 'PAYMENT', amount_pkr: 500 });
 
-    expect((await getCustomer(ALI)).balance_pkr).toBe(200);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(200);
   });
 
-  it('takes an advance from a customer who has never been weighed', async () => {
-    const created = await request(app)
-      .post('/api/ledger/customers')
-      .set(auth())
-      .send({ name: 'New Customer', company: 'New Co' });
-    expect(created.status).toBe(201);
-
-    const id = created.body.customer.id as string;
+  it('spends an advance on the customer\'s next weighing', async () => {
+    // Accounts exist because a customer has been weighed, so an advance is
+    // taken against an account that already exists.
+    await ingest([completedWeighment({ amount_charged: 300, payment_status: 'PAID' })], []);
     await request(app)
-      .post(`/api/ledger/customers/${encodeURIComponent(id)}/entries`)
+      .post(`/api/ledger/customers/${encodeURIComponent(await aliId())}/entries`)
       .set(auth())
       .send({ direction: 'CREDIT', kind: 'PAYMENT', amount_pkr: 1000 });
 
-    expect((await getCustomer(id)).balance_pkr).toBe(1000);
-  });
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(1000);
 
-  it('spends an advance as the customer is weighed', async () => {
-    const created = await request(app)
-      .post('/api/ledger/customers')
-      .set(auth())
-      .send({ name: 'Ali Raza', company: 'Raza Traders' });
-    expect(created.status).toBe(201);
+    await ingest(
+      [
+        completedWeighment({
+          slip_number: 'SI-000002',
+          amount_charged: 300,
+          payment_status: 'ON_ACCOUNT',
+        }),
+      ],
+      [],
+    );
 
-    await request(app)
-      .post(`/api/ledger/customers/${encodeURIComponent(ALI)}/entries`)
-      .set(auth())
-      .send({ direction: 'CREDIT', kind: 'PAYMENT', amount_pkr: 1000 });
-
-    await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
-
-    expect((await getCustomer(ALI)).balance_pkr).toBe(700);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(700);
   });
 
   it('stops a voided entry counting, without removing it', async () => {
+    await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
     const posted = await request(app)
-      .post(`/api/ledger/customers/${encodeURIComponent(await openAli())}/entries`)
+      .post(`/api/ledger/customers/${encodeURIComponent(await aliId())}/entries`)
       .set(auth())
       .send({ direction: 'CREDIT', kind: 'PAYMENT', amount_pkr: 500 });
 
     const entryId = posted.body.entry.id as string;
     const voided = await request(app)
-      .post(`/api/ledger/customers/${encodeURIComponent(ALI)}/entries/${entryId}/void`)
+      .post(`/api/ledger/customers/${encodeURIComponent(await aliId())}/entries/${entryId}/void`)
       .set(auth())
       .send({ reason: 'Entered twice' });
 
     expect(voided.status).toBe(200);
-    expect(voided.body.customer.balance_pkr).toBe(0);
-    expect(await LedgerEntryModel.countDocuments()).toBe(1);
+    // Back to just the weighing charge.
+    expect(voided.body.customer.balance_pkr).toBe(-300);
+    expect(await LedgerEntryModel.countDocuments()).toBe(2);
   });
 
   it('refuses to void a weighing charge from the ledger', async () => {
     // Voiding it here would leave the slip standing with no charge behind it.
     await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
-    const entries = await listEntries(ALI);
+    const entries = await listEntries(await aliId());
 
     const response = await request(app)
-      .post(`/api/ledger/customers/${encodeURIComponent(ALI)}/entries/${entries[0]!.id}/void`)
+      .post(`/api/ledger/customers/${encodeURIComponent(await aliId())}/entries/${entries[0]!.id}/void`)
       .set(auth())
       .send({ reason: 'Mistake' });
 
     expect(response.status).toBe(400);
-    expect((await getCustomer(ALI)).balance_pkr).toBe(-300);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(-300);
   });
 });
 
@@ -292,7 +302,7 @@ describe('the statement', () => {
   it('shows the balance as it stood after each entry', async () => {
     await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
     await request(app)
-      .post(`/api/ledger/customers/${encodeURIComponent(ALI)}/entries`)
+      .post(`/api/ledger/customers/${encodeURIComponent(await aliId())}/entries`)
       .set(auth())
       .send({
         direction: 'CREDIT',
@@ -301,18 +311,15 @@ describe('the statement', () => {
         at: '2026-09-15T09:00:00.000Z',
       });
 
-    const entries = await listEntries(ALI);
+    const entries = await listEntries(await aliId());
     expect(entries.map((e) => e.balance_after_pkr)).toEqual([-300, -200]);
   });
 
   it('orders by when it happened, not when it was typed in', async () => {
-    // A payment taken yesterday, recorded today, belongs before today's charge.
+    // A payment taken before today's charge belongs before it on the statement.
+    await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
     await request(app)
-      .post('/api/ledger/customers')
-      .set(auth())
-      .send({ name: 'Ali Raza', company: 'Raza Traders' });
-    await request(app)
-      .post(`/api/ledger/customers/${encodeURIComponent(ALI)}/entries`)
+      .post(`/api/ledger/customers/${encodeURIComponent(await aliId())}/entries`)
       .set(auth())
       .send({
         direction: 'CREDIT',
@@ -320,9 +327,8 @@ describe('the statement', () => {
         amount_pkr: 100,
         at: '2026-09-13T09:00:00.000Z',
       });
-    await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
 
-    const entries = await listEntries(ALI);
+    const entries = await listEntries(await aliId());
     expect(entries.map((e) => e.kind)).toEqual(['PAYMENT', 'WEIGHING']);
     expect(entries.map((e) => e.balance_after_pkr)).toEqual([100, -200]);
   });
@@ -331,12 +337,23 @@ describe('the statement', () => {
 describe('the summary', () => {
   it('separates what is owed from what is held in advance', async () => {
     await ingest([completedWeighment({ amount_charged: 300, payment_status: 'ON_ACCOUNT' })], []);
+    // A second customer, weighed and then overpaid, so they sit in credit.
+    await ingest(
+      [
+        completedWeighment({
+          slip_number: 'SI-000009',
+          customer_name: 'Payer',
+          customer_company: 'Payer Co',
+          amount_charged: 100,
+          payment_status: 'PAID',
+        }),
+      ],
+      [],
+    );
     await request(app)
-      .post('/api/ledger/customers')
-      .set(auth())
-      .send({ name: 'Payer', company: 'Payer Co' });
-    await request(app)
-      .post(`/api/ledger/customers/${encodeURIComponent(customerKey('Payer', 'Payer Co'))}/entries`)
+      .post(
+        `/api/ledger/customers/${encodeURIComponent(await idFor(customerKey('Payer', 'Payer Co')))}/entries`,
+      )
       .set(auth())
       .send({ direction: 'CREDIT', kind: 'PAYMENT', amount_pkr: 500 });
 
@@ -364,7 +381,7 @@ describe('index drift', () => {
     await syncLedgerIndexes();
 
     await ingest([completedWeighment({ amount_charged: 300, payment_status: 'PAID' })], []);
-    expect((await getCustomer(ALI)).balance_pkr).toBe(0);
+    expect((await getCustomer(await aliId())).balance_pkr).toBe(0);
     expect(await LedgerEntryModel.countDocuments({ weighment_id: { $ne: null } })).toBe(2);
   });
 });
@@ -386,12 +403,3 @@ describe('who can see the ledger', () => {
     expect(response.status).toBe(403);
   });
 });
-
-/** Opens Ali's account without weighing him, for payment-only cases. */
-async function openAli(): Promise<string> {
-  await request(app)
-    .post('/api/ledger/customers')
-    .set(auth())
-    .send({ name: 'Ali Raza', company: 'Raza Traders' });
-  return ALI;
-}

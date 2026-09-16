@@ -35,6 +35,8 @@ import {
 } from '@suarza/ui';
 import {
   LEDGER_KIND_LABELS,
+  LEDGER_KIND_URDU,
+  LEDGER_URDU,
   balanceLabel,
   balanceState,
   formatDateTimePkt,
@@ -44,6 +46,7 @@ import {
 } from '@suarza/shared';
 import { ArrowLeft, Ban, Banknote, SlidersHorizontal } from 'lucide-react';
 import { api, ApiError } from '../lib/api.js';
+import { CustomerId, Urdu } from '../components/ledger-bits.js';
 
 /**
  * The one dialog for both manual entries.
@@ -102,7 +105,12 @@ function EntryDialog({
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isPayment ? 'Record a payment' : 'Add an adjustment'}</DialogTitle>
+          <DialogTitle className="flex items-baseline gap-2">
+            {isPayment ? 'Record a payment' : 'Add an adjustment'}
+            <Urdu className="text-sm">
+              {isPayment ? LEDGER_URDU.recordPayment : LEDGER_URDU.adjustment}
+            </Urdu>
+          </DialogTitle>
         </DialogHeader>
 
         <p className="text-sm text-muted-foreground">
@@ -114,7 +122,10 @@ function EntryDialog({
         <div className="space-y-3">
           {!isPayment && (
             <div className="space-y-2">
-              <Label>Which way?</Label>
+              <Label className="flex items-baseline gap-2">
+                Which way?
+                <Urdu>{LEDGER_URDU.debit} / {LEDGER_URDU.credit}</Urdu>
+              </Label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -125,9 +136,8 @@ function EntryDialog({
                   )}
                 >
                   <span className="font-semibold">Charge</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Customer owes more
-                  </span>
+                  <span className="block text-xs text-muted-foreground">Customer owes more</span>
+                  <Urdu className="block">{LEDGER_URDU.customerOwesMore}</Urdu>
                 </button>
                 <button
                   type="button"
@@ -139,13 +149,17 @@ function EntryDialog({
                 >
                   <span className="font-semibold">Credit</span>
                   <span className="block text-xs text-muted-foreground">Customer owes less</span>
+                  <Urdu className="block">{LEDGER_URDU.customerOwesLess}</Urdu>
                 </button>
               </div>
             </div>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="entry-amount">Amount (Rs)</Label>
+            <Label htmlFor="entry-amount" className="flex items-baseline gap-2">
+              Amount (Rs)
+              <Urdu>{LEDGER_URDU.amount}</Urdu>
+            </Label>
             <NumberInput
               id="entry-amount"
               min={0}
@@ -157,8 +171,9 @@ function EntryDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="entry-note">
+            <Label htmlFor="entry-note" className="flex items-baseline gap-2">
               Note <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+              <Urdu>{LEDGER_URDU.note}</Urdu>
             </Label>
             <Textarea
               id="entry-note"
@@ -213,7 +228,10 @@ function VoidDialog({
     <Dialog open={entry !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Void this entry</DialogTitle>
+          <DialogTitle className="flex items-baseline gap-2">
+            Void this entry
+            <Urdu className="text-sm">{LEDGER_URDU.void}</Urdu>
+          </DialogTitle>
         </DialogHeader>
 
         <p className="text-sm text-muted-foreground">
@@ -229,7 +247,10 @@ function VoidDialog({
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="void-reason">Reason</Label>
+          <Label htmlFor="void-reason" className="flex items-baseline gap-2">
+            Reason
+            <Urdu>{LEDGER_URDU.reason}</Urdu>
+          </Label>
           <Input
             id="void-reason"
             autoFocus
@@ -312,11 +333,24 @@ export function LedgerCustomerPage() {
               {customer.company || 'No company'}
               {customer.phone ? ` · ${customer.phone}` : ''}
             </p>
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="flex items-baseline gap-1">
+                ID <Urdu>{LEDGER_URDU.id}</Urdu>
+                <CustomerId id={customer.id} className="text-foreground" />
+              </span>
+            </p>
           </div>
 
           <div className="text-right">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               {balanceLabel(customer.balance_pkr)}
+              <Urdu className="ml-1.5">
+                {state === 'owing'
+                  ? LEDGER_URDU.owes
+                  : state === 'credit'
+                    ? LEDGER_URDU.inCredit
+                    : LEDGER_URDU.settled}
+              </Urdu>
             </p>
             <p
               className={cn(
@@ -333,10 +367,12 @@ export function LedgerCustomerPage() {
             <Button onClick={() => setDialog('payment')}>
               <Banknote className="h-4 w-4" />
               Record payment
+              <Urdu className="text-primary-foreground/80">{LEDGER_URDU.recordPayment}</Urdu>
             </Button>
             <Button variant="outline" onClick={() => setDialog('adjustment')}>
               <SlidersHorizontal className="h-4 w-4" />
               Adjustment
+              <Urdu>{LEDGER_URDU.adjustment}</Urdu>
             </Button>
           </div>
         </CardContent>
@@ -345,7 +381,9 @@ export function LedgerCustomerPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Charged for weighings</p>
+            <p className="text-xs text-muted-foreground">
+              Charged for weighings <Urdu>{LEDGER_URDU.charged}</Urdu>
+            </p>
             <p className="tabular mt-1 text-lg font-semibold">
               {formatPKR(customer.total_charged_pkr)}
             </p>
@@ -353,7 +391,9 @@ export function LedgerCustomerPage() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Paid</p>
+            <p className="text-xs text-muted-foreground">
+              Paid <Urdu>{LEDGER_URDU.paid}</Urdu>
+            </p>
             <p className="tabular mt-1 text-lg font-semibold">
               {formatPKR(customer.total_paid_pkr)}
             </p>
@@ -361,7 +401,9 @@ export function LedgerCustomerPage() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Entries</p>
+            <p className="text-xs text-muted-foreground">
+              Entries <Urdu>{LEDGER_URDU.entries}</Urdu>
+            </p>
             <p className="tabular mt-1 text-lg font-semibold">{customer.entry_count}</p>
           </CardContent>
         </Card>
@@ -369,11 +411,16 @@ export function LedgerCustomerPage() {
 
       <Card>
         <CardContent className="p-5">
-          <h2 className="mb-3 text-sm font-semibold">Statement</h2>
+          <h2 className="mb-3 flex items-baseline gap-2 text-sm font-semibold">
+            Statement
+            <Urdu>{LEDGER_URDU.statement}</Urdu>
+          </h2>
 
           {entries.length === 0 ? (
             <div className="py-10 text-center">
-              <p className="text-sm font-medium">Nothing on this account yet</p>
+              <p className="text-sm font-medium">
+              Nothing on this account yet <Urdu>{LEDGER_URDU.nothingYet}</Urdu>
+            </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Charges appear as weighings are completed.
               </p>
@@ -383,11 +430,21 @@ export function LedgerCustomerPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Detail</TableHead>
-                    <TableHead className="text-right">Debit</TableHead>
-                    <TableHead className="text-right">Credit</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead>
+                      Date <Urdu>{LEDGER_URDU.date}</Urdu>
+                    </TableHead>
+                    <TableHead>
+                      Detail <Urdu>{LEDGER_URDU.detail}</Urdu>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      Debit <Urdu>{LEDGER_URDU.debit}</Urdu>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      Credit <Urdu>{LEDGER_URDU.credit}</Urdu>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      Balance <Urdu>{LEDGER_URDU.balance}</Urdu>
+                    </TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -401,12 +458,17 @@ export function LedgerCustomerPage() {
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{LEDGER_KIND_LABELS[entry.kind]}</span>
+                          <Urdu>{LEDGER_KIND_URDU[entry.kind]}</Urdu>
                           {entry.slip_number && (
                             <Badge variant="secondary" className="tabular">
                               {entry.slip_number}
                             </Badge>
                           )}
-                          {entry.voided && <Badge variant="destructive">Voided</Badge>}
+                          {entry.voided && (
+                            <Badge variant="destructive">
+                              Voided <Urdu className="text-inherit">{LEDGER_URDU.voided}</Urdu>
+                            </Badge>
+                          )}
                         </div>
                         {entry.note && (
                           <p className="mt-0.5 text-xs text-muted-foreground">{entry.note}</p>

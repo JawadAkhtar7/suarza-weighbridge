@@ -60,7 +60,9 @@ export function App() {
 
   return (
     <div className="min-h-full bg-muted/30">
-      <header className="border-b bg-background">
+      {/* The orange rule picks up the logo's second brand colour and gives the
+          screen an edge of colour without tinting anything that carries data. */}
+      <header className="border-b-[3px] border-b-brand bg-background">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2.5 sm:px-6">
           {/* The logo is the whole identity here — `mr-auto` moved onto it now
               that the wording beside it is gone, so the nav still sits right. */}
@@ -167,7 +169,8 @@ function ModeButton({
       onClick={onClick}
       className={cn(
         'gap-1.5 text-sm',
-        active && 'bg-background text-foreground shadow-sm hover:bg-background',
+        // The current mode is worth spotting at a glance from across the cabin.
+        active && 'bg-background text-brand shadow-sm ring-1 ring-brand/30 hover:bg-background',
       )}
     >
       {children}

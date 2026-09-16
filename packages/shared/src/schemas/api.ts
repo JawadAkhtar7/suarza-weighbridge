@@ -93,8 +93,23 @@ export const weighmentQuerySchema = dateRangeSchema.extend({
 
 export type WeighmentQuery = z.infer<typeof weighmentQuerySchema>;
 
+/**
+ * A weighment as the manager's table shows it: the record, plus the ledger
+ * account it belongs to.
+ *
+ * The id is resolved when the list is read rather than stored on the weighment,
+ * because the weighbridge that produced it has no ledger and must not need one.
+ * Null when the account does not exist yet — an open ticket posts no charge, so
+ * nothing has opened one.
+ */
+export const weighmentRowSchema = weighmentSchema.extend({
+  customer_id: z.string().nullable().default(null),
+});
+
+export type WeighmentRow = z.infer<typeof weighmentRowSchema>;
+
 export const paginatedWeighmentsSchema = z.object({
-  rows: z.array(weighmentSchema),
+  rows: z.array(weighmentRowSchema),
   total: z.number().int().min(0),
   page: z.number().int().min(1),
   page_size: z.number().int().min(1),

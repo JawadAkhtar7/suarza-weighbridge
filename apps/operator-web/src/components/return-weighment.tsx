@@ -370,6 +370,7 @@ export function ReturnWeighment({
           from wrapping into an ambiguous jumble on a narrower display. */}
       {isOpen && (
         <Button
+          variant="brand"
           size="xl"
           className="w-full sm:w-auto"
           onClick={() => complete.mutate()}
@@ -377,7 +378,7 @@ export function ReturnWeighment({
         >
           {complete.isPending ? <Loader2 className="animate-spin" /> : <Save />}
           Complete weighing
-          <kbd className="ml-1 rounded bg-primary-foreground/20 px-1.5 py-0.5 text-xs font-medium">
+          <kbd className="ml-1 rounded bg-brand-foreground/20 px-1.5 py-0.5 text-xs font-medium">
             {HOTKEYS.save}
           </kbd>
         </Button>

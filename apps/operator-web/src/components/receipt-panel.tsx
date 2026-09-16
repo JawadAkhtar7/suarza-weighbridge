@@ -70,7 +70,9 @@ export function ReceiptPanel({
           Receipt {variant === 'FIRST' ? '1 — first weight' : '2 — completed'}
         </CardTitle>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={openPrintTab}>
+          {/* Printing is what the operator does next, so it carries the same
+              orange as every other step-forward action. */}
+          <Button variant="brand" onClick={openPrintTab}>
             <Printer />
             Print
           </Button>

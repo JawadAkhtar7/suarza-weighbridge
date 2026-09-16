@@ -26,9 +26,12 @@ import {
   type LedgerSummary,
   type Weighment,
 } from '@suarza/shared';
+import mongoose from 'mongoose';
 import { LedgerCustomerModel, LedgerEntryModel } from '../models/ledger.model.js';
 import type { LedgerEntryDocument } from '../models/ledger.model.js';
 import { ApiError } from '../errors.js';
+
+const isValidObjectId = (id: string) => mongoose.isValidObjectId(id);
 
 /** Rupees, to the paisa. Floats accumulate error; money must not. */
 function round2(value: number): number {
@@ -134,7 +137,13 @@ export async function listCustomers(query: LedgerQuery): Promise<LedgerCustomerP
     // Escaped: a customer called "A+B (Pvt)" must not be read as a pattern.
     const safe = query.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const pattern = new RegExp(safe, 'i');
-    filter.$or = [{ name: pattern }, { company: pattern }, { phone: pattern }];
+    // The match key too: it is shown in the table, so it should be searchable.
+    filter.$or = [
+      { name: pattern },
+      { company: pattern },
+      { phone: pattern },
+      { match_key: pattern },
+    ];
   }
 
   const matching = await LedgerCustomerModel.find(filter).lean();
@@ -144,6 +153,7 @@ export async function listCustomers(query: LedgerQuery): Promise<LedgerCustomerP
     const t = totals.get(String(doc._id)) ?? EMPTY_TOTALS;
     return {
       id: String(doc._id),
+      match_key: doc.match_key,
       name: doc.name,
       company: doc.company ?? '',
       phone: doc.phone ?? null,
@@ -175,12 +185,14 @@ export async function listCustomers(query: LedgerQuery): Promise<LedgerCustomerP
 }
 
 export async function getCustomer(id: string): Promise<LedgerCustomer> {
-  const doc = await LedgerCustomerModel.findById(id).lean();
+  // A malformed id is a 404, not a 500: these arrive from URLs people edit.
+  const doc = isValidObjectId(id) ? await LedgerCustomerModel.findById(id).lean() : null;
   if (!doc) throw new ApiError('NOT_FOUND', 'No ledger account for that customer.', { id });
 
   const t = (await totalsFor([id])).get(id) ?? EMPTY_TOTALS;
   return {
     id,
+    match_key: doc.match_key,
     name: doc.name,
     company: doc.company ?? '',
     phone: doc.phone ?? null,
@@ -254,11 +266,11 @@ export async function ensureCustomer(input: {
   company: string;
   phone?: string | null;
 }): Promise<LedgerCustomer> {
-  const id = customerKey(input.name, input.company);
+  const key = customerKey(input.name, input.company);
   const now = new Date();
 
-  await LedgerCustomerModel.updateOne(
-    { _id: id },
+  const doc = await LedgerCustomerModel.findOneAndUpdate(
+    { match_key: key },
     {
       // The display spelling follows the most recent sighting, but the identity
       // does not: the key is normalised, so "ALI RAZA" and "Ali Raza" stay one
@@ -269,12 +281,12 @@ export async function ensureCustomer(input: {
         updated_at: now,
         ...(input.phone ? { phone: input.phone } : {}),
       },
-      $setOnInsert: { created_at: now },
+      $setOnInsert: { created_at: now, match_key: key },
     },
-    { upsert: true },
+    { upsert: true, new: true },
   );
 
-  return getCustomer(id);
+  return getCustomer(String(doc._id));
 }
 
 export async function addEntry(

@@ -19,15 +19,24 @@ import { LEDGER_DIRECTIONS, LEDGER_KINDS } from '@suarza/shared';
 
 const ledgerCustomerSchema = new Schema(
   {
-    /** `customerKey(name, company)` — derived, so the same person is one account. */
-    _id: { type: String, required: true },
+    /**
+     * `customerKey(name, company)` — derived from what the operator typed, and
+     * how a weighing finds its account.
+     *
+     * It is a field rather than the `_id` so that the two jobs stay separate:
+     * the id is what entries and URLs point at and must never change, while
+     * this follows the spelling on the weighing form. Unique, because two
+     * accounts for one customer is the failure this whole matching exists to
+     * prevent.
+     */
+    match_key: { type: String, required: true, unique: true },
     name: { type: String, required: true },
     company: { type: String, default: '' },
     phone: { type: String, default: null },
     created_at: { type: Date, required: true, default: () => new Date() },
     updated_at: { type: Date, required: true, default: () => new Date() },
   },
-  { timestamps: false, versionKey: false, _id: false },
+  { timestamps: false, versionKey: false },
 );
 
 // The list page sorts and searches on these.

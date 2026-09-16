@@ -127,12 +127,6 @@ export const api = {
       `/api/ledger/customers/${encodeURIComponent(id)}`,
     ),
 
-  createLedgerCustomer: (body: { name: string; company: string; phone?: string }) =>
-    request<{ customer: LedgerCustomer }>('/api/ledger/customers', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
-
   addLedgerEntry: (customerId: string, body: CreateLedgerEntryInput) =>
     request<{ entry: LedgerEntry; customer: LedgerCustomer }>(
       `/api/ledger/customers/${encodeURIComponent(customerId)}/entries`,

@@ -48,6 +48,58 @@ export const LEDGER_KIND_LABELS: Record<LedgerKind, string> = {
 };
 
 /**
+ * The ledger's words in Urdu, beside the English rather than instead of it.
+ *
+ * The screen is read by people who have never used an accounts package, and
+ * "debit" and "credit" are the two words that lose them. Kept in one table so
+ * the two languages cannot drift apart across the pages that show them, and so
+ * a correction to the wording is one edit.
+ */
+export const LEDGER_KIND_URDU: Record<LedgerKind, string> = {
+  WEIGHING: 'وزن کا چارج',
+  PAYMENT: 'وصول شدہ رقم',
+  ADJUSTMENT: 'ترمیم',
+};
+
+export const LEDGER_URDU = {
+  ledger: 'کھاتہ',
+  customers: 'کسٹمرز',
+  customer: 'کسٹمر',
+  company: 'کمپنی',
+  phone: 'فون نمبر',
+  id: 'شناختی نمبر',
+  matchKey: 'ملاپ کی کلید',
+  balance: 'بقایا',
+  owes: 'واجب الادا',
+  inCredit: 'جمع شدہ',
+  settled: 'حساب برابر',
+  totalOwed: 'کل واجب الادا رقم',
+  heldInAdvance: 'پیشگی جمع شدہ رقم',
+  charged: 'کل چارج',
+  paid: 'کل ادائیگی',
+  entries: 'اندراجات',
+  statement: 'کھاتہ کی تفصیل',
+  date: 'تاریخ',
+  detail: 'تفصیل',
+  debit: 'ڈیبٹ (چارج)',
+  credit: 'کریڈٹ (ادائیگی)',
+  recordPayment: 'ادائیگی درج کریں',
+  adjustment: 'ترمیم کریں',
+  amount: 'رقم',
+  note: 'تفصیل',
+  reason: 'وجہ',
+  void: 'منسوخ کریں',
+  voided: 'منسوخ شدہ',
+  search: 'تلاش کریں',
+  all: 'سب',
+  nothingYet: 'ابھی کوئی اندراج نہیں',
+  cancel: 'منسوخ',
+  save: 'محفوظ کریں',
+  customerOwesMore: 'کسٹمر پر مزید واجب الادا',
+  customerOwesLess: 'کسٹمر پر کم واجب الادا',
+} as const;
+
+/**
  * Rupees. Non-negative and at most two decimals — the direction carries the
  * sign, so a negative amount here would be a second way to say the same thing
  * and the two could disagree.
@@ -74,8 +126,16 @@ export function customerKey(name: string, company: string): string {
 }
 
 export const ledgerCustomerSchema = z.object({
-  /** `customerKey(name, company)`. Stable, derived, and safe in a URL once encoded. */
+  /** The database's own id. Opaque, permanent, and what URLs and entries use. */
   id: z.string().min(1),
+  /**
+   * `customerKey(name, company)` — how a weighing finds its account.
+   *
+   * Separate from the id because the two answer different questions: the id
+   * never changes, while this is derived from what the operator typed and is
+   * the thing to look at when a customer's weighings land in the wrong place.
+   */
+  match_key: z.string(),
   name: z.string(),
   company: z.string(),
   phone: z.string().nullable().default(null),
@@ -144,16 +204,6 @@ export type CreateLedgerEntryInput = z.infer<typeof createLedgerEntrySchema>;
 
 export const voidLedgerEntrySchema = z.object({
   reason: z.string().trim().min(1, 'A reason is required').max(300),
-});
-
-/**
- * Opening an account before the customer has ever been weighed, so an advance
- * payment has somewhere to go.
- */
-export const createLedgerCustomerSchema = z.object({
-  name: z.string().trim().min(1, 'Customer name is required').max(120),
-  company: z.string().trim().max(120).default(''),
-  phone: z.string().trim().max(40).optional(),
 });
 
 export const ledgerQuerySchema = z.object({

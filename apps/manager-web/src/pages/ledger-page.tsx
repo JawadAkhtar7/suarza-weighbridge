@@ -7,19 +7,12 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   Badge,
-  Button,
   Card,
   CardContent,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Input,
-  Label,
   Skeleton,
   Table,
   TableBody,
@@ -28,102 +21,41 @@ import {
   TableHeader,
   TableRow,
   cn,
-  toast,
 } from '@suarza/ui';
-import { balanceState, formatPKR, type LedgerQuery } from '@suarza/shared';
-import { Search, UserPlus } from 'lucide-react';
-import { api, ApiError } from '../lib/api.js';
+import { LEDGER_URDU, balanceState, formatPKR, type LedgerQuery } from '@suarza/shared';
+import { Search } from 'lucide-react';
+import { api } from '../lib/api.js';
+import { CustomerId, Urdu } from '../components/ledger-bits.js';
 
-const STATUS_TABS: { key: LedgerQuery['status']; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'owing', label: 'Owing' },
-  { key: 'credit', label: 'In credit' },
-  { key: 'settled', label: 'Settled' },
+const STATUS_TABS: { key: LedgerQuery['status']; label: string; urdu: string }[] = [
+  { key: 'all', label: 'All', urdu: LEDGER_URDU.all },
+  { key: 'owing', label: 'Owing', urdu: LEDGER_URDU.owes },
+  { key: 'credit', label: 'In credit', urdu: LEDGER_URDU.inCredit },
+  { key: 'settled', label: 'Settled', urdu: LEDGER_URDU.settled },
 ];
 
 /** Rs 1,200 — never a bare negative number, which reads as an error. */
 function BalanceCell({ balance }: { balance: number }) {
   const state = balanceState(balance);
-  if (state === 'settled') return <span className="text-muted-foreground">Settled</span>;
+  if (state === 'settled') {
+    return (
+      <span className="text-muted-foreground">
+        Settled
+        <Urdu className="block">{LEDGER_URDU.settled}</Urdu>
+      </span>
+    );
+  }
 
   return (
     <span className={cn('font-semibold', state === 'owing' ? 'text-destructive' : 'text-success')}>
       {formatPKR(Math.abs(balance))}
-      <span className="ml-1 text-xs font-normal text-muted-foreground">
+      <span className="block text-xs font-normal text-muted-foreground">
         {state === 'owing' ? 'owed' : 'in credit'}
+        <Urdu className="ml-1">
+          {state === 'owing' ? LEDGER_URDU.owes : LEDGER_URDU.inCredit}
+        </Urdu>
       </span>
     </span>
-  );
-}
-
-function NewAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const [name, setName] = useState('');
-  const [company, setCompany] = useState('');
-  const [phone, setPhone] = useState('');
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  const create = useMutation({
-    mutationFn: () => api.createLedgerCustomer({ name, company, phone: phone || undefined }),
-    onSuccess: ({ customer }) => {
-      void queryClient.invalidateQueries({ queryKey: ['ledger'] });
-      onOpenChange(false);
-      setName('');
-      setCompany('');
-      setPhone('');
-      navigate(`/ledger/${encodeURIComponent(customer.id)}`);
-    },
-    onError: (error) =>
-      toast.error('Could not open the account', {
-        description: error instanceof ApiError ? error.message : 'Unexpected error.',
-      }),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Open an account</DialogTitle>
-        </DialogHeader>
-
-        <p className="text-sm text-muted-foreground">
-          Customers get an account automatically the first time they are weighed. Open one by hand
-          only to take a payment in advance.
-        </p>
-
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="new-name">Customer name</Label>
-            <Input id="new-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="new-company">
-              Company <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <Input id="new-company" value={company} onChange={(e) => setCompany(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="new-phone">
-              Phone <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <Input id="new-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            The name and company must match what the operator types on the weighing form, or the
-            weighings will land in a second account.
-          </p>
-        </div>
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={() => create.mutate()} disabled={!name.trim() || create.isPending}>
-            Open account
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -131,8 +63,6 @@ export function LedgerPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<LedgerQuery['status']>('all');
-  const [newOpen, setNewOpen] = useState(false);
-
   const summary = useQuery({ queryKey: ['ledger', 'summary'], queryFn: api.ledgerSummary });
 
   const customers = useQuery({
@@ -142,23 +72,26 @@ export function LedgerPage() {
 
   return (
     <div className="mx-auto max-w-[80rem] space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="mr-auto">
-          <h1 className="text-xl font-semibold">Ledger</h1>
-          <p className="text-sm text-muted-foreground">
-            What each customer owes, and what they have paid.
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => setNewOpen(true)}>
-          <UserPlus className="h-4 w-4" />
-          Open an account
-        </Button>
+      <div>
+        <h1 className="flex items-baseline gap-2 text-xl font-semibold">
+          Ledger
+          <Urdu className="text-lg">{LEDGER_URDU.ledger}</Urdu>
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          What each customer owes, and what they have paid.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          An account opens by itself the first time a customer is weighed.
+        </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Card>
           <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Total owed to you</p>
+            <p className="text-sm text-muted-foreground">
+              Total owed to you
+              <Urdu className="ml-2">{LEDGER_URDU.totalOwed}</Urdu>
+            </p>
             {summary.isLoading ? (
               <Skeleton className="mt-2 h-8 w-32" />
             ) : (
@@ -175,7 +108,10 @@ export function LedgerPage() {
 
         <Card>
           <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Held in advance</p>
+            <p className="text-sm text-muted-foreground">
+              Held in advance
+              <Urdu className="ml-2">{LEDGER_URDU.heldInAdvance}</Urdu>
+            </p>
             {summary.isLoading ? (
               <Skeleton className="mt-2 h-8 w-32" />
             ) : (
@@ -219,6 +155,7 @@ export function LedgerPage() {
                   )}
                 >
                   {tab.label}
+                  <Urdu className="ml-1.5">{tab.urdu}</Urdu>
                 </button>
               ))}
             </div>
@@ -235,10 +172,26 @@ export function LedgerPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead className="text-right">Charged</TableHead>
-                    <TableHead className="text-right">Paid</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead>
+                      ID
+                      <Urdu className="ml-1.5">{LEDGER_URDU.id}</Urdu>
+                    </TableHead>
+                    <TableHead>
+                      Customer
+                      <Urdu className="ml-1.5">{LEDGER_URDU.customer}</Urdu>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      Charged
+                      <Urdu className="ml-1.5">{LEDGER_URDU.charged}</Urdu>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      Paid
+                      <Urdu className="ml-1.5">{LEDGER_URDU.paid}</Urdu>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      Balance
+                      <Urdu className="ml-1.5">{LEDGER_URDU.balance}</Urdu>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -248,6 +201,9 @@ export function LedgerPage() {
                       className="cursor-pointer"
                       onClick={() => navigate(`/ledger/${encodeURIComponent(customer.id)}`)}
                     >
+                      <TableCell>
+                        <CustomerId id={customer.id} />
+                      </TableCell>
                       <TableCell>
                         <p className="font-medium">{customer.name}</p>
                         {customer.company && (
@@ -275,6 +231,7 @@ export function LedgerPage() {
                 {search || status !== 'all'
                   ? 'Nothing matches that search.'
                   : 'Accounts appear as customers are weighed.'}
+                <Urdu className="ml-1">{LEDGER_URDU.nothingYet}</Urdu>
               </p>
             </div>
           )}
@@ -291,8 +248,6 @@ export function LedgerPage() {
           )}
         </CardContent>
       </Card>
-
-      <NewAccountDialog open={newOpen} onOpenChange={setNewOpen} />
     </div>
   );
 }

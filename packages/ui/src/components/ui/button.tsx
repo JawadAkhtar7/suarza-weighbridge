@@ -11,6 +11,13 @@ const buttonVariants = cva(
         default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
         destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
         success: 'bg-success text-success-foreground shadow-sm hover:bg-success/90',
+        /**
+         * The logo's orange (#F68523), for the one action that carries each
+         * screen forward — capture, save, complete. Green is the structural
+         * brand colour and is everywhere; reserving orange for the live action
+         * is what keeps it meaning something rather than becoming decoration.
+         */
+        brand: 'bg-brand text-brand-foreground shadow-sm hover:bg-brand/90',
         outline:
           'border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground',
         secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',

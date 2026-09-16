@@ -339,7 +339,12 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
           </div>
 
           <div className="flex flex-wrap gap-3 border-t pt-5">
-            <Button type="submit" size="xl" disabled={!captured || mutation.isPending}>
+            <Button
+              type="submit"
+              variant="brand"
+              size="xl"
+              disabled={!captured || mutation.isPending}
+            >
               {mutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
               Save first weight
               <kbd className="ml-1 rounded bg-primary-foreground/20 px-1.5 py-0.5 text-xs font-medium">

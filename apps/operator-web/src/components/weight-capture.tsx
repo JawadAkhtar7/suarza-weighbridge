@@ -145,7 +145,7 @@ export function WeightCapture({
           </p>
           <div className="tabular text-4xl font-bold">{formatKg(pendingKg)}</div>
           <div className="flex gap-2">
-            <Button onClick={confirmPending} className="flex-1">
+            <Button variant="brand" onClick={confirmPending} className="flex-1">
               <Check />
               Confirm
             </Button>
@@ -188,7 +188,7 @@ export function WeightCapture({
             This will be flagged as a manual reading on the record and in the audit log.
           </p>
           <div className="flex gap-2">
-            <Button onClick={applyManual} className="flex-1">
+            <Button variant="brand" onClick={applyManual} className="flex-1">
               <Check />
               Use this weight
             </Button>
@@ -207,10 +207,16 @@ export function WeightCapture({
         <CardTitle className="text-base">Capture {pass} weight</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Button size="xl" className="w-full" onClick={handleCapture} disabled={!captureAllowed}>
+        <Button
+          variant="brand"
+          size="xl"
+          className="w-full"
+          onClick={handleCapture}
+          disabled={!captureAllowed}
+        >
           <Camera />
           Capture weight
-          <kbd className="ml-1 rounded bg-primary-foreground/20 px-1.5 py-0.5 text-xs font-medium">
+          <kbd className="ml-1 rounded bg-brand-foreground/20 px-1.5 py-0.5 text-xs font-medium">
             {HOTKEYS.capture}
           </kbd>
         </Button>

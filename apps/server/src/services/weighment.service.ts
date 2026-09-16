@@ -2,8 +2,9 @@
 
 import type { FilterQuery } from 'mongoose';
 import type { PaginatedWeighments, Weighment, WeighmentQuery } from '@suarza/shared';
-import { DISPLAY_TIMEZONE } from '@suarza/shared';
+import { DISPLAY_TIMEZONE, customerKey } from '@suarza/shared';
 import { WeighmentModel, type WeighmentDocument } from '../models/weighment.model.js';
+import { LedgerCustomerModel } from '../models/ledger.model.js';
 import { ApiError } from '../errors.js';
 
 /** Regex metacharacters in a customer's name must not become a pattern. */
@@ -86,8 +87,23 @@ export async function listWeighments(query: WeighmentQuery): Promise<PaginatedWe
     WeighmentModel.countDocuments(filter),
   ]);
 
+  const dtos = rows.map((row) => toDto(row as WeighmentDocument & { _id: string }));
+
+  // One query for the whole page rather than one per row. The weighbridge does
+  // not know about ledger accounts — it works offline and has no ledger — so
+  // the link is made here, from the same name+company the ledger matches on.
+  const keys = [...new Set(dtos.map((w) => customerKey(w.customer_name, w.customer_company)))];
+  const accounts = await LedgerCustomerModel.find({ match_key: { $in: keys } })
+    .select({ _id: 1, match_key: 1 })
+    .lean();
+  const idByKey = new Map(accounts.map((doc) => [doc.match_key, String(doc._id)]));
+
   return {
-    rows: rows.map((row) => toDto(row as WeighmentDocument & { _id: string })),
+    rows: dtos.map((weighment) => ({
+      ...weighment,
+      customer_id:
+        idByKey.get(customerKey(weighment.customer_name, weighment.customer_company)) ?? null,
+    })),
     total,
     page: query.page,
     page_size: query.page_size,
