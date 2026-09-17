@@ -47,6 +47,7 @@ const configSchema = z.object({
   COMPANY_NAME: z.string().default('Suarza International'),
   COMPANY_ADDRESS: z.string().default('[PLACEHOLDER] Address line, City, Pakistan'),
   COMPANY_PHONE: z.string().default('[PLACEHOLDER] +92 300 0000000'),
+  COMPANY_EMAIL: z.string().default(''),
   COMPANY_LOGO_URL: z.string().default('/logo.png'),
 
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),

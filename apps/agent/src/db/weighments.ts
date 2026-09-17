@@ -254,30 +254,79 @@ export class WeighmentRepository {
    * stranded on page three, when open tickets are the whole reason the operator
    * looks at this list — they are the trucks still to come back.
    */
+  /**
+   * The WHERE and its parameters, shared by the page query and the count.
+   *
+   * Written once because the two must agree: a count built from a different
+   * filter than the rows would make a "Load more" button that never stops, or
+   * one that hides records.
+   */
+  private listFilter(options: { status?: WeighmentStatus; q?: string }): {
+    sql: string;
+    params: unknown[];
+  } {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+
+    if (options.status) {
+      clauses.push('status = ?');
+      params.push(options.status);
+    }
+
+    const q = options.q?.trim();
+    if (q) {
+      /*
+       * Searched in the DATABASE, not among the rows already on screen.
+       *
+       * The list is paged, so a slip from last week is not in the browser to
+       * be filtered — and "I cannot find it" would be the operator's
+       * conclusion rather than "it is on another page".
+       *
+       * Escaped, so a customer called "100% Traders" is not a wildcard.
+       */
+      const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      clauses.push(
+        `(slip_number LIKE ? ESCAPE '\\'
+          OR customer_name LIKE ? ESCAPE '\\'
+          OR customer_company LIKE ? ESCAPE '\\'
+          OR vehicle_plate LIKE ? ESCAPE '\\')`,
+      );
+      params.push(pattern, pattern, pattern, pattern);
+    }
+
+    return {
+      sql: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '',
+      params,
+    };
+  }
+
   list(
-    options: { status?: WeighmentStatus; limit?: number; offset?: number } = {},
+    options: { status?: WeighmentStatus; q?: string; limit?: number; offset?: number } = {},
   ): WeighmentWithSync[] {
-    const { status, limit = 50, offset = 0 } = options;
-    const where = status ? 'WHERE status = ?' : '';
-    const params = status ? [status, limit, offset] : [limit, offset];
+    const { limit = 50, offset = 0 } = options;
+    const filter = this.listFilter(options);
     const rows = this.db
       .prepare(
-        `${SELECT_ALL} ${where}
-         ORDER BY CASE WHEN status = 'OPEN' THEN 0 ELSE 1 END, first_weight_at DESC
+        `${SELECT_ALL} ${filter.sql}
+         ORDER BY CASE WHEN status = 'OPEN' THEN 0 ELSE 1 END,
+                  first_weight_at DESC,
+                  -- Breaks the tie. Several trucks weighed in the same second
+                  -- would otherwise come back in whatever order SQLite felt
+                  -- like, and a paged list with an unstable order repeats some
+                  -- records and skips others between pages.
+                  rowid DESC
          LIMIT ? OFFSET ?`,
       )
-      .all(...params) as WeighmentRow[];
+      .all(...filter.params, limit, offset) as WeighmentRow[];
     return rows.map(rowToWeighment);
   }
 
   /** How many records the same filter matches, so a pager knows when to stop. */
-  count(options: { status?: WeighmentStatus } = {}): number {
-    const { status } = options;
-    const where = status ? 'WHERE status = ?' : '';
-    const params = status ? [status] : [];
+  count(options: { status?: WeighmentStatus; q?: string } = {}): number {
+    const filter = this.listFilter(options);
     const row = this.db
-      .prepare(`SELECT COUNT(*) AS n FROM weighments ${where}`)
-      .get(...params) as { n: number };
+      .prepare(`SELECT COUNT(*) AS n FROM weighments ${filter.sql}`)
+      .get(...filter.params) as { n: number };
     return row.n;
   }
 

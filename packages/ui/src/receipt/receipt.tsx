@@ -45,7 +45,22 @@ import {
   type NetWeight,
   type Weighment,
 } from '@suarza/shared';
-import { Scale, Weight } from 'lucide-react';
+import {
+  Banknote,
+  Building2,
+  Leaf,
+  Mail,
+  MapPin,
+  Package,
+  Phone,
+  Scale,
+  ScanLine,
+  Tag,
+  Truck,
+  User,
+  Weight,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '../lib/utils.js';
 import { PRINT_BLOCK_CLASS, SOFT_ONLY_CLASS } from './print-style.js';
 
@@ -53,6 +68,8 @@ export interface ReceiptCompany {
   name: string;
   address: string;
   phone: string;
+  /** Optional: a station without one simply shows address and phone. */
+  email?: string;
   logoUrl?: string;
 }
 
@@ -83,6 +100,17 @@ const BRAND_BORDER = 'border-[#155932]';
 /** Reverts every filled panel to plain ink for the pre-printed pad. */
 const PRINT_PLAIN = 'print:bg-white print:text-black print:border-black';
 
+/**
+ * A hairline for every rule on paper.
+ *
+ * On screen a 2px border gives the slip number and the net weight the weight
+ * their importance deserves. Printed, that emphasis is bought in ink on every
+ * slip of every day, and a thin line encloses a box just as well as a thick
+ * one. 0.5pt rather than a fraction of a pixel: it is the thinnest width a
+ * printer reliably renders, where a sub-pixel rule can drop out entirely.
+ */
+const PRINT_HAIRLINE = 'print:border-[0.5pt]';
+
 export function Receipt({
   weighment,
   net,
@@ -101,7 +129,7 @@ export function Receipt({
         <SlipRow weighment={weighment} />
 
         {weighment.status === 'VOID' && (
-          <p className={cn('mt-2 border-2 px-2 py-1 text-center text-xs font-bold uppercase tracking-wide', BRAND_BORDER, BRAND, PRINT_PLAIN)}>
+          <p className={cn('mt-2 border-2 px-2 py-1 text-center text-xs font-bold uppercase tracking-wide', BRAND_BORDER, BRAND, PRINT_PLAIN, PRINT_HAIRLINE)}>
             Voided{weighment.void_reason ? ` — ${weighment.void_reason}` : ''}
           </p>
         )}
@@ -109,11 +137,9 @@ export function Receipt({
         <DetailsRow weighment={weighment} isComplete={isComplete} receiptUrl={receiptUrl} />
 
         <WeightCards weighment={weighment} net={net} isComplete={isComplete} />
-
-        <FooterRow weighment={weighment} />
       </section>
 
-      <ReceiptFooter company={company} />
+      <ReceiptFooter />
     </div>
   );
 }
@@ -126,6 +152,7 @@ function SlipRow({ weighment }: { weighment: Weighment }) {
       className={cn(
         'grid grid-cols-[1fr_auto] items-center gap-3 rounded-md border-2 px-3 py-2',
         BRAND_BORDER,
+        PRINT_HAIRLINE,
         // The slip number is the one thing anyone quotes back over the phone, so
         // in the soft form it carries the brand fill. The pad already has it
         // printed, hence PRINT_PLAIN.
@@ -143,10 +170,20 @@ function SlipRow({ weighment }: { weighment: Weighment }) {
       </div>
 
       <div className="text-right">
-        <p className="text-[8px] font-bold uppercase leading-none tracking-wide text-white print:text-black">
+        {/* The caption is for the soft copy. On the pad a date beside a slip
+            number needs no announcing, and the row is tight enough that two
+            lines of label crowd the number it sits next to. The value stays
+            right-aligned and, with nothing above it, centres itself against
+            the slip number opposite. */}
+        <p
+          className={cn(
+            'text-[8px] font-bold uppercase leading-none tracking-wide text-white',
+            SOFT_ONLY_CLASS,
+          )}
+        >
           Date &amp; Time
         </p>
-        <p className="urdu text-[8px] leading-relaxed">تاریخ و وقت</p>
+        <p className={cn('urdu text-[8px] leading-relaxed', SOFT_ONLY_CLASS)}>تاریخ و وقت</p>
         <p className="tabular text-[10px] font-semibold">
           {formatDateTimePkt(weighment.first_weight_at)}
         </p>
@@ -167,29 +204,66 @@ function DetailsRow({
   receiptUrl: string | null;
 }) {
   return (
-    <div className="mt-2 grid grid-cols-[1.6fr_1fr] gap-2">
-      <dl className={cn('rounded-md border px-3 py-2 text-[10.5px]', BRAND_BORDER, PRINT_PLAIN)}>
-        <DetailRow label="Customer Name" urdu="کسٹمر کا نام" value={weighment.customer_name} />
-        <DetailRow label="Company" urdu="کمپنی" value={weighment.customer_company || '—'} />
-        <DetailRow label="Vehicle Number" urdu="گاڑی نمبر" value={weighment.vehicle_plate} />
-        <DetailRow label="Vehicle Type" urdu="گاڑی کی قسم" value={vehicleTypeLabel(weighment.vehicle_type)} />
-        <DetailRow label="Container Number" urdu="کنٹینر نمبر" value={weighment.container_number ?? '—'} />
-        <DetailRow label="Phone" urdu="فون نمبر" value={weighment.customer_phone ?? '—'} />
-        <DetailRow label="Product" urdu="پروڈکٹ" value={weighment.product || '—'} />
+    <div
+      className={cn(
+        'mt-2 grid grid-cols-[1.6fr_1fr] gap-2',
+        /*
+         * One box on paper instead of three.
+         *
+         * Each outline is a rectangle of ink on every slip of every day, and
+         * the amount and the QR are already grouped by sitting together — the
+         * borders were doing work the layout does for free. On the pad the
+         * frame moves out here and wraps the lot; on screen and in the PDF the
+         * three separate cards stay, where ink costs nothing.
+         */
+        'print:gap-x-3 print:gap-y-0 print:rounded-md print:border print:border-black print:p-2',
+        PRINT_HAIRLINE,
+      )}
+    >
+      <dl
+        className={cn(
+          'rounded-md border px-3 py-2 text-[10.5px]',
+          BRAND_BORDER,
+          PRINT_PLAIN,
+          PRINT_HAIRLINE,
+          'print:rounded-none print:border-0 print:p-0',
+        )}
+      >
+        <DetailRow icon={User} label="Customer Name" urdu="کسٹمر کا نام" value={weighment.customer_name} />
+        <DetailRow
+          icon={Building2}
+          label="Company"
+          urdu="کمپنی"
+          value={weighment.customer_company || '—'}
+          softOnly
+        />
+        <DetailRow icon={Truck} label="Vehicle Number" urdu="گاڑی نمبر" value={weighment.vehicle_plate} />
+        <DetailRow
+          icon={Tag}
+          label="Vehicle Type"
+          urdu="گاڑی کی قسم"
+          value={vehicleTypeLabel(weighment.vehicle_type, weighment.vehicle_type_label)}
+        />
+        <DetailRow icon={Package} label="Container Number" urdu="کنٹینر نمبر" value={weighment.container_number ?? '—'} />
+        {/* The number on the slip is the one to ring about this truck. */}
+        <DetailRow icon={Phone} label="Driver Number" urdu="ڈرائیور نمبر" value={weighment.customer_phone ?? '—'} />
+        <DetailRow icon={Leaf} label="Product" urdu="پروڈکٹ" value={weighment.product || '—'} />
       </dl>
 
-      <div className="space-y-2">
+      {/* A column, so the QR panel can stretch into whatever the details leave
+          below it and the two columns end level. */}
+      <div className="flex flex-col gap-2">
         {isComplete && (
           <Panel
+            icon={Banknote}
             label="Amount Charged"
-            urdu="چارج شدہ رقم"
             value={`${formatPKR(weighment.amount_charged)}/-`}
             // On the paper, because "was this paid?" is the question that gets
             // argued about later and the slip is the only thing both sides hold.
             footer={
               weighment.payment_status === 'PAID'
-                ? { text: 'Paid', urdu: 'ادا شدہ', tone: 'paid' }
-                : { text: 'On account', urdu: 'ادھار', tone: 'due' }
+                ? { text: 'Paid', tone: 'paid' as const }
+                : { text: 'On account', tone: 'due' as const }
             }
           />
         )}
@@ -203,9 +277,30 @@ function DetailsRow({
   );
 }
 
-function DetailRow({ label, urdu, value }: { label: string; urdu: string; value: string }) {
+function DetailRow({
+  icon: Icon,
+  label,
+  urdu,
+  value,
+  softOnly = false,
+}: {
+  icon: LucideIcon;
+  label: string;
+  urdu: string;
+  value: string;
+  /** Kept off the printed pad, where space is the scarce thing. */
+  softOnly?: boolean;
+}) {
   return (
-    <div className="grid grid-cols-[7.2rem_0.5rem_1fr] items-start gap-x-1 py-[2.5px]">
+    <div
+      className={cn(
+        'grid grid-cols-[0.75rem_7.2rem_0.5rem_1fr] items-start gap-x-1 py-[2.5px]',
+        softOnly && 'print:hidden',
+      )}
+    >
+      {/* Names the row rather than decorating it: the eye finds the plate or
+          the phone number without reading every label on the way down. */}
+      <Icon className={cn('mt-[1px] h-3 w-3 shrink-0', BRAND, 'print:text-black')} />
       <dt className="min-w-0">
         {/* `whitespace-nowrap` keeps "Container Number" on one line — a wrapped
             label makes every row a different height and the colons stop lining
@@ -220,25 +315,36 @@ function DetailRow({ label, urdu, value }: { label: string; urdu: string; value:
 }
 
 function Panel({
+  icon: Icon,
   label,
-  urdu,
   value,
   footer,
 }: {
+  icon: LucideIcon;
   label: string;
-  urdu: string;
   value: string;
-  footer?: { text: string; urdu: string; tone: 'paid' | 'due' };
+  footer?: { text: string; tone: 'paid' | 'due' };
 }) {
   return (
-    <div className={cn('rounded-md border px-3 py-3.5 text-center', BRAND_BORDER, PRINT_PLAIN)}>
-      <p className={cn('text-[9px] font-bold uppercase leading-none tracking-wide', BRAND, 'print:text-black')}>
+    <div
+      className={cn(
+        'rounded-md border px-3 py-3.5 text-center',
+        BRAND_BORDER,
+        PRINT_PLAIN,
+        PRINT_HAIRLINE,
+        'print:rounded-none print:border-0 print:px-0 print:py-1',
+      )}
+    >
+      <p
+        className={cn(
+          'flex items-center justify-center gap-1 text-[9px] font-bold uppercase leading-none tracking-wide',
+          BRAND,
+          'print:text-black',
+        )}
+      >
+        <Icon className="h-3 w-3 shrink-0" />
         {label}
       </p>
-      {/* `leading-loose`, not `leading-none`: Nastaliq descends well below its
-          baseline and was sitting on top of the label above it. The column has
-          the height to spare, so the panel takes it. */}
-      <p className="urdu mt-0.5 text-[10px] leading-loose">{urdu}</p>
       {/* As big as the net weight — it is read just as often, and by the person
           paying it. */}
       <p className="tabular mt-1 text-2xl font-bold leading-none">{value}</p>
@@ -247,12 +353,12 @@ function Panel({
         <p
           className={cn(
             'mt-1.5 inline-block rounded border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+            PRINT_HAIRLINE,
             footer.tone === 'paid' ? cn(BRAND_BORDER, BRAND) : 'border-black/50 text-black',
             PRINT_PLAIN,
           )}
         >
           {footer.text}
-          <span className="urdu ml-1 text-[9px] leading-relaxed">{footer.urdu}</span>
         </p>
       )}
     </div>
@@ -290,12 +396,12 @@ function WeightCards({
         manual={weighment.second_weight_src === 'MANUAL'}
       />
 
-      <div className={cn('overflow-hidden rounded-md border-2', BRAND_BORDER, PRINT_PLAIN)}>
-        <div className={cn('flex items-center justify-center gap-1 px-1 py-1 text-white', BRAND_BG, PRINT_PLAIN, 'print:border-b print:border-black')}>
+      <div className={cn('overflow-hidden rounded-md border-2', BRAND_BORDER, PRINT_PLAIN, PRINT_HAIRLINE)}>
+        <div className={cn('flex items-center justify-center gap-1 px-1 py-1 text-white', BRAND_BG, PRINT_PLAIN, 'print:border-b print:border-black print:border-b-[0.5pt]')}>
           <Weight className="h-3.5 w-3.5" />
           <div className="text-center leading-none">
             <p className="text-[8px] font-bold uppercase tracking-wide">Net Weight</p>
-            <p className="urdu text-[8px] leading-relaxed">خالص وزن</p>
+            <p className="urdu text-[8px] leading-relaxed">صافی وزن</p>
           </div>
         </div>
 
@@ -303,11 +409,12 @@ function WeightCards({
           {isComplete ? (
             <>
               <p className="tabular text-2xl font-bold leading-none">{formatKg(net.kg)}</p>
-              <p className="urdu text-[8px] leading-tight">کلوگرام</p>
-              <div className="mt-1 border-t pt-1">
+              {/* The side-specific width, not the all-round one: a plain
+                  `border-[0.5pt]` sets all four edges and turns this single
+                  rule into a box around the maund figure. */}
+              <div className="mt-1 border-t pt-1 print:border-t-[0.5pt]">
                 <p className="tabular text-xl font-bold leading-none">
                   {mann(net.maund)} <span className="text-[11px]">Mann</span>
-                  <span className="urdu ml-1 text-[10px]">(من)</span>
                 </p>
                 <p className="tabular text-[9px] leading-tight">{formatTon(net.ton)}</p>
               </div>
@@ -339,8 +446,8 @@ function WeightCard({
   manual: boolean;
 }) {
   return (
-    <div className={cn('overflow-hidden rounded-md border', BRAND_BORDER, PRINT_PLAIN)}>
-      <div className={cn('flex items-center justify-center gap-1 px-1 py-1 text-white', BRAND_BG, PRINT_PLAIN, 'print:border-b print:border-black')}>
+    <div className={cn('overflow-hidden rounded-md border', BRAND_BORDER, PRINT_PLAIN, PRINT_HAIRLINE)}>
+      <div className={cn('flex items-center justify-center gap-1 px-1 py-1 text-white', BRAND_BG, PRINT_PLAIN, 'print:border-b print:border-black print:border-b-[0.5pt]')}>
         {icon}
         <div className="text-center leading-none">
           <p className="text-[8px] font-bold uppercase tracking-wide">{label}</p>
@@ -353,7 +460,6 @@ function WeightCard({
         <p className="tabular text-xl font-bold leading-tight">
           {kg === null ? 'pending' : formatKg(kg)}
         </p>
-        <p className="urdu text-[8px] leading-tight">کلوگرام</p>
         {manual && (
           // Flagged on the paper, not just in the database — the audit trail is
           // no use to someone holding the receipt.
@@ -376,36 +482,37 @@ function QrPanel({ receiptUrl }: { receiptUrl: string | null }) {
   if (!receiptUrl) return null;
 
   return (
-    <div className={cn('rounded-md border px-3 py-3 text-center', BRAND_BORDER, PRINT_PLAIN)}>
-      <p className={cn('text-[9px] font-bold uppercase leading-none tracking-wide', BRAND, 'print:text-black')}>
+    // `flex-1` with centred content: the panel grows into whatever the details
+    // beside it leave over, so the two columns end level instead of this one
+    // stopping short with a gap beneath it.
+    <div
+      className={cn(
+        'flex flex-1 flex-col items-center justify-center rounded-md border px-3 py-3 text-center',
+        BRAND_BORDER,
+        PRINT_PLAIN,
+        PRINT_HAIRLINE,
+        'print:rounded-none print:border-0 print:px-0 print:py-1',
+      )}
+    >
+      <p
+        className={cn(
+          'flex items-center justify-center gap-1 text-[9px] font-bold uppercase leading-none tracking-wide',
+          BRAND,
+          'print:text-black',
+        )}
+      >
+        <ScanLine className="h-3 w-3 shrink-0" />
         Scan to Verify
       </p>
-      <p className="urdu mt-0.5 text-[10px] leading-loose">تصدیق کے لیے اسکین کریں</p>
       {/* The class is the only stable way to tell the QR apart from the
           lucide icons elsewhere on the receipt, which are also <svg>. */}
       <QRCodeSVG
-        className="receipt-qr mx-auto mt-1.5"
+        className="receipt-qr mx-auto mt-2"
         value={receiptUrl}
         size={68}
         level="M"
         marginSize={0}
       />
-    </div>
-  );
-}
-
-function FooterRow({ weighment }: { weighment: Weighment }) {
-  return (
-    <div className={cn('mt-2 grid grid-cols-[1fr_auto] items-end gap-3 rounded-md border px-3 py-2', BRAND_BORDER, PRINT_PLAIN)}>
-      {/* No station on the slip: there is one weighbridge, so naming it told the
-          customer nothing. The id is still recorded against every weighment. */}
-      <p className="text-[7px] leading-[1.2]">Operator: {weighment.operator_username}</p>
-
-      <div className="w-[52mm] text-center">
-        <p className="text-[9px] font-bold uppercase tracking-wide">Weighing Officer Signature</p>
-        <p className="urdu text-[8px] leading-relaxed">وزن کرنے والے افسر کے دستخط</p>
-        <p className="mt-3 border-t border-dashed border-black/60 pt-0.5 text-[7px]">&nbsp;</p>
-      </div>
     </div>
   );
 }
@@ -426,21 +533,37 @@ function ReceiptHeader({ company }: { company: ReceiptCompany }) {
           </h1>
         )}
 
-        <div className="min-w-0 text-right text-[11px] leading-snug">
-          <p>{company.address}</p>
-          <p className="font-semibold">{company.phone}</p>
+        {/* Each line with its own icon, as on the PDF. */}
+        <div className="min-w-0 space-y-0.5 text-right text-[11px] leading-snug">
+          <p className="flex items-center justify-end gap-1.5">
+            <MapPin className={cn('h-3 w-3 shrink-0', BRAND)} />
+            {company.address}
+          </p>
+          <p className="flex items-center justify-end gap-1.5 font-semibold">
+            <Phone className={cn('h-3 w-3 shrink-0', BRAND)} />
+            {company.phone}
+          </p>
+          {company.email && (
+            <p className="flex items-center justify-end gap-1.5">
+              <Mail className={cn('h-3 w-3 shrink-0', BRAND)} />
+              {company.email}
+            </p>
+          )}
         </div>
       </div>
     </header>
   );
 }
 
-function ReceiptFooter({ company }: { company: ReceiptCompany }) {
+/**
+ * The closing line.
+ *
+ * No contact details: the header carries them a few centimetres above, and the
+ * same address twice on one page is noise rather than reassurance.
+ */
+function ReceiptFooter() {
   return (
     <footer className={cn(SOFT_ONLY_CLASS, 'border-t-2 px-5 pb-5 pt-2 text-center', BRAND_BORDER)}>
-      <p className="text-[10px]">
-        {company.name} · {company.phone}
-      </p>
       <p className="text-[10px]">
         This receipt is generated from the weighbridge record and is valid without a signature.
       </p>

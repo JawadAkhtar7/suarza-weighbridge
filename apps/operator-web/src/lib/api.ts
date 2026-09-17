@@ -158,9 +158,14 @@ export const agentApi = {
     }),
 
   /** Recent weighments for the quick-pick list. */
-  listWeighments: (options: { status?: string; limit?: number; offset?: number } = {}) => {
+  listWeighments: (
+    options: { status?: string; q?: string; limit?: number; offset?: number } = {},
+  ) => {
     const params = new URLSearchParams();
     if (options.status) params.set('status', options.status);
+    // Searched by the weighbridge across every record, not filtered in the
+    // browser across the page that happens to be loaded.
+    if (options.q?.trim()) params.set('q', options.q.trim());
     params.set('limit', String(options.limit ?? 20));
     if (options.offset) params.set('offset', String(options.offset));
     // `total` is every record the filter matches, not just this page.

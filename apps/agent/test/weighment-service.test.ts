@@ -320,6 +320,59 @@ describe('the list the operator picks from', () => {
   });
 });
 
+describe('searching the list', () => {
+  /** Twelve tickets, with the wanted one buried well past the first page. */
+  const seedMany = () => {
+    for (let i = 1; i <= 12; i += 1) {
+      service.createFirstWeight(
+        firstWeightInput({
+          vehicle_plate: `LES-${String(i).padStart(4, '0')}`,
+          // The FIRST one created, so it sorts last: newest first is the order.
+          customer_name: i === 1 ? 'Zainab Bibi' : `Customer ${i}`,
+        }),
+      );
+    }
+  };
+
+  it('finds a record that is not on the page being shown', () => {
+    // The point of searching in the database rather than filtering the rows
+    // already on screen: the operator's answer must not depend on how far they
+    // happened to have scrolled.
+    seedMany();
+
+    const firstPage = service.list({ limit: 5 }).map((row) => row.customer_name);
+    expect(firstPage).not.toContain('Zainab Bibi');
+
+    const found = service.list({ q: 'zainab', limit: 5 });
+    expect(found).toHaveLength(1);
+    expect(found[0]!.customer_name).toBe('Zainab Bibi');
+  });
+
+  it('matches on slip number, customer and vehicle alike', () => {
+    const { weighment } = service.createFirstWeight(
+      firstWeightInput({ customer_name: 'Ali Raza', vehicle_plate: 'LES-9876' }),
+    );
+
+    expect(service.list({ q: weighment.slip_number })).toHaveLength(1);
+    expect(service.list({ q: 'ali' })).toHaveLength(1);
+    expect(service.list({ q: '9876' })).toHaveLength(1);
+  });
+
+  it('counts only what matches, so the pager stops in the right place', () => {
+    seedMany();
+    expect(service.countWeighments()).toBe(12);
+    expect(service.countWeighments({ q: 'zainab' })).toBe(1);
+  });
+
+  it('treats a wildcard as text, not as a pattern', () => {
+    // A customer called "100% Traders" must not match everything.
+    service.createFirstWeight(firstWeightInput({ customer_name: '100% Traders' }));
+    service.createFirstWeight(firstWeightInput({ customer_name: 'Someone Else' }));
+
+    expect(service.list({ q: '%' })).toHaveLength(1);
+  });
+});
+
 describe('outbox bookkeeping', () => {
   it('marks every new and updated record as pending sync', () => {
     const { weighment } = service.createFirstWeight(firstWeightInput());

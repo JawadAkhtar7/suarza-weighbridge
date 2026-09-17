@@ -27,7 +27,7 @@ import { receiptPdfUrl } from '../lib/api.js';
 interface WeighmentDetailProps {
   weighment: Weighment | null;
   onClose: () => void;
-  company: { name: string; address: string; phone: string; logoUrl?: string };
+  company: { name: string; address: string; phone: string; email?: string; logoUrl?: string };
   /** Public origin, so the QR on a printed copy still resolves. */
   receiptBaseUrl: string;
 }

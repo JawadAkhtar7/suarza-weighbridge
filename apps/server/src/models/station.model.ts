@@ -22,6 +22,7 @@ const stationSchema = new Schema(
     company_name: { type: String, default: '' },
     company_address: { type: String, default: '' },
     company_phone: { type: String, default: '' },
+    company_email: { type: String, default: '' },
     company_logo_url: { type: String, default: '' },
     /** What this station prints on; the downloaded PDF follows it. */
     paper_size: { type: String, enum: ['A4', 'A5', 'LETTER'], default: 'A5' },

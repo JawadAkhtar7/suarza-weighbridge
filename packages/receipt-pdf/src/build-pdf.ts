@@ -35,6 +35,8 @@ import {
 } from '@suarza/shared';
 
 export interface PdfCompany {
+  /** Optional: a station that has not set one simply shows address and phone. */
+  email?: string;
   name: string;
   address: string;
   phone: string;
@@ -61,6 +63,33 @@ const BRAND = '#155932';
 const INK = '#000000';
 const PAPER = '#ffffff';
 const MUTED = '#4b5563';
+
+/**
+ * Line icons, as SVG path data on a 24×24 grid.
+ *
+ * Deliberately few and deliberately plain: these are read at 8pt on a slip a
+ * driver folds into a pocket, so anything with fine detail becomes a smudge.
+ */
+const ICONS = {
+  user: ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8z'],
+  building: ['M4 21h16M6 21V7l6-3.5L18 7v14', 'M9.5 10h1M9.5 14h1M13.5 10h1M13.5 14h1'],
+  truck: ['M2 17V7h11v10', 'M13 10h4l3 3.5V17H13', 'M6.5 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4z', 'M17 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'],
+  tag: ['M20.6 13.4 12 22l-9-9V4h9z', 'M7.5 7.5h.01'],
+  box: ['M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z', 'M3 7.5 12 12l9-4.5M12 12v9'],
+  phone: ['M6 3h4l2 5-2.5 1.5a12 12 0 0 0 5 5L16 12l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z'],
+  leaf: ['M4 20C4 10 10 4 20 4c0 10-6 16-16 16z', 'M9 15c2-3 5-5 8-6'],
+  calendar: ['M4 6h16v15H4z', 'M4 11h16M9 3v5M15 3v5'],
+  money: ['M2 6h20v12H2z', 'M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z', 'M5.5 9h.01M18.5 15h.01'],
+  scan: ['M8 2h8v20H8z', 'M11 19h2', 'M10.5 6h3v3h-3z'],
+  scale: ['M12 3v18M6 21h12', 'M12 6 5.5 14h13z'],
+  weight: ['M7 8h10l2 13H5z', 'M12 3a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z'],
+  pen: ['M4 20l1-4L17 4l3 3L8 19z', 'M15 6l3 3'],
+  hash: ['M5 9h14M5 15h14M10 3 8 21M16 3l-2 18'],
+  mail: ['M3 5h18v14H3z', 'm3 6 9 6.5L21 6'],
+  pin: ['M12 21s7-6.8 7-11.5A7 7 0 0 0 5 9.5C5 14.2 12 21 12 21z', 'M12 7a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z'],
+} as const;
+
+type IconName = keyof typeof ICONS;
 
 const MARGIN = 28;
 const GAP = 7;
@@ -192,18 +221,55 @@ export async function buildReceiptPdf({
       });
   };
 
+  /**
+   * A small line icon beside a label.
+   *
+   * Drawn as vector paths rather than shipped as images: at 8pt a bitmap turns
+   * to mush, and an icon font would be a third font to embed for a dozen
+   * glyphs. The paths are on a 24×24 grid — the same grid the screens' icons
+   * use — so the two tiers stay recognisably the same product.
+   *
+   * A label the reader cannot place is worse than none, so every icon here
+   * names the thing beside it rather than decorating it.
+   */
+  const icon = (name: IconName, x: number, top: number, size = 8, color = BRAND) => {
+    const paths = ICONS[name];
+    const scale = size / 24;
+
+    doc.save();
+    doc.translate(x, top).scale(scale);
+    // Set inside the scaled space, so the stroke thins with the icon instead
+    // of staying 1.8pt and turning a 8pt glyph into a blob.
+    doc.lineWidth(1.8).strokeColor(color).lineJoin('round').lineCap('round');
+    for (const d of paths) doc.path(d).stroke();
+    doc.restore();
+  };
+
   /** A card's dark title strip, as in the HTML. */
-  const cardHead = (x: number, top: number, w: number, h: number, title: string, urdu: string) => {
+  const cardHead = (
+    x: number,
+    top: number,
+    w: number,
+    h: number,
+    title: string,
+    urdu: string,
+    name: IconName,
+  ) => {
     doc.save();
     doc.roundedRect(x, top, w, h, RADIUS).clip();
     doc.rect(x, top, w, h).fillColor(BRAND).fill();
     doc.restore();
-    doc
-      .font('Helvetica-Bold')
-      .fontSize(6.5)
-      .fillColor('#ffffff')
-      .text(title.toUpperCase(), x, top + 3, { width: w, align: 'center', characterSpacing: 0.4 });
-    urduLine(urdu, x, top + 11, { width: w, color: '#ffffff', size: 6.5 });
+
+    // Measured, so the icon sits against the title rather than at a guessed
+    // offset that drifts as soon as a title changes length.
+    const label = title.toUpperCase();
+    doc.font('Helvetica-Bold').fontSize(6.5).fillColor(PAPER);
+    const labelWidth = doc.widthOfString(label, { characterSpacing: 0.4 });
+    const labelX = x + (w - labelWidth) / 2;
+    icon(name, labelX - 11, top + 2, 8, PAPER);
+    doc.text(label, labelX, top + 3, { lineBreak: false, characterSpacing: 0.4 });
+
+    urduLine(urdu, x, top + 11, { width: w, color: PAPER, size: 6.5 });
   };
 
   /* ── branded header ──────────────────────────────────────────────────── */
@@ -215,12 +281,27 @@ export async function buildReceiptPdf({
     doc.font('Helvetica-Bold').fontSize(16).fillColor(BRAND).text(company.name.toUpperCase(), left, y + 8);
   }
 
-  doc
-    .font('Helvetica')
-    .fontSize(7.5)
-    .fillColor(MUTED)
-    .text(company.address, left + (logo ? 150 : 0), y + 8, { width: width - (logo ? 150 : 0), align: 'right' })
-    .text(company.phone, { width: width - (logo ? 150 : 0), align: 'right' });
+  /*
+   * Contact details, right-aligned, one line each with its own icon.
+   *
+   * Drawn line by line rather than as a block so each icon can sit against the
+   * line it belongs to — and so the email is simply absent, rather than leaving
+   * a gap, on a station that has not set one.
+   */
+  const contactLines: { icon: IconName; text: string }[] = [
+    { icon: 'pin', text: company.address },
+    { icon: 'phone', text: company.phone },
+    ...(company.email ? [{ icon: 'mail' as IconName, text: company.email }] : []),
+  ];
+
+  const contactRight = left + width;
+  contactLines.forEach((line, index) => {
+    const lineY = y + 3 + index * 10;
+    doc.font('Helvetica').fontSize(7.5).fillColor(MUTED);
+    const textWidth = doc.widthOfString(line.text);
+    doc.text(line.text, contactRight - textWidth, lineY, { lineBreak: false });
+    icon(line.icon, contactRight - textWidth - 11, lineY - 1, 8);
+  });
 
   y += 42;
   doc.moveTo(left, y).lineTo(right, y).lineWidth(2).strokeColor(BRAND).stroke();
@@ -232,15 +313,17 @@ export async function buildReceiptPdf({
   // Filled, to match the screen: the PDF is the soft form. Only the printed pad
   // stays plain ink.
   box(left, y, width, slipH, true);
-  doc.font('Helvetica-Bold').fontSize(6.5).fillColor(PAPER).text('SLIP NO.', left + 10, y + 6, { characterSpacing: 0.5 });
-  urduLine('سلپ نمبر', left + 10, y + 14, { width: 60, align: 'left', color: PAPER, size: 6.5 });
-  doc.font('Helvetica-Bold').fontSize(15).fillColor(PAPER).text(weighment.slip_number, left + 72, y + 11);
+  icon('hash', left + 9, y + 5, 8, PAPER);
+  doc.font('Helvetica-Bold').fontSize(6.5).fillColor(PAPER).text('SLIP NO.', left + 20, y + 6, { characterSpacing: 0.5 });
+  urduLine('سلپ نمبر', left + 20, y + 14, { width: 60, align: 'left', color: PAPER, size: 6.5 });
+  doc.font('Helvetica-Bold').fontSize(15).fillColor(PAPER).text(weighment.slip_number, left + 82, y + 11);
 
-  doc.font('Helvetica-Bold').fontSize(6.5).fillColor(PAPER).text('DATE & TIME', left, y + 6, {
-    width: width - 10,
-    align: 'right',
-    characterSpacing: 0.5,
-  });
+  const dateLabel = 'DATE & TIME';
+  doc.font('Helvetica-Bold').fontSize(6.5).fillColor(PAPER);
+  const dateLabelWidth = doc.widthOfString(dateLabel, { characterSpacing: 0.5 });
+  const dateLabelX = left + width - 10 - dateLabelWidth;
+  icon('calendar', dateLabelX - 11, y + 5, 8, PAPER);
+  doc.text(dateLabel, dateLabelX, y + 6, { lineBreak: false, characterSpacing: 0.5 });
   urduLine('تاریخ و وقت', left, y + 14, { width: width - 10, align: 'right', color: PAPER, size: 6.5 });
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor(PAPER).text(formatDateTimePkt(weighment.first_weight_at), left, y + 23, {
     width: width - 10,
@@ -268,14 +351,33 @@ export async function buildReceiptPdf({
   const panelX = left + detailW + GAP;
   const panelW = width - detailW - GAP;
 
-  const rows: [string, string, string][] = [
-    ['Customer Name', 'کسٹمر کا نام', weighment.customer_name],
-    ['Company', 'کمپنی', weighment.customer_company || '—'],
-    ['Vehicle Number', 'گاڑی نمبر', weighment.vehicle_plate],
-    ['Vehicle Type', 'گاڑی کی قسم', vehicleTypeLabel(weighment.vehicle_type)],
-    ['Container Number', 'کنٹینر نمبر', weighment.container_number ?? '—'],
-    ['Phone', 'فون نمبر', weighment.customer_phone ?? '—'],
-    ['Product', 'پروڈکٹ', weighment.product || '—'],
+  const rows: { icon: IconName; label: string; urdu: string; value: string }[] = [
+    { icon: 'user', label: 'Customer Name', urdu: 'کسٹمر کا نام', value: weighment.customer_name },
+    { icon: 'building', label: 'Company', urdu: 'کمپنی', value: weighment.customer_company || '—' },
+    { icon: 'truck', label: 'Vehicle Number', urdu: 'گاڑی نمبر', value: weighment.vehicle_plate },
+    {
+      icon: 'tag',
+      label: 'Vehicle Type',
+      urdu: 'گاڑی کی قسم',
+      // The label the slip was made with, like every other tier — a type the
+      // manager renames later must not change what an old receipt says.
+      value: vehicleTypeLabel(weighment.vehicle_type, weighment.vehicle_type_label),
+    },
+    {
+      icon: 'box',
+      label: 'Container Number',
+      urdu: 'کنٹینر نمبر',
+      value: weighment.container_number ?? '—',
+    },
+    // The number on the slip is the one to ring about this truck, which is the
+    // driver's — so the label says so rather than leaving it to be assumed.
+    {
+      icon: 'phone',
+      label: 'Driver Number',
+      urdu: 'ڈرائیور نمبر',
+      value: weighment.customer_phone ?? '—',
+    },
+    { icon: 'leaf', label: 'Product', urdu: 'پروڈکٹ', value: weighment.product || '—' },
   ];
 
   // Two lines per row once the Urdu is there, so the row has to grow with it.
@@ -283,36 +385,44 @@ export async function buildReceiptPdf({
   const detailH = rows.length * rowH + 10;
   box(left, y, detailW, detailH);
 
-  rows.forEach(([label, urdu, value], index) => {
+  rows.forEach((row, index) => {
     const rowY = y + 6 + index * rowH;
-    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(INK).text(label, left + 9, rowY, { width: 72, lineBreak: false });
-    urduLine(urdu, left + 9, rowY + 8, { width: 72, align: 'left', size: 6, color: MUTED });
-    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(INK).text(':', left + 84, rowY);
-    doc.font('Helvetica').fontSize(8).fillColor(INK).text(value, left + 91, rowY, {
-      width: detailW - 100,
+    icon(row.icon, left + 8, rowY, 8.5);
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(7.5)
+      .fillColor(INK)
+      .text(row.label, left + 20, rowY, { width: 76, lineBreak: false });
+    urduLine(row.urdu, left + 20, rowY + 8, { width: 76, align: 'left', size: 6, color: MUTED });
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(INK).text(':', left + 99, rowY);
+    doc.font('Helvetica').fontSize(8).fillColor(INK).text(row.value, left + 106, rowY, {
+      width: detailW - 115,
       lineBreak: false,
       ellipsis: true,
     });
   });
 
-  const panelH = hasUrdu ? 62 : 46;
+  // No Urdu line under the amount any more, so the panel is back to the height
+  // the figure and its paid/unpaid marker actually need.
+  const panelH = 48;
   let panelY = y;
 
   if (isComplete) {
     box(panelX, panelY, panelW, panelH);
-    doc.font('Helvetica-Bold').fontSize(6).fillColor(BRAND).text('AMOUNT CHARGED', panelX, panelY + 6, {
-      width: panelW,
-      align: 'center',
-      characterSpacing: 0.5,
-    });
-    urduLine('چارج شدہ رقم', panelX, panelY + 15, { width: panelW, size: 7.5 });
+    const amountLabel = 'AMOUNT CHARGED';
+    doc.font('Helvetica-Bold').fontSize(6).fillColor(BRAND);
+    const amountLabelWidth = doc.widthOfString(amountLabel, { characterSpacing: 0.5 });
+    const amountLabelX = panelX + (panelW - amountLabelWidth) / 2;
+    icon('money', amountLabelX - 11, panelY + 5, 8);
+    doc.text(amountLabel, amountLabelX, panelY + 6, { lineBreak: false, characterSpacing: 0.5 });
+
     // As big as the net weight: it is read just as often, and by the person
     // paying it.
     doc
       .font('Helvetica-Bold')
       .fontSize(19)
       .fillColor(INK)
-      .text(`${formatPKR(weighment.amount_charged)}/-`, panelX, panelY + (hasUrdu ? 30 : 16), {
+      .text(`${formatPKR(weighment.amount_charged)}/-`, panelX, panelY + 17, {
         width: panelW,
         align: 'center',
       });
@@ -323,7 +433,7 @@ export async function buildReceiptPdf({
       .font('Helvetica-Bold')
       .fontSize(6.5)
       .fillColor(paid ? BRAND : INK)
-      .text(paid ? 'PAID' : 'ON ACCOUNT', panelX, panelY + (hasUrdu ? 50 : 34), {
+      .text(paid ? 'PAID' : 'ON ACCOUNT', panelX, panelY + 37, {
         width: panelW,
         align: 'center',
         characterSpacing: 0.5,
@@ -335,16 +445,29 @@ export async function buildReceiptPdf({
   // The QR lives under the amount rather than along the foot of the slip: this
   // column has the room, and the space it frees below goes to the weights.
   if (qr) {
-    const qrH = hasUrdu ? 72 : 58;
+    /*
+     * Stretched to the foot of the details beside it.
+     *
+     * A fixed height left a gap under this column while the details ran on
+     * past it — the two are one band of the slip and should end level, as they
+     * do on screen where the browser's grid handles it. Here the arithmetic is
+     * ours to do.
+     */
+    const qrH = Math.max(60, y + detailH - panelY);
     box(panelX, panelY, panelW, qrH);
-    doc.font('Helvetica-Bold').fontSize(6).fillColor(BRAND).text('SCAN TO VERIFY', panelX, panelY + 6, {
-      width: panelW,
-      align: 'center',
-      characterSpacing: 0.5,
-    });
-    urduLine('تصدیق کے لیے اسکین کریں', panelX, panelY + 15, { width: panelW, size: 7.5 });
+
+    const scanLabel = 'SCAN TO VERIFY';
+    doc.font('Helvetica-Bold').fontSize(6).fillColor(BRAND);
+    const scanWidth = doc.widthOfString(scanLabel, { characterSpacing: 0.5 });
+    const scanX = panelX + (panelW - scanWidth) / 2;
+    icon('scan', scanX - 11, panelY + 5, 8);
+    doc.text(scanLabel, scanX, panelY + 6, { lineBreak: false, characterSpacing: 0.5 });
+
     const qrSize = 40;
-    doc.image(qr, panelX + (panelW - qrSize) / 2, panelY + (hasUrdu ? 29 : 16), { width: qrSize });
+    // Centred in whatever the stretch left under the caption, rather than
+    // pinned to the top with the slack all at the bottom.
+    const qrTop = panelY + 16 + Math.max(0, (qrH - 16 - qrSize - 6) / 2);
+    doc.image(qr, panelX + (panelW - qrSize) / 2, qrTop, { width: qrSize });
   }
 
   y += detailH + GAP;
@@ -353,7 +476,7 @@ export async function buildReceiptPdf({
 
   const cardW = (width - GAP * 2) / 3;
   const headH = hasUrdu ? 21 : 15;
-  const cardH = (isComplete ? 82 : 58) + (hasUrdu ? 14 : 0);
+  const cardH = isComplete ? 86 : 52;
 
   const weightCard = (
     x: number,
@@ -364,7 +487,7 @@ export async function buildReceiptPdf({
     manual: boolean,
   ) => {
     box(x, y, cardW, cardH);
-    cardHead(x, y, cardW, headH, title, urdu);
+    cardHead(x, y, cardW, headH, title, urdu, 'scale');
     doc.font('Helvetica').fontSize(6.5).fillColor(MUTED).text(at ? formatDateTimePkt(at) : '—', x, y + headH + 6, {
       width: cardW,
       align: 'center',
@@ -374,11 +497,10 @@ export async function buildReceiptPdf({
       .fontSize(17)
       .fillColor(INK)
       .text(kg === null ? 'pending' : formatKg(kg), x, y + headH + 14, { width: cardW, align: 'center' });
-    urduLine('کلوگرام', x, y + headH + 33, { width: cardW, size: 6, color: MUTED });
     if (manual) {
       // Flagged on the paper, not just in the database — the audit trail is no
       // use to someone holding the receipt.
-      doc.font('Helvetica-Bold').fontSize(5.5).fillColor(INK).text('(MANUAL ENTRY)', x, y + headH + (hasUrdu ? 45 : 36), {
+      doc.font('Helvetica-Bold').fontSize(5.5).fillColor(INK).text('(MANUAL ENTRY)', x, y + headH + 34, {
         width: cardW,
         align: 'center',
       });
@@ -390,15 +512,14 @@ export async function buildReceiptPdf({
 
   const netX = left + (cardW + GAP) * 2;
   box(netX, y, cardW, cardH);
-  cardHead(netX, y, cardW, headH, 'Net Weight', 'خالص وزن');
+  cardHead(netX, y, cardW, headH, 'Net Weight', 'صافی وزن', 'weight');
 
   if (isComplete) {
     doc.font('Helvetica-Bold').fontSize(19).fillColor(INK).text(formatKg(net.kg), netX, y + headH + 4, {
       width: cardW,
       align: 'center',
     });
-    urduLine('کلوگرام', netX, y + headH + 25, { width: cardW, size: 6, color: MUTED });
-    const ruleY = y + headH + (hasUrdu ? 36 : 28);
+    const ruleY = y + headH + 28;
     doc
       .moveTo(netX + 8, ruleY)
       .lineTo(netX + cardW - 8, ruleY)
@@ -410,8 +531,7 @@ export async function buildReceiptPdf({
       width: cardW,
       align: 'center',
     });
-    urduLine('من', netX, ruleY + 25, { width: cardW, size: 6, color: MUTED });
-    doc.font('Helvetica').fontSize(7).fillColor(MUTED).text(formatTon(net.ton), netX, ruleY + (hasUrdu ? 36 : 20), {
+    doc.font('Helvetica').fontSize(7).fillColor(MUTED).text(formatTon(net.ton), netX, ruleY + 24, {
       width: cardW,
       align: 'center',
     });
@@ -424,49 +544,27 @@ export async function buildReceiptPdf({
 
   y += cardH + GAP;
 
-  /* ── QR + signature ──────────────────────────────────────────────────── */
-
-  const footH = 44;
-  box(left, y, width, footH);
-
-  doc
-    .font('Helvetica')
-    .fontSize(6)
-    .fillColor(MUTED)
-    .text(`Operator: ${weighment.operator_username}`, left + 9, y + 18);
-
-  const signX = left + width * 0.52;
-  const signW = width * 0.48 - 10;
-  doc.font('Helvetica-Bold').fontSize(6.5).fillColor(INK).text('WEIGHING OFFICER SIGNATURE', signX, y + 8, {
-    width: signW,
-    align: 'center',
-    characterSpacing: 0.4,
-  });
-  urduLine('وزن کرنے والے افسر کے دستخط', signX, y + 17, { width: signW, size: 6.5 });
-  doc
-    .moveTo(signX + 6, y + 32)
-    .lineTo(signX + signW - 6, y + 38)
-    .dash(2, { space: 2 })
-    .lineWidth(0.6)
-    .strokeColor(MUTED)
-    .stroke()
-    .undash();
-
-  y += footH + GAP;
 
   /* ── branded footer ──────────────────────────────────────────────────── */
 
   doc.moveTo(left, y).lineTo(right, y).lineWidth(1).strokeColor(BRAND).stroke();
-  doc.font('Helvetica').fontSize(6.5).fillColor(MUTED).text(`${company.name}  ·  ${company.phone}`, left, y + 6, {
-    width,
-    align: 'center',
-  });
-  doc.text(
-    'This receipt is generated from the weighbridge record and is valid without a signature.',
-    left,
-    y + 15,
-    { width, align: 'center' },
-  );
+  /*
+   * The closing line only.
+   *
+   * No contact details and no operator name: the header carries the first a few
+   * centimetres above, and the second was never something the customer's copy
+   * needed — it stays recorded against the weighment.
+   */
+  doc
+    .font('Helvetica')
+    .fontSize(6.5)
+    .fillColor(MUTED)
+    .text(
+      'This receipt is generated from the weighbridge record and is valid without a signature.',
+      left,
+      y + 6,
+      { width, align: 'center' },
+    );
 
   doc.end();
   return finished;

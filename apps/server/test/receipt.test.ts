@@ -36,6 +36,7 @@ describe('whose company details the page shows', () => {
     company_name: 'Suarza International',
     company_address: '2 Km, Chowk Hujra Shah Muqeem, Kasur Road, Depalpur',
     company_phone: '+923036537700',
+    company_email: 'info@suarza.com',
     company_logo_url: '/logo.png',
     paper_size: 'A4' as const,
     updated_at: '2026-09-15T10:00:00.000Z',
@@ -45,6 +46,7 @@ describe('whose company details the page shows', () => {
     name: 'Suarza International',
     address: '12 Industrial Road, Lahore',
     phone: '+92 300 0000000',
+    email: '',
     logoUrl: '/logo.png',
   };
 

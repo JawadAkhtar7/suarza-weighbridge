@@ -327,6 +327,18 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="company-email">
+                  Email <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  id="company-email"
+                  value={draft.company_email}
+                  placeholder="info@suarza.com"
+                  onChange={(event) => setDraft({ ...draft, company_email: event.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="receipt-base">Receipt web address</Label>
                 <Input
                   id="receipt-base"

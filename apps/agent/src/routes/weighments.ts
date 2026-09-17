@@ -34,9 +34,15 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
   });
 
   app.get('/weighments', (request) => {
-    const query = request.query as { status?: string; limit?: string; offset?: string };
+    const query = request.query as {
+      status?: string;
+      q?: string;
+      limit?: string;
+      offset?: string;
+    };
     const rows = deps.service.list({
       status: query.status as never,
+      q: query.q,
       limit: query.limit ? Number(query.limit) : undefined,
       offset: query.offset ? Number(query.offset) : undefined,
     });
@@ -45,7 +51,7 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
     return {
       rows: rows.map(toDto),
       count: rows.length,
-      total: deps.service.countWeighments({ status: query.status as never }),
+      total: deps.service.countWeighments({ status: query.status as never, q: query.q }),
     };
   });
 
@@ -81,6 +87,7 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
         name: settings?.company_name ?? 'Suarza International',
         address: settings?.company_address ?? '',
         phone: settings?.company_phone ?? '',
+        email: settings?.company_email ?? '',
       },
       receiptUrl: settings?.receipt_base_url
         ? `${settings.receipt_base_url.replace(/\/+$/, '')}/r/${encodeURIComponent(record.slip_number)}`

@@ -14,8 +14,19 @@
  * a page nobody loaded.
  */
 
+import { useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Skeleton, cn } from '@suarza/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Input,
+  Skeleton,
+  cn,
+} from '@suarza/ui';
 import {
   formatDateTimePkt,
   formatKg,
@@ -23,8 +34,9 @@ import {
   type Weighment,
   type WeighmentStatus,
 } from '@suarza/shared';
-import { ChevronDown, Clock, Loader2, RefreshCw } from 'lucide-react';
+import { ChevronDown, Clock, Loader2, RefreshCw, Search } from 'lucide-react';
 import { agentApi } from '../lib/api.js';
+import { useDebounced } from '../hooks/use-debounced.js';
 
 const STATUS_VARIANT: Record<WeighmentStatus, 'secondary' | 'success' | 'destructive'> = {
   OPEN: 'secondary',
@@ -46,11 +58,18 @@ interface RecentWeighmentsProps {
 }
 
 export function RecentWeighments({ onPick }: RecentWeighmentsProps) {
+  const [search, setSearch] = useState('');
+  // Debounced: this hits the weighbridge on every keystroke otherwise, and a
+  // slip number is six digits typed quickly.
+  const q = useDebounced(search, 250);
+
   const query = useInfiniteQuery({
-    queryKey: ['recent-weighments'],
+    // The search is part of the key, so changing it starts the paging again
+    // rather than appending results from a different question.
+    queryKey: ['recent-weighments', q],
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
-      agentApi.listWeighments({ limit: PAGE_SIZE, offset: pageParam as number }),
+      agentApi.listWeighments({ q, limit: PAGE_SIZE, offset: pageParam as number }),
     getNextPageParam: (lastPage, pages) => {
       const loaded = pages.reduce((sum, page) => sum + page.rows.length, 0);
       return loaded < lastPage.total ? loaded : undefined;
@@ -64,7 +83,7 @@ export function RecentWeighments({ onPick }: RecentWeighmentsProps) {
      * waiting for a truck to arrive, so the poll stops once they page back and
      * resumes when they are back to one page.
      */
-    refetchInterval: (q) => ((q.state.data?.pages.length ?? 1) > 1 ? false : 15_000),
+    refetchInterval: (state) => ((state.state.data?.pages.length ?? 1) > 1 ? false : 15_000),
     retry: false,
   });
 
@@ -76,12 +95,24 @@ export function RecentWeighments({ onPick }: RecentWeighmentsProps) {
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-3">
+      <CardHeader className="flex-row flex-wrap items-center gap-2 space-y-0 pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Clock className="h-4 w-4" />
           Recent weighments
           {total > 0 && <span className="text-xs font-normal text-muted-foreground">({total})</span>}
         </CardTitle>
+
+        <div className="relative ml-auto min-w-[10rem] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            aria-label="Search weighments"
+            placeholder="Slip, customer or vehicle"
+            className="h-9 pl-8"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+
         <Button
           variant="ghost"
           size="sm"
@@ -106,10 +137,10 @@ export function RecentWeighments({ onPick }: RecentWeighmentsProps) {
           </p>
         ) : ordered.length === 0 ? (
           <p className="p-6 text-center text-sm text-muted-foreground">
-            Nothing weighed yet today.
+            {q ? `Nothing matches “${q}”.` : 'Nothing weighed yet today.'}
           </p>
         ) : (
-          <div className="h-[26rem] overflow-y-auto">
+          <div className="h-[19rem] overflow-y-auto">
             <ul className="divide-y">
               {ordered.map((row) => (
                 <RecentRow key={row.id} weighment={row} onPick={onPick} />

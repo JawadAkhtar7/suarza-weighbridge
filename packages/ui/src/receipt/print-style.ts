@@ -36,6 +36,17 @@ function paperSizeCss(settings: PrintSettings): string {
  * Built as a string because react-to-print injects it into the print document,
  * which has no access to the app's stylesheet variables.
  */
+/**
+ * Breathing room down each side of the printed block.
+ *
+ * Symmetric on purpose. The right side used to carry this on its own while the
+ * left took only the calibration offset — which was fine while an operator was
+ * setting that offset, and became a visible lopsided page the moment the
+ * offsets were fixed at zero: text hard against the left edge, a gap on the
+ * right.
+ */
+const SIDE_MM = 4;
+
 export function buildPageStyle(settings: PrintSettings): string {
   const scale = settings.scale_percent / 100;
 
@@ -65,8 +76,11 @@ export function buildPageStyle(settings: PrintSettings): string {
         border: 0 !important;
         box-shadow: none !important;
         padding-top: ${settings.offset_top_mm}mm;
-        padding-left: ${settings.offset_left_mm}mm;
-        padding-right: 4mm;
+        /* The offset is calibration — it shifts the block on the pad — and the
+           side margin is layout. Added together so one does not swallow the
+           other. */
+        padding-left: calc(${settings.offset_left_mm}mm + ${SIDE_MM}mm);
+        padding-right: ${SIDE_MM}mm;
         transform: scale(${scale});
         transform-origin: top left;
         /* Splitting a weighment across two sheets of a pre-printed pad would

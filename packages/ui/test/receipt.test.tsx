@@ -70,13 +70,14 @@ function renderReceipt(
 }
 
 describe('soft and hard forms', () => {
-  it('marks the header and footer as screen-only', () => {
+  it('marks the header, footer and the date caption as screen-only', () => {
     const { container } = renderReceipt(base(), 'FIRST');
     const softParts = container.querySelectorAll(`.${SOFT_ONLY_CLASS}`);
 
-    // Exactly two: the branded header and the branded footer. They are hidden
-    // by the print stylesheet because the pad already carries them.
-    expect(softParts).toHaveLength(2);
+    // The branded header and footer, which the pad already carries, plus the
+    // "Date & Time" caption and its Urdu, which the pad does not need beside a
+    // slip number.
+    expect(softParts).toHaveLength(4);
     expect(screen.getByText('Suarza International')).toBeInTheDocument();
   });
 

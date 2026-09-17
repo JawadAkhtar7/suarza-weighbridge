@@ -37,6 +37,7 @@ export const stationSettingsSchema = z.object({
   company_name: z.string().default('Suarza International'),
   company_address: z.string().default('[PLACEHOLDER] Address line, City, Pakistan'),
   company_phone: z.string().default('[PLACEHOLDER] +92 300 0000000'),
+  company_email: z.string().default(''),
   company_logo_url: z.string().default('/logo.png'),
   /** Base URL the receipt QR points at, e.g. https://app.example.com. */
   receipt_base_url: z.string().default(''),

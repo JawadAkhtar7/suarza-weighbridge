@@ -25,6 +25,7 @@ export const stationProfileSchema = z.object({
   company_name: z.string().max(200),
   company_address: z.string().max(400),
   company_phone: z.string().max(100),
+  company_email: z.string().max(200).default(''),
   company_logo_url: z.string().max(500).default(''),
   /** What this station prints on, so a downloaded PDF matches its paper. */
   paper_size: z.enum(['A4', 'A5', 'LETTER']).default('A5'),

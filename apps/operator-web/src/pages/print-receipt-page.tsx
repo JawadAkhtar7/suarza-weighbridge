@@ -135,6 +135,7 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
             name: settings.company_name,
             address: settings.company_address,
             phone: settings.company_phone,
+            email: settings.company_email,
             // The bundled logo is the default; Settings can override it.
             logoUrl: settings.company_logo_url || '/logo.png',
           }}

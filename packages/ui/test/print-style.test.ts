@@ -35,7 +35,18 @@ describe('buildPageStyle', () => {
     const css = buildPageStyle(settings({ offset_top_mm: 12, offset_left_mm: 7 }));
     expect(css).toContain(`.${PRINT_BLOCK_CLASS}`);
     expect(css).toContain('padding-top: 12mm');
-    expect(css).toContain('padding-left: 7mm');
+    // The offset shifts the block on the pad; the side margin keeps the text
+    // off the paper edge. Both apply, so they are added rather than one
+    // replacing the other.
+    expect(css).toContain('padding-left: calc(7mm + 4mm)');
+  });
+
+  it('keeps the same margin on both sides', () => {
+    // The right side used to carry a margin the left did not, which printed
+    // the block hard against the left edge of the page.
+    const css = buildPageStyle(settings());
+    expect(css).toContain('padding-left: calc(0mm + 4mm)');
+    expect(css).toContain('padding-right: 4mm');
   });
 
   it('accepts negative offsets for a printer that starts too low', () => {

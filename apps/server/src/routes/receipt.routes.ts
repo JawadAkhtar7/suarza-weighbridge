@@ -26,6 +26,7 @@ export function receiptRouter(config: ServerConfig): Router {
     name: config.COMPANY_NAME,
     address: config.COMPANY_ADDRESS,
     phone: config.COMPANY_PHONE,
+    email: config.COMPANY_EMAIL,
     // The bundled logo is the default; COMPANY_LOGO_URL overrides it.
     logoUrl: config.COMPANY_LOGO_URL || '/logo.png',
   };

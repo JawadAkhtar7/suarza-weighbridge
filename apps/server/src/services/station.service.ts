@@ -14,6 +14,7 @@ export interface ReceiptCompanyDetails {
   name: string;
   address: string;
   phone: string;
+  email: string;
   logoUrl: string;
 }
 
@@ -37,6 +38,7 @@ export async function companyForStation(
     name: station.company_name || fallback.name,
     address: station.company_address || fallback.address,
     phone: station.company_phone || fallback.phone,
+    email: station.company_email || fallback.email,
     logoUrl: station.company_logo_url || fallback.logoUrl,
   };
 }
