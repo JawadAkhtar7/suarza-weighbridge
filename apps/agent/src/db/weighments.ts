@@ -131,7 +131,7 @@ export class WeighmentRepository {
            void_reason, voided_at, synced, sync_attempts, last_attempt_at
          ) VALUES (
            @id, @slip_number, @status, @station_id,
-           @customer_name, @customer_company, @customer_phone,
+           COALESCE(@customer_name, ''), @customer_company, @customer_phone,
            @vehicle_type, COALESCE(@vehicle_type_label, ''), @vehicle_plate,
            @container_number, COALESCE(@product, ''),
            @first_weight_kg, @first_weight_at, @first_weight_src,

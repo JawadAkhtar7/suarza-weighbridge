@@ -202,7 +202,9 @@ function RecentRow({
         </div>
 
         <div className="flex items-baseline justify-between gap-3">
-          <span className="min-w-0 truncate text-sm">{weighment.customer_name}</span>
+          <span className="min-w-0 truncate text-sm">
+            {weighment.customer_name || <span className="text-muted-foreground">No name</span>}
+          </span>
           <span className="tabular shrink-0 text-sm text-muted-foreground">
             {weighment.status === 'COMPLETED'
               ? `${formatKg(weighment.net_weight_kg)} net`

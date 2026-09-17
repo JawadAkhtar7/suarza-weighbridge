@@ -104,14 +104,26 @@ describe('createWeighmentSchema', () => {
     expect(parsed.customer_company).toBe('');
   });
 
-  it('still demands a customer name — a receipt with no one on it is useless', () => {
-    const withoutName = {
-      customer_company: 'Raza Traders',
+  it('saves a weighing with nobody named', () => {
+    // The client's rule: only the vehicle type and number are required. An
+    // unnamed weighing opens no customer account (see the ledger tests).
+    const parsed = createWeighmentSchema.parse({
       vehicle_type: 'truck',
       vehicle_plate: 'LES-1234',
       first_weight_kg: 8000,
-    };
-    expect(createWeighmentSchema.safeParse(withoutName).success).toBe(false);
+    });
+    expect(parsed.customer_name).toBe('');
+  });
+
+  it('still demands the vehicle type and number', () => {
+    // What is left mandatory: without these the record identifies no truck.
+    expect(createWeighmentSchema.safeParse({ first_weight_kg: 8000 }).success).toBe(false);
+    expect(
+      createWeighmentSchema.safeParse({ vehicle_type: 'truck', first_weight_kg: 8000 }).success,
+    ).toBe(false);
+    expect(
+      createWeighmentSchema.safeParse({ vehicle_plate: 'LES-1234', first_weight_kg: 8000 }).success,
+    ).toBe(false);
   });
 });
 

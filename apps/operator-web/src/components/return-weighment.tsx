@@ -118,11 +118,15 @@ export function ReturnWeighment({
   const complete = useMutation({
     mutationFn: () => {
       if (!record || !captured) throw new Error('Nothing to complete');
+      // Belt and braces: the button is disabled without a name, but a state
+      // left over from a previous slip must not send ON_ACCOUNT for a weighing
+      // that can have no account.
+      const settlement = record.weighment.customer_name.trim() ? paymentStatus : 'PAID';
       return agentApi.completeWeighment(record.weighment.slip_number, {
         second_weight_kg: captured.kg,
         second_weight_src: captured.source,
         amount_charged: parseAmount(amount),
-        payment_status: paymentStatus,
+        payment_status: settlement,
         operator_username: DEFAULT_OPERATOR_USERNAME,
         product: product.trim() || undefined,
         container_number: containerNumber.trim() || undefined,
@@ -243,6 +247,8 @@ export function ReturnWeighment({
 
   const weighment = record.weighment;
   const isOpen = weighment.status === 'OPEN';
+  // No name, no customer account — so nothing can be charged to one.
+  const hasCustomerName = weighment.customer_name.trim().length > 0;
 
   // Previewed live from the captured snapshot, so the operator sees the net
   // before committing rather than discovering it on the printed receipt.
@@ -332,12 +338,14 @@ export function ReturnWeighment({
                   </button>
                   <button
                     type="button"
+                    disabled={!hasCustomerName}
                     onClick={() => setPaymentStatus('ON_ACCOUNT')}
                     className={cn(
                       'rounded-md border-2 px-3 py-3 text-left transition-colors',
                       paymentStatus === 'ON_ACCOUNT'
                         ? 'border-warning bg-warning/5'
                         : 'border-muted hover:border-muted-foreground/30',
+                      !hasCustomerName && 'cursor-not-allowed opacity-50 hover:border-muted',
                     )}
                   >
                     <span className="block text-sm font-semibold">Add to account</span>
@@ -346,6 +354,20 @@ export function ReturnWeighment({
                     </span>
                   </button>
                 </div>
+
+                {/*
+                 * Said plainly rather than left to be discovered.
+                 *
+                 * An unnamed weighing opens no customer account, so putting it
+                 * on account would record a debt against nobody — the operator
+                 * would believe it was owed and nothing would exist to collect.
+                 */}
+                {!hasCustomerName && (
+                  <p className="text-xs text-muted-foreground">
+                    This weighing has no customer name, so it cannot go on an account. Add the name
+                    on the first weight to charge it later.
+                  </p>
+                )}
               </div>
 
               <details className="text-sm">

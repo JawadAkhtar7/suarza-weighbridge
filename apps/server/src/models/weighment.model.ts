@@ -22,7 +22,9 @@ const weighmentSchema = new Schema(
     status: { type: String, required: true, enum: WEIGHMENT_STATUSES },
     station_id: { type: String, required: true },
 
-    customer_name: { type: String, required: true },
+    // Not `required`: Mongoose treats '' as missing, and an unnamed weighing
+    // is legitimate — it simply gets no customer account.
+    customer_name: { type: String, default: '' },
     // Not `required`: Mongoose treats '' as missing, and a blank company is
     // legitimate here.
     customer_company: { type: String, default: '' },

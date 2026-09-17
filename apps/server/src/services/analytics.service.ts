@@ -66,7 +66,10 @@ export async function getAnalytics(query: WeighmentQuery): Promise<Analytics> {
       ]),
 
       WeighmentModel.aggregate([
-        { $match: revenueMatch },
+        // Unnamed weighings are excluded for the same reason blank companies
+        // are: they would group into one nameless bar pooling unrelated
+        // trucks, and it would probably top the chart.
+        { $match: { ...revenueMatch, customer_name: { $nin: ['', null] } } },
         {
           $group: {
             _id: '$customer_name',

@@ -229,7 +229,7 @@ function DetailsRow({
           'print:rounded-none print:border-0 print:p-0',
         )}
       >
-        <DetailRow icon={User} label="Customer Name" urdu="کسٹمر کا نام" value={weighment.customer_name} />
+        <DetailRow icon={User} label="Customer Name" urdu="کسٹمر کا نام" value={weighment.customer_name || '—'} />
         <DetailRow
           icon={Building2}
           label="Company"

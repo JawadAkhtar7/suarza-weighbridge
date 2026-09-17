@@ -25,6 +25,7 @@ import {
   syncLedgerIndexes,
 } from '../src/models/ledger.model.js';
 import { ingest } from '../src/services/ingest.service.js';
+import { WeighmentModel } from '../src/models/weighment.model.js';
 import { getCustomer, listEntries, summary } from '../src/services/ledger.service.js';
 
 let app: Express;
@@ -151,6 +152,37 @@ describe('charges from weighings', () => {
 
     expect(await LedgerEntryModel.countDocuments({ weighment_id: record.id })).toBe(2);
     expect((await getCustomer(await aliId())).balance_pkr).toBe(0);
+  });
+
+  it('opens no account for a weighing with no customer name', async () => {
+    // Option A, as the client chose: no name, no ledger. Every unnamed
+    // weighing would otherwise share one key and pool into a single balance
+    // belonging to nobody.
+    await ingest(
+      [completedWeighment({ customer_name: '', amount_charged: 300, payment_status: 'ON_ACCOUNT' })],
+      [],
+    );
+
+    expect(await LedgerCustomerModel.countDocuments()).toBe(0);
+    expect(await LedgerEntryModel.countDocuments()).toBe(0);
+  });
+
+  it('keeps unnamed weighings out of what you are owed', async () => {
+    await ingest(
+      [completedWeighment({ customer_name: '', amount_charged: 300, payment_status: 'ON_ACCOUNT' })],
+      [],
+    );
+
+    const totals = await summary();
+    expect(totals.total_receivable_pkr).toBe(0);
+    expect(totals.customers_owing).toBe(0);
+  });
+
+  it('still records the weighing itself', async () => {
+    // The ledger skips it; the weighbridge record is untouched and still shows
+    // up in reports and searches.
+    await ingest([completedWeighment({ customer_name: '', amount_charged: 300 })], []);
+    expect(await WeighmentModel.countDocuments()).toBe(1);
   });
 
   it('posts nothing for a weighing that is still open', async () => {

@@ -75,7 +75,9 @@ export function SalesTable({
       header: 'Customer',
       cell: ({ row }) => (
         <div className="min-w-0">
-          <p className="truncate font-medium">{row.original.customer_name}</p>
+          <p className="truncate font-medium">
+            {row.original.customer_name || <span className="text-muted-foreground">No name</span>}
+          </p>
           {/* Dropped entirely rather than shown as a dash: this is a subtitle,
               and an empty line under every individual customer is just noise. */}
           {row.original.customer_company && (
@@ -198,7 +200,9 @@ export function SalesTable({
 
                   <div className="flex items-baseline justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{row.customer_name}</p>
+                      <p className="truncate text-sm font-medium">
+                        {row.customer_name || <span className="text-muted-foreground">No name</span>}
+                      </p>
                       {row.customer_company && (
                         <p className="truncate text-xs text-muted-foreground">
                           {row.customer_company}

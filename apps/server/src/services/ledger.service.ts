@@ -370,6 +370,17 @@ export async function postWeighmentCharges(weighments: Weighment[]): Promise<num
   let posted = 0;
 
   for (const weighment of weighments) {
+    /*
+     * No name, no account.
+     *
+     * Identity here is name + company, so an unnamed weighing has no identity
+     * to open an account under — and every one of them would share the same
+     * key, pooling unrelated trucks into a single balance belonging to nobody.
+     * Skipped outright: nothing is opened, nothing is charged, nothing is
+     * settled. The weighment itself is stored and reported on as normal.
+     */
+    if (!weighment.customer_name.trim()) continue;
+
     const chargeable = weighment.status === 'COMPLETED' && weighment.amount_charged > 0;
     const amount = round2(weighment.amount_charged);
     const at = new Date(weighment.second_weight_at ?? weighment.created_at);

@@ -145,7 +145,10 @@ describe('POST /weighments', () => {
     expect(response.statusCode).toBe(400);
     const body = response.json();
     expect(body.error.code).toBe('VALIDATION_ERROR');
-    expect(Object.keys(body.error.details.field_errors)).toContain('customer_name');
+    // What is left mandatory: the truck. Customer name, company and product are
+    // all optional now, so the vehicle is what a rejection must name.
+    expect(Object.keys(body.error.details.field_errors)).toContain('vehicle_plate');
+    expect(Object.keys(body.error.details.field_errors)).toContain('vehicle_type');
   });
 
   it('returns the duplicate-plate warning alongside a successful save', async () => {

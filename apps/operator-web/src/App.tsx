@@ -47,7 +47,7 @@ export function App() {
     setCaptured(null);
 
     toast.success(`Saved — slip ${weighment.slip_number}`, {
-      description: `${weighment.customer_name} · ${weighment.vehicle_plate}`,
+      description: [weighment.customer_name, weighment.vehicle_plate].filter(Boolean).join(' · '),
     });
 
     // Advice, not an error: a second open ticket for the same plate is

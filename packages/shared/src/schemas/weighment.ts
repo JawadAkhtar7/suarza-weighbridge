@@ -69,7 +69,15 @@ export const weighmentSchema = z.object({
   station_id: z.string().min(1).max(16).default('A'),
 
   // Customer / vehicle
-  customer_name: z.string().trim().min(1, 'Customer name is required').max(120),
+  /**
+   * Optional, like the company and the product.
+   *
+   * A weighing with nobody named opens no customer account and posts nothing
+   * to the ledger — there is no one to bill, and pooling every unnamed weighing
+   * into a single nameless account would make a balance no one could chase.
+   * That is why "Add to account" needs a name and a cash weighing does not.
+   */
+  customer_name: z.string().trim().max(120).default(''),
   // Optional: plenty of customers are individuals with no company to give, and
   // refusing the weighing over it would just get a placeholder typed in. Empty
   // string rather than undefined, so every tier keeps a plain `string`.
@@ -154,7 +162,15 @@ export const completedWeighmentSchema = weighmentSchema.superRefine((w, ctx) => 
 
 /** POST /weighments — pass 1. The agent mints id, slip number and timestamps. */
 export const createWeighmentSchema = z.object({
-  customer_name: z.string().trim().min(1, 'Customer name is required').max(120),
+  /**
+   * Optional, like the company and the product.
+   *
+   * A weighing with nobody named opens no customer account and posts nothing
+   * to the ledger — there is no one to bill, and pooling every unnamed weighing
+   * into a single nameless account would make a balance no one could chase.
+   * That is why "Add to account" needs a name and a cash weighing does not.
+   */
+  customer_name: z.string().trim().max(120).default(''),
   // Optional: plenty of customers are individuals with no company to give, and
   // refusing the weighing over it would just get a placeholder typed in. Empty
   // string rather than undefined, so every tier keeps a plain `string`.

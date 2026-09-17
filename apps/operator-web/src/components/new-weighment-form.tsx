@@ -212,7 +212,8 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
               htmlFor="customer_name"
               label="Customer name"
               error={errors.customer_name?.message}
-              required
+              optional
+              hint="Needed only if this weighing goes on the customer's account."
             >
               <Input
                 id="customer_name"

@@ -352,7 +352,12 @@ export async function buildReceiptPdf({
   const panelW = width - detailW - GAP;
 
   const rows: { icon: IconName; label: string; urdu: string; value: string }[] = [
-    { icon: 'user', label: 'Customer Name', urdu: 'کسٹمر کا نام', value: weighment.customer_name },
+    {
+      icon: 'user',
+      label: 'Customer Name',
+      urdu: 'کسٹمر کا نام',
+      value: weighment.customer_name || '—',
+    },
     { icon: 'building', label: 'Company', urdu: 'کمپنی', value: weighment.customer_company || '—' },
     { icon: 'truck', label: 'Vehicle Number', urdu: 'گاڑی نمبر', value: weighment.vehicle_plate },
     {

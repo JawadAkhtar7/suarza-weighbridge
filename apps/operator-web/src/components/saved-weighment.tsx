@@ -46,7 +46,7 @@ export function SavedWeighment({ weighment, onNext }: SavedWeighmentProps) {
           </div>
 
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-            <Detail label="Customer" value={weighment.customer_name} />
+            <Detail label="Customer" value={weighment.customer_name || '—'} />
             <Detail label="Company" value={weighment.customer_company || '—'} />
             <Detail
               label="Vehicle"
