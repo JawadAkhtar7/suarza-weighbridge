@@ -23,9 +23,9 @@
  */
 
 import { cn } from '@suarza/ui';
-import { EmptyTruckIcon, LoadedTruckIcon } from './truck-icons.js';
+import { EmptyTruckIcon, LoadedTruckIcon, TypedWeightTruckIcon } from './truck-icons.js';
 
-export type WeighingMode = 'first' | 'second';
+export type WeighingMode = 'first' | 'second' | 'third';
 
 interface ModeOption {
   key: WeighingMode;
@@ -50,6 +50,20 @@ const OPTIONS: ModeOption[] = [
     detail: 'Truck is back with a slip — weigh again and finish',
     icon: LoadedTruckIcon,
   },
+  {
+    key: 'third',
+    step: '3',
+    /*
+     * The detail line works harder here than on the other two.
+     *
+     * After "First" and "Second", a number three reads as a third trip over
+     * the bridge — which is the opposite of what this is. So the line says
+     * plainly that it replaces both: one visit, no slip to come back with.
+     */
+    title: 'Third Weight',
+    detail: 'Instead of 1 and 2 — driver tells you the empty weight',
+    icon: TypedWeightTruckIcon,
+  },
 ];
 
 export function ModeSwitch({
@@ -66,7 +80,7 @@ export function ModeSwitch({
       // showing.
       role="radiogroup"
       aria-label="What is happening at the weighbridge"
-      className="grid gap-3 sm:grid-cols-2"
+      className="grid gap-3 sm:grid-cols-3"
     >
       {OPTIONS.map((option) => {
         const active = mode === option.key;

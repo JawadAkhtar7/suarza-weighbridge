@@ -30,7 +30,9 @@ import {
 import {
   createWeighmentSchema,
   formatPKR,
+  parseAmount,
   type Customer,
+  type PaymentStatus,
   type VehicleType,
   type Weighment,
 } from '@suarza/shared';
@@ -70,9 +72,27 @@ function emptyValues(): FormValues {
 interface NewWeighmentFormProps {
   captured: CapturedWeight | null;
   onSaved: (weighment: Weighment, warnings: AgentWarning[]) => void;
+  /**
+   * `first` — the usual pass 1: capture the weight, save an open ticket, the
+   * truck comes back later for the rest.
+   *
+   * `third` — the whole weighing in one visit. The customer already knows his
+   * empty weight and says so, the operator types it, and the captured weight
+   * is the LOADED one. There is no open ticket and no second visit, so the
+   * amount and whether it was paid are settled here too.
+   *
+   * One component rather than two: the customer and vehicle fields are the
+   * same in both, and a near-copy of this form would drift from it within a
+   * release or two — which is exactly how the receipt and the PDF drifted.
+   */
+  flow?: 'first' | 'third';
 }
 
-export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
+export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeighmentFormProps) {
+  const isSingleVisit = flow === 'third';
+  // Typed, not weighed: the figure the driver gives for his empty truck.
+  const [knownFirstWeight, setKnownFirstWeight] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('PAID');
   const [amountEdited, setAmountEdited] = useState(false);
   const refreshSyncStatus = useRefreshSyncStatus();
   // The rate card belongs to the manager now: this is the copy this bridge
@@ -98,18 +118,38 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
       if (!captured) throw new Error('No weight captured');
-      return agentApi.createWeighment({
+
+      const details = {
         ...createWeighmentSchema
           .omit({ first_weight_kg: true, first_weight_src: true, operator_username: true })
           .parse(values),
         vehicle_type_label: vehicleTypes.labelFor(values.vehicle_type),
+        operator_username: DEFAULT_OPERATOR_USERNAME,
+      };
+
+      if (isSingleVisit) {
+        // The captured reading is the LOADED truck here; the empty weight is
+        // the one the driver gave us.
+        return agentApi.createCompletedWeighment({
+          ...details,
+          first_weight_kg: parseAmount(knownFirstWeight),
+          first_weight_src: 'MANUAL',
+          second_weight_kg: captured.kg,
+          second_weight_src: captured.source,
+          payment_status: paymentStatus,
+        });
+      }
+
+      return agentApi.createWeighment({
+        ...details,
         first_weight_kg: captured.kg,
         first_weight_src: captured.source,
-        operator_username: DEFAULT_OPERATOR_USERNAME,
       });
     },
     onSuccess: (response) => {
       form.reset(emptyValues());
+      setKnownFirstWeight('');
+      setPaymentStatus('PAID');
       setAmountEdited(false);
       refreshSyncStatus();
       onSaved(response.weighment, response.warnings);
@@ -127,10 +167,26 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
     },
   });
 
+  // Typed before anything is weighed, so it is checked before the capture is.
+  const knownKg = parseAmount(knownFirstWeight);
+  const knownFirstWeightValid = !isSingleVisit || knownKg > 0;
+
+  // No name, no customer account — the same rule the return screen enforces.
+  const canGoOnAccount = String(form.watch('customer_name') ?? '').trim().length > 0;
+  useEffect(() => {
+    if (!canGoOnAccount && paymentStatus === 'ON_ACCOUNT') setPaymentStatus('PAID');
+  }, [canGoOnAccount, paymentStatus]);
+
   const submit = form.handleSubmit(
     (values) => {
+      if (isSingleVisit && !knownFirstWeightValid) {
+        toast.error('Enter the empty weight the driver gave you');
+        return;
+      }
       if (!captured) {
-        toast.error('Capture the first weight before saving');
+        toast.error(
+          isSingleVisit ? 'Capture the loaded weight before saving' : 'Capture the first weight before saving',
+        );
         return;
       }
       mutation.mutate(values);
@@ -205,6 +261,41 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-5" noValidate>
+          {/*
+            * First on the screen, because it is first in the conversation: the
+            * driver says the number while he is still at the window, before
+            * anyone has typed a name or driven onto the bridge.
+            *
+            * Big, like the capture readout it stands in for — this figure goes
+            * onto a slip and into a net weight, and a mistyped digit here is a
+            * wrong invoice.
+            */}
+          {isSingleVisit && (
+            <div className="space-y-2 rounded-lg border-2 border-brand/40 bg-brand/5 p-4">
+              <Label htmlFor="known-first-weight" className="text-sm font-semibold">
+                Empty weight, as given by the driver
+              </Label>
+              <div className="relative">
+                <NumberInput
+                  id="known-first-weight"
+                  min={0}
+                  step="1"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={knownFirstWeight}
+                  onChange={(event) => setKnownFirstWeight(event.target.value)}
+                  className="tabular h-16 pr-14 text-3xl font-bold"
+                />
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-lg font-semibold text-muted-foreground">
+                  kg
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Recorded as a manual entry and marked as such on the slip.
+              </p>
+            </div>
+          )}
+
           <CustomerPicker onPick={applyCustomer} />
 
           <div className="grid gap-4 border-t pt-5 sm:grid-cols-2">
@@ -337,15 +428,63 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
             </Field>
           </div>
 
+          {/*
+            * Settled here, because there is no second visit to settle it at.
+            * The same two choices the return screen offers, and the same rule:
+            * an account needs a name to charge it to.
+            */}
+          {isSingleVisit && (
+            <div className="space-y-2 border-t pt-5">
+              <Label>Payment</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentStatus('PAID')}
+                  className={cn(
+                    'rounded-md border-2 px-3 py-3 text-left transition-colors',
+                    paymentStatus === 'PAID'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted hover:border-muted-foreground/30',
+                  )}
+                >
+                  <span className="block text-sm font-semibold">Paid now</span>
+                  <span className="block text-xs text-muted-foreground">Customer has paid</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={!canGoOnAccount}
+                  onClick={() => setPaymentStatus('ON_ACCOUNT')}
+                  className={cn(
+                    'rounded-md border-2 px-3 py-3 text-left transition-colors',
+                    paymentStatus === 'ON_ACCOUNT'
+                      ? 'border-warning bg-warning/5'
+                      : 'border-muted hover:border-muted-foreground/30',
+                    !canGoOnAccount && 'cursor-not-allowed opacity-50 hover:border-muted',
+                  )}
+                >
+                  <span className="block text-sm font-semibold">Add to account</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Customer will pay later
+                  </span>
+                </button>
+              </div>
+              {!canGoOnAccount && (
+                <p className="text-xs text-muted-foreground">
+                  Enter a customer name to charge this to an account.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-3 border-t pt-5">
             <Button
               type="submit"
               variant="brand"
               size="xl"
-              disabled={!captured || mutation.isPending}
+              disabled={!captured || !knownFirstWeightValid || mutation.isPending}
             >
               {mutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-              Save first weight
+              {isSingleVisit ? 'Save & print slip' : 'Save first weight'}
               <kbd className="ml-1 rounded bg-primary-foreground/20 px-1.5 py-0.5 text-xs font-medium">
                 {HOTKEYS.save}
               </kbd>
@@ -360,7 +499,11 @@ export function NewWeighmentForm({ captured, onSaved }: NewWeighmentFormProps) {
           </div>
 
           {!captured && (
-            <p className="text-sm text-muted-foreground">Capture the first weight before saving.</p>
+            <p className="text-sm text-muted-foreground">
+              {isSingleVisit
+                ? 'Capture the loaded weight before saving.'
+                : 'Capture the first weight before saving.'}
+            </p>
           )}
         </form>
       </CardContent>

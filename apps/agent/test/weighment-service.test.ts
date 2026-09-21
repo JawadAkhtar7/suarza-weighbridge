@@ -277,6 +277,92 @@ describe('recordReprint', () => {
   });
 });
 
+describe('createCompleted — the whole weighing in one visit', () => {
+  const oneVisit = (overrides: Record<string, unknown> = {}) => ({
+    ...firstWeightInput(),
+    first_weight_kg: 12_000,
+    first_weight_src: 'MANUAL' as const,
+    second_weight_kg: 20_000,
+    second_weight_src: 'SERIAL' as const,
+    payment_status: 'PAID' as const,
+    ...overrides,
+  });
+
+  it('stores a finished weighment with a slip number and a net weight', () => {
+    const { weighment } = service.createCompleted(oneVisit());
+
+    expect(weighment.status).toBe('COMPLETED');
+    expect(weighment.slip_number).toBe('SI-000001');
+    expect(weighment.net_weight_kg).toBe(8_000);
+    expect(weighment.first_weight_src).toBe('MANUAL');
+    expect(weighment.second_weight_src).toBe('SERIAL');
+  });
+
+  it('leaves no open ticket behind', () => {
+    // The whole point: the truck is not coming back, so nothing may be left
+    // sitting in the operator's list waiting for it.
+    service.createCompleted(oneVisit());
+    expect(service.list({ status: 'OPEN' })).toHaveLength(0);
+  });
+
+  it('takes the net as the difference whichever way round the weights are', () => {
+    // A truck that arrives loaded and leaves empty is the same arithmetic.
+    const { weighment } = service.createCompleted(
+      oneVisit({ first_weight_kg: 20_000, second_weight_kg: 12_000 }),
+    );
+    expect(weighment.net_weight_kg).toBe(8_000);
+  });
+
+  it('writes the full audit trail, not a shortcut', () => {
+    // Someone checking this record months later should see the same story a
+    // two-visit weighing tells.
+    const { weighment } = service.createCompleted(oneVisit());
+    const actions = service.auditTrail(weighment.id).map((entry) => entry.action);
+
+    expect(actions).toContain('CREATED');
+    expect(actions).toContain('SECOND_WEIGHT');
+    expect(actions).toContain('COMPLETED');
+    // The typed empty weight is a fact about the record, flagged on its own.
+    expect(actions).toContain('MANUAL_WEIGHT');
+  });
+
+  it('records only the typed weight as manual', () => {
+    const { weighment } = service.createCompleted(oneVisit());
+    const manual = service
+      .auditTrail(weighment.id)
+      .filter((entry) => entry.action === 'MANUAL_WEIGHT');
+
+    expect(manual).toHaveLength(1);
+    expect((manual[0]!.detail as { which: string }).which).toBe('FIRST');
+  });
+
+  it('carries the payment choice, since there is no second visit to make it', () => {
+    const { weighment } = service.createCompleted(oneVisit({ payment_status: 'ON_ACCOUNT' }));
+    expect(weighment.payment_status).toBe('ON_ACCOUNT');
+  });
+
+  it('remembers the customer for the picker', () => {
+    service.createCompleted(oneVisit({ customer_name: 'Zainab Bibi' }));
+    expect(service.searchCustomers('zainab')).toHaveLength(1);
+  });
+
+  it('still warns about a plate that already has an open ticket', () => {
+    // Likelier a mistake here than anywhere: this truck probably ought to be
+    // finishing the ticket it already has.
+    service.createFirstWeight(firstWeightInput({ vehicle_plate: 'LES-7777' }));
+    const { warnings } = service.createCompleted(oneVisit({ vehicle_plate: 'LES-7777' }));
+
+    expect(warnings.map((w) => w.code)).toContain('DUPLICATE_OPEN_PLATE');
+  });
+
+  it('queues exactly one record for the cloud', () => {
+    // One weighment, not a create followed by an update — the sync has a
+    // single finished record to send.
+    service.createCompleted(oneVisit());
+    expect(service.pendingSyncCount()).toBe(1);
+  });
+});
+
 describe('the list the operator picks from', () => {
   it('puts tickets still awaiting a second weight first', async () => {
     // The operator's list is paged now, so this ordering has to come from the

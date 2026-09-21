@@ -215,6 +215,27 @@ export const completeWeighmentSchema = z.object({
 
 export type CompleteWeighmentInput = z.infer<typeof completeWeighmentSchema>;
 
+/**
+ * POST /weighments/complete — a weighing finished in one visit.
+ *
+ * For the customer who already knows his empty weight and says so: the
+ * operator types that figure, weighs the loaded truck once, and the slip is
+ * printed there and then. No open ticket is ever created, because the truck is
+ * not coming back for a second pass.
+ *
+ * It is the create and the completion in one message rather than two calls,
+ * so a failure cannot leave a ticket half-made — either the whole weighing
+ * exists or none of it does.
+ */
+export const createCompletedWeighmentSchema = createWeighmentSchema.extend({
+  second_weight_kg: weightKg,
+  second_weight_src: weightSourceSchema.default('SERIAL'),
+  /** Decided at the same moment here, since there is no second visit. */
+  payment_status: paymentStatusSchema.default('PAID'),
+});
+
+export type CreateCompletedWeighmentInput = z.infer<typeof createCompletedWeighmentSchema>;
+
 /** POST /weighments/:slip/void — a reason is mandatory (brief §7.6). */
 export const voidWeighmentSchema = z.object({
   reason: z.string().trim().min(3, 'Give a reason for voiding this ticket').max(500),

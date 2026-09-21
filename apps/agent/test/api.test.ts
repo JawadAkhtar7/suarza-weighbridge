@@ -135,6 +135,51 @@ describe('POST /weighments', () => {
     expect(row.product).toBe('');
   });
 
+  it('saves a one-visit weighing already completed', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/weighments/complete',
+      payload: {
+        ...firstWeightBody(),
+        first_weight_kg: 12_000,
+        first_weight_src: 'MANUAL',
+        second_weight_kg: 20_000,
+        second_weight_src: 'SERIAL',
+        payment_status: 'PAID',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const { weighment, net } = response.json();
+    expect(weighment.status).toBe('COMPLETED');
+    expect(weighment.net_weight_kg).toBe(8_000);
+    // The net comes back in all three units, as the completion route does, so
+    // the receipt can be drawn without a second request.
+    expect(net.kg).toBe(8_000);
+  });
+
+  it('routes /weighments/complete ahead of /weighments/:slip', async () => {
+    // A static path and a parametric one share this prefix. If the router ever
+    // preferred the parameter, "complete" would be read as a slip number.
+    const response = await app.inject({
+      method: 'POST',
+      url: '/weighments/complete',
+      payload: { ...firstWeightBody(), second_weight_kg: 20_000 },
+    });
+    expect(response.statusCode).toBe(201);
+  });
+
+  it('rejects a one-visit weighing with no second weight', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/weighments/complete',
+      payload: firstWeightBody(),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(Object.keys(response.json().error.details.field_errors)).toContain('second_weight_kg');
+  });
+
   it('rejects a form with missing required fields and names them', async () => {
     const response = await app.inject({
       method: 'POST',

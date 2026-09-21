@@ -102,36 +102,41 @@ export function App() {
 
             {/* In second-weight mode the capture control lives inside the
                 flow, next to the record it belongs to, so it isn't duplicated
-                here. */}
-            {mode === 'first' && !saved && (
+                here. The one-visit flow captures the LOADED truck, so the
+                control is labelled for pass two even though the form beside it
+                is the pass-one form. */}
+            {mode !== 'second' && !saved && (
               <WeightCapture
                 live={live}
                 captured={captured}
                 onCapture={setCaptured}
                 onClear={() => setCaptured(null)}
+                pass={mode === 'third' ? 'second' : 'first'}
               />
             )}
           </div>
 
           <div>
-            {mode === 'first' ? (
-              saved ? (
-                <SavedWeighment
-                  weighment={saved}
-                  onNext={() => {
-                    setSaved(null);
-                    setCaptured(null);
-                  }}
-                />
-              ) : (
-                <NewWeighmentForm captured={captured} onSaved={handleSaved} />
-              )
-            ) : (
+            {mode === 'second' ? (
               <ReturnWeighment
                 live={live}
                 captured={captured}
                 onCapture={setCaptured}
                 onClearCapture={() => setCaptured(null)}
+              />
+            ) : saved ? (
+              <SavedWeighment
+                weighment={saved}
+                onNext={() => {
+                  setSaved(null);
+                  setCaptured(null);
+                }}
+              />
+            ) : (
+              <NewWeighmentForm
+                captured={captured}
+                onSaved={handleSaved}
+                flow={mode === 'third' ? 'third' : 'first'}
               />
             )}
           </div>

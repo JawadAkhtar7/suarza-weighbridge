@@ -12,6 +12,7 @@ import type {
   Customer,
   StationSettings,
   CompleteWeighmentInput,
+  CreateCompletedWeighmentInput,
   CreateWeighmentInput,
   LiveWeight,
   NetWeight,
@@ -138,6 +139,13 @@ export const agentApi = {
 
   createWeighment: (input: CreateWeighmentInput) =>
     request<CreateWeighmentResponse>('/weighments', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  /** A weighing done in one visit: the driver gave us the empty weight. */
+  createCompletedWeighment: (input: CreateCompletedWeighmentInput) =>
+    request<CreateWeighmentResponse>('/weighments/complete', {
       method: 'POST',
       body: JSON.stringify(input),
     }),

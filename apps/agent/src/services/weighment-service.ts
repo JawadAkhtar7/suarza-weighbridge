@@ -9,6 +9,7 @@
 
 import type {
   AuditEntry,
+  CreateCompletedWeighmentInput,
   CompleteWeighmentInput,
   CreateWeighmentInput,
   ReprintWeighmentInput,
@@ -173,6 +174,149 @@ export class WeighmentService {
           detail: { which: 'FIRST', weight_kg: record.first_weight_kg },
         });
       }
+
+      return record;
+    })();
+
+    this.notifyChanged();
+    return { weighment, warnings };
+  }
+
+  /**
+   * A weighing that starts and finishes in one visit.
+   *
+   * The customer already knows his empty weight and tells the operator, who
+   * types it and weighs the loaded truck once. No open ticket is ever created,
+   * because the truck is not coming back.
+   *
+   * Written as its own transaction rather than "create then complete" from the
+   * browser: two calls can fail between each other and leave an open ticket
+   * nobody expects, sitting in the operator's list waiting for a truck that has
+   * already driven away.
+   *
+   * The audit trail is the full story — CREATED, both weights, COMPLETED — so
+   * a record made this way reads the same as any other when someone comes to
+   * check it months later.
+   */
+  createCompleted(input: CreateCompletedWeighmentInput): CreateResult {
+    // Same advice as pass 1, and it matters more here: an open ticket for this
+    // plate probably means this truck should be finishing that one instead.
+    const openForPlate = this.weighments.findOpenByPlate(input.vehicle_plate);
+    const warnings: Warning[] = openForPlate.length
+      ? [
+          {
+            code: 'DUPLICATE_OPEN_PLATE',
+            message: `${input.vehicle_plate} already has an open ticket (${openForPlate
+              .map((w) => w.slip_number)
+              .join(', ')}).`,
+            details: { slip_numbers: openForPlate.map((w) => w.slip_number) },
+          },
+        ]
+      : [];
+
+    const at = nowUtc();
+    const net = netWeightKg(input.first_weight_kg, input.second_weight_kg);
+
+    const weighment = this.db.transaction((): Weighment => {
+      const record: Weighment = {
+        id: newId(),
+        slip_number: this.nextSlipNumber(),
+        status: 'COMPLETED',
+        station_id: this.options.stationId,
+
+        customer_name: input.customer_name,
+        customer_company: input.customer_company,
+        customer_phone: input.customer_phone,
+        vehicle_type: input.vehicle_type,
+        vehicle_type_label:
+          input.vehicle_type_label?.trim() ||
+          this.vehicleTypes_.labelFor(input.vehicle_type) ||
+          vehicleTypeLabel(input.vehicle_type),
+        vehicle_plate: input.vehicle_plate,
+        container_number: input.container_number,
+        product: input.product,
+
+        first_weight_kg: input.first_weight_kg,
+        first_weight_at: at,
+        first_weight_src: input.first_weight_src,
+        second_weight_kg: input.second_weight_kg,
+        second_weight_at: at,
+        second_weight_src: input.second_weight_src,
+        net_weight_kg: net,
+
+        amount_charged: input.amount_charged,
+        currency: DEFAULT_CURRENCY,
+        payment_status: input.payment_status,
+
+        operator_username: input.operator_username,
+        created_at: at,
+        updated_at: at,
+        void_reason: null,
+        voided_at: null,
+      };
+
+      this.weighments.insert(record);
+
+      this.customers.remember({
+        name: record.customer_name,
+        company: record.customer_company,
+        phone: record.customer_phone,
+        vehicle_type: record.vehicle_type,
+        vehicle_plate: record.vehicle_plate,
+        product: record.product,
+      });
+
+      this.audit.append({
+        weighment_id: record.id,
+        action: 'CREATED',
+        actor_username: record.operator_username,
+        at,
+        detail: {
+          slip_number: record.slip_number,
+          first_weight_kg: record.first_weight_kg,
+          source: record.first_weight_src,
+          vehicle_plate: record.vehicle_plate,
+          single_visit: true,
+        },
+      });
+
+      // Typed weights each get their own entry, as they do on the two-pass
+      // route. Here the first one almost always is one.
+      for (const [which, kg, src] of [
+        ['FIRST', record.first_weight_kg, record.first_weight_src],
+        ['SECOND', record.second_weight_kg ?? 0, record.second_weight_src],
+      ] as const) {
+        if (src === 'MANUAL') {
+          this.audit.append({
+            weighment_id: record.id,
+            action: 'MANUAL_WEIGHT',
+            actor_username: record.operator_username,
+            at,
+            detail: { which, weight_kg: kg },
+          });
+        }
+      }
+
+      this.audit.append({
+        weighment_id: record.id,
+        action: 'SECOND_WEIGHT',
+        actor_username: record.operator_username,
+        at,
+        detail: {
+          second_weight_kg: record.second_weight_kg,
+          source: record.second_weight_src,
+          first_weight_kg: record.first_weight_kg,
+          net_weight_kg: net,
+        },
+      });
+
+      this.audit.append({
+        weighment_id: record.id,
+        action: 'COMPLETED',
+        actor_username: record.operator_username,
+        at,
+        detail: { net_weight_kg: net, amount_charged: record.amount_charged },
+      });
 
       return record;
     })();

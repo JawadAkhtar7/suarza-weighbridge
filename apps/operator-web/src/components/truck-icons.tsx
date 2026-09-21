@@ -51,6 +51,29 @@ export function EmptyTruckIcon({ className }: IconProps) {
   );
 }
 
+/**
+ * A loaded truck whose empty weight was told to us, not weighed.
+ *
+ * The load is there, as on the second-weight icon, and the pencil says the
+ * other figure was written down rather than read off the indicator — which is
+ * the whole difference between this flow and the other two.
+ */
+export function TypedWeightTruckIcon({ className }: IconProps) {
+  return (
+    <svg {...COMMON} className={className} aria-hidden="true">
+      <Body />
+      <path
+        d="M3.4 10.4h6.2v3.4H3.4z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth={1}
+      />
+      {/* A pencil, nib down, over the empty end of the deck. */}
+      <path d="M17.5 3.2 20 5.7l-5.2 5.2-3 .5.5-3z" />
+    </svg>
+  );
+}
+
 /** The same truck carrying a load: what comes back for the second weight. */
 export function LoadedTruckIcon({ className }: IconProps) {
   return (

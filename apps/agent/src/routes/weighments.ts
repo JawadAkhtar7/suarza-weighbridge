@@ -3,6 +3,7 @@
 import type { FastifyInstance } from 'fastify';
 import {
   completeWeighmentSchema,
+  createCompletedWeighmentSchema,
   createWeighmentSchema,
   netWeightAllUnits,
   reprintWeighmentSchema,
@@ -31,6 +32,32 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
     // 201 with the warnings alongside: a duplicate open plate is advice, so it
     // travels with a successful save rather than replacing it (brief §3B).
     return reply.code(201).send({ weighment, warnings });
+  });
+
+  /**
+   * A weighing done in one visit — the customer told us his empty weight.
+   *
+   * A static path, so Fastify matches it ahead of `/weighments/:slip`.
+   */
+  app.post('/weighments/complete', (request, reply) => {
+    const input = parse(createCompletedWeighmentSchema, request.body);
+    const { weighment, warnings } = deps.service.createCompleted(input);
+
+    request.log.info(
+      {
+        slip_number: weighment.slip_number,
+        first_weight_kg: weighment.first_weight_kg,
+        second_weight_kg: weighment.second_weight_kg,
+        net_weight_kg: weighment.net_weight_kg,
+      },
+      'Single-visit weighing saved',
+    );
+
+    return reply.code(201).send({
+      weighment,
+      net: netWeightAllUnits(weighment.first_weight_kg, weighment.second_weight_kg),
+      warnings,
+    });
   });
 
   app.get('/weighments', (request) => {

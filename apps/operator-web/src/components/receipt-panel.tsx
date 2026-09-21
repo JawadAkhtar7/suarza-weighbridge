@@ -24,6 +24,11 @@ interface ReceiptPanelProps {
   weighment: Weighment;
   net: NetWeight;
   variant: 'FIRST' | 'SECOND';
+  /**
+   * Overrides the "Receipt 1 / 2" heading. The numbering counts visits, so it
+   * reads wrong for a one-visit weighing, where this is the only receipt.
+   */
+  title?: string;
   /** Open the print tab once, as soon as this receipt appears. */
   autoPrint?: boolean;
 }
@@ -32,6 +37,7 @@ export function ReceiptPanel({
   weighment,
   net,
   variant,
+  title,
   autoPrint = false,
 }: ReceiptPanelProps) {
   const { settings } = useReceiptSettings();
@@ -67,7 +73,7 @@ export function ReceiptPanel({
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base">
-          Receipt {variant === 'FIRST' ? '1 — first weight' : '2 — completed'}
+          {title ?? `Receipt ${variant === 'FIRST' ? '1 — first weight' : '2 — completed'}`}
         </CardTitle>
         <div className="flex flex-wrap gap-2">
           {/* Printing is what the operator does next, so it carries the same
