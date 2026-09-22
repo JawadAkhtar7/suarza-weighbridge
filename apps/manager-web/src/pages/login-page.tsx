@@ -1,7 +1,16 @@
 /** Sign-in (brief §10). No registration — accounts are provisioned, not created. */
 
 import { useState } from 'react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@suarza/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+  ThemeToggle,
+} from '@suarza/ui';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/use-auth.js';
 import { ApiError } from '../lib/api.js';
@@ -25,7 +34,12 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-muted/30 px-4 py-10">
+    <div className="relative flex min-h-full items-center justify-center bg-muted/30 px-4 py-10">
+      {/* The only control on this screen besides the form: someone signing in
+          at night should not have to get past a white page to reach the
+          toggle in the header. */}
+      <ThemeToggle className="absolute right-3 top-3" />
+
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <img

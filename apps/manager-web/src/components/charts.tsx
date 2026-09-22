@@ -22,16 +22,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle, Skeleton } from '@suarza/ui';
+import { Card, CardContent, CardHeader, CardTitle, Skeleton, useTheme } from '@suarza/ui';
 import { formatPKR, vehicleTypeLabel, type Analytics, type VehicleType } from '@suarza/shared';
 import { format, parseISO } from 'date-fns';
 import { MD_BREAKPOINT, useMediaQuery } from '../hooks/use-media-query.js';
-import {
-  CHART_AXIS_TEXT,
-  CHART_GRID,
-  CHART_SERIES_LIGHT,
-  CHART_TOOLTIP_STYLE,
-} from '../lib/chart-theme.js';
+import { chartPalette } from '../lib/chart-theme.js';
 
 /** Past this, the tail folds into "Other" rather than becoming unreadable. */
 const MAX_BARS = 7;
@@ -76,6 +71,11 @@ function ChartCard({
 }
 
 export function WeighmentsOverTime({ analytics, isLoading }: ChartsProps) {
+  // Recharts writes colours into SVG attributes, so unlike the rest of the
+  // dashboard these have to be handed the theme rather than inheriting it.
+  const { theme } = useTheme();
+  const palette = chartPalette(theme);
+
   const data = (analytics?.weighments_over_time ?? []).map((row) => ({
     ...row,
     label: format(parseISO(row.date), 'd MMM'),
@@ -92,16 +92,16 @@ export function WeighmentsOverTime({ analytics, isLoading }: ChartsProps) {
         <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="weighmentsFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={CHART_SERIES_LIGHT} stopOpacity={0.22} />
-              <stop offset="100%" stopColor={CHART_SERIES_LIGHT} stopOpacity={0.02} />
+              <stop offset="0%" stopColor={palette.series} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={palette.series} stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke={CHART_GRID} vertical={false} />
+          <CartesianGrid stroke={palette.grid} vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fill: CHART_AXIS_TEXT, fontSize: 12 }}
+            tick={{ fill: palette.axisText, fontSize: 12 }}
             tickLine={false}
-            axisLine={{ stroke: CHART_GRID }}
+            axisLine={{ stroke: palette.grid }}
             tickMargin={8}
             // Inset the first and last ticks, or the leading label sits on top
             // of the y-axis zero and the trailing one runs off the card.
@@ -110,21 +110,22 @@ export function WeighmentsOverTime({ analytics, isLoading }: ChartsProps) {
           />
           <YAxis
             allowDecimals={false}
-            tick={{ fill: CHART_AXIS_TEXT, fontSize: 12 }}
+            tick={{ fill: palette.axisText, fontSize: 12 }}
             tickLine={false}
             axisLine={false}
             width={32}
             tickMargin={4}
           />
           <Tooltip
-            contentStyle={CHART_TOOLTIP_STYLE}
-            cursor={{ stroke: CHART_GRID }}
+            contentStyle={palette.tooltip}
+            labelStyle={palette.tooltipLabel}
+            cursor={{ stroke: palette.grid }}
             formatter={(value: number) => [value, 'Weighments']}
           />
           <Area
             type="monotone"
             dataKey="count"
-            stroke={CHART_SERIES_LIGHT}
+            stroke={palette.series}
             strokeWidth={2}
             fill="url(#weighmentsFill)"
             // Big enough to hit on a phone.
@@ -183,6 +184,8 @@ function HorizontalBars({
   formatValue: (value: number) => string;
 }) {
   const isWide = useMediaQuery(MD_BREAKPOINT);
+  const { theme } = useTheme();
+  const palette = chartPalette(theme);
 
   // On a phone the category column and the value label together leave almost
   // no room for the bar itself, so both shrink and long names are elided.
@@ -196,12 +199,12 @@ function HorizontalBars({
         layout="vertical"
         margin={{ top: 4, right: valueGutter, left: 4, bottom: 4 }}
       >
-        <CartesianGrid stroke={CHART_GRID} horizontal={false} />
+        <CartesianGrid stroke={palette.grid} horizontal={false} />
         <XAxis type="number" hide />
         <YAxis
           type="category"
           dataKey="label"
-          tick={{ fill: CHART_AXIS_TEXT, fontSize: isWide ? 12 : 11 }}
+          tick={{ fill: palette.axisText, fontSize: isWide ? 12 : 11 }}
           tickLine={false}
           axisLine={false}
           width={axisWidth}
@@ -210,8 +213,9 @@ function HorizontalBars({
           }
         />
         <Tooltip
-          contentStyle={CHART_TOOLTIP_STYLE}
-          cursor={{ fill: 'hsl(210 40% 96%)' }}
+          contentStyle={palette.tooltip}
+          labelStyle={palette.tooltipLabel}
+          cursor={{ fill: palette.cursorFill }}
           formatter={(value: number) => [formatValue(value), 'Revenue']}
         />
         <Bar
@@ -220,7 +224,7 @@ function HorizontalBars({
           barSize={18}
           label={{
             position: 'right',
-            fill: CHART_AXIS_TEXT,
+            fill: palette.axisText,
             fontSize: isWide ? 12 : 10,
             formatter: (value: number) => formatValue(value),
           }}
@@ -228,7 +232,7 @@ function HorizontalBars({
           {data.map((row) => (
             // One hue throughout: the category is the axis label, so colour
             // would be decoration, and eleven generated hues would be worse.
-            <Cell key={row.label} fill={CHART_SERIES_LIGHT} />
+            <Cell key={row.label} fill={palette.series} />
           ))}
         </Bar>
       </BarChart>

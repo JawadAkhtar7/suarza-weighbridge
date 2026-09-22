@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { foldTail } from '../src/components/charts.js';
 import { StatTiles } from '../src/components/stat-tiles.js';
+import { chartPalette } from '../src/lib/chart-theme.js';
 import { analytics } from './utils.js';
 
 describe('foldTail', () => {
@@ -53,5 +54,27 @@ describe('StatTiles', () => {
   it('shows placeholders rather than zeros while loading', () => {
     render(<StatTiles analytics={undefined} isLoading />);
     expect(screen.queryByText('Rs 0')).not.toBeInTheDocument();
+  });
+});
+
+describe('chartPalette', () => {
+  it('gives each theme its own set — nothing is shared by accident', () => {
+    const light = chartPalette('light');
+    const dark = chartPalette('dark');
+
+    // Recharts paints into SVG attributes, so a value left over from the other
+    // theme does not merely look off — it is invisible. Every slot differs.
+    expect(dark.series).not.toBe(light.series);
+    expect(dark.grid).not.toBe(light.grid);
+    expect(dark.axisText).not.toBe(light.axisText);
+    expect(dark.cursorFill).not.toBe(light.cursorFill);
+    expect(dark.tooltip.background).not.toBe(light.tooltip.background);
+  });
+
+  it('gives the dark tooltip a text colour of its own', () => {
+    // Without it the tooltip inherits near-black body text onto a dark card
+    // and the figure the manager hovered for cannot be read.
+    expect(chartPalette('dark').tooltip.color).toBeTruthy();
+    expect(chartPalette('dark').tooltipLabel.color).toBeTruthy();
   });
 });

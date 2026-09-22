@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Badge, Button, cn } from '@suarza/ui';
+import { Badge, Button, ThemeToggle, cn } from '@suarza/ui';
 import {
   BookOpen,
   ChevronLeft,
@@ -219,6 +219,9 @@ export function AppShell() {
             <Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
               {user?.role}
             </Badge>
+            {/* Beside sign-out rather than buried in a menu: the dashboard is
+                read late in the evening as often as it is in daylight. */}
+            <ThemeToggle />
             <Button variant="ghost" size="icon" aria-label="Sign out" onClick={signOut}>
               <LogOut className="h-5 w-5" />
             </Button>
