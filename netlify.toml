@@ -1,0 +1,109 @@
+# Netlify serves the Manager Dashboard. The API lives on Render.
+#
+# The operator PWA is not deployed here — it is served by the agent on the
+# weighbridge PC, which is the only machine that can reach the scale.
+
+[build]
+  # The dashboard imports @suarza/shared, so that is built first.
+  command = "pnpm --filter @suarza/shared build && pnpm --filter @suarza/manager-web build"
+  publish = "apps/manager-web/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Every API prefix is forwarded to Render so the browser only ever sees one
+# origin. This list MUST match API_PREFIXES in apps/server/src/static.ts — a
+# missing prefix does not fail loudly: Netlify answers it with index.html and a
+# 200, and the dashboard then tries to read HTML as JSON and shows nothing.
+#
+# REPLACE the host below with your own Render URL.
+[[redirects]]
+  from = "/auth"
+  to = "https://suarza-weighbridge-api.onrender.com/auth"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/auth/*"
+  to = "https://suarza-weighbridge-api.onrender.com/auth/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/weighments"
+  to = "https://suarza-weighbridge-api.onrender.com/weighments"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/weighments/*"
+  to = "https://suarza-weighbridge-api.onrender.com/weighments/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/analytics"
+  to = "https://suarza-weighbridge-api.onrender.com/analytics"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/analytics/*"
+  to = "https://suarza-weighbridge-api.onrender.com/analytics/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/suggestions"
+  to = "https://suarza-weighbridge-api.onrender.com/suggestions"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/suggestions/*"
+  to = "https://suarza-weighbridge-api.onrender.com/suggestions/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/health"
+  to = "https://suarza-weighbridge-api.onrender.com/health"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/health/*"
+  to = "https://suarza-weighbridge-api.onrender.com/health/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/r"
+  to = "https://suarza-weighbridge-api.onrender.com/r"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/r/*"
+  to = "https://suarza-weighbridge-api.onrender.com/r/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api"
+  to = "https://suarza-weighbridge-api.onrender.com/api"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://suarza-weighbridge-api.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Client-side routing: /ledger and /customers are pages in the dashboard, not
+# files, so everything else returns index.html and the router takes over.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

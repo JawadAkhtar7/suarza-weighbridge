@@ -1,0 +1,37 @@
+# Render blueprint for the CLOUD API only (apps/server).
+#
+# The agent and the operator PWA are NOT deployed here: the agent talks to the
+# weighbridge indicator over a serial port and keeps its own SQLite file, so it
+# runs on the weighbridge PC and nowhere else. That is the offline-first design,
+# not a limitation to work around.
+
+services:
+  - type: web
+    name: suarza-weighbridge-api
+    runtime: node
+    plan: free
+    # Closest free region to Pakistan; Singapore is the alternative.
+    region: frankfurt
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @suarza/shared build && pnpm --filter @suarza/receipt-pdf build && pnpm --filter @suarza/server build
+    startCommand: node apps/server/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Set in the dashboard — it holds the Atlas password.
+      - key: MONGODB_URI
+        sync: false
+      # Signs manager sessions. Changing it logs everyone out, nothing worse.
+      - key: JWT_SECRET
+        generateValue: true
+      # MUST equal CLOUD_API_KEY in the agent's .env on the weighbridge PC, or
+      # every sync is rejected with a 401 and slips pile up in the outbox.
+      - key: INGEST_API_KEY
+        sync: false
+      # The public address printed into the QR code on every slip. Set it to
+      # the site customers will actually open.
+      - key: APP_DOMAIN
+        sync: false
+      # Netlify serves the manager dashboard; this process is the API only.
+      - key: SERVE_MANAGER_WEB
+        value: "false"
