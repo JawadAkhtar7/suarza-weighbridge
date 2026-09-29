@@ -286,21 +286,20 @@ mobile connection.
 
 Full step-by-step instructions for whoever sets up the Windows machine are in
 [`apps/agent/windows/README.md`](apps/agent/windows/README.md). In short: install
-Node 20, fill in `.env`, then from an Administrator prompt:
+Node 20, run `windows\install.bat`, and fill in `.env`.
 
-```
-node windows\install-service.cjs
-```
+That puts a **Suarza Weighbridge** icon on the desktop. The operator
+double-clicks it — including after a power cut — and gets the weighing screen.
+It starts the agent if it is not running, reopens the screen if it is, and never
+starts a second copy.
 
-That registers **Suarza Weighbridge Agent** as a Windows service, so it starts
-at boot before anyone logs in and restarts itself if it ever stops. A service
-rather than a tray app because the PC is switched on by whoever opens the yard,
-and the software has to be running before anyone thinks about it.
+A desktop icon rather than a Windows service: one visible thing that is either
+running or not, which the operator can start themselves and anyone can reason
+about over the phone.
 
-> **Not verified on Windows.** The service scripts and the guide were written
-> and syntax-checked here, but this project was built on Linux — the install,
-> the auto-start and the reboot survival still need one run-through on the
-> actual PC. Everything else in this README has been run.
+> **Not verified on Windows.** The guide was written and checked here, but this
+> project was built on Linux — the install and a reboot still need one
+> run-through on the actual PC. Everything else in this README has been run.
 
 **Silent printing:** Chrome shows a print dialog by default. Launch it with
 `--kiosk-printing --app=http://localhost:3100` for receipts that print without

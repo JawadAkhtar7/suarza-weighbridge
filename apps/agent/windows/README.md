@@ -4,22 +4,29 @@ Written for: whoever sets up the Windows PC at the weighbridge.
 
 ## What you are installing
 
-One Windows service, **Suarza Weighbridge Agent**. It reads the weight
-indicator over the serial cable, stores every weighment on this PC, serves the
-operator screen at `http://localhost:3100`, and sends completed records to the
-cloud when there is internet.
+One program, the **weighbridge agent**. It reads the weight indicator over the
+serial cable, stores every weighment on this PC, serves the operator screen at
+`http://localhost:3100`, and sends completed records to the cloud when there is
+internet.
 
-It runs as a service so it starts when the PC boots — before anyone logs in —
-and restarts itself if it ever stops.
+Everything the operator uses is that one address in a browser. Nothing else is
+installed, and no other machine is involved in weighing.
 
 ## One-time setup
+
+Done once, by whoever sets the machine up. After this the operator only ever
+uses the desktop icon.
 
 1. **Install Node.js 20 or newer** from nodejs.org (the LTS installer).
 
 2. **Copy the agent folder** onto the PC, for example `C:\suarza\agent`.
 
-3. **Create the configuration file.** Copy `.env.example` to `.env` and open it
-   in Notepad. The settings that matter:
+3. **Run `windows\install.bat`** (double-click it). It installs the
+   dependencies, builds the software, creates a `.env` for you to fill in, and
+   puts a **Suarza Weighbridge** icon on the desktop.
+
+4. **Open `.env` in Notepad** and set the values below. The one that always
+   needs changing is `SERIAL_PORT`.
 
    | Setting            | What to put                                                              |
    | ------------------ | ------------------------------------------------------------------------ |
@@ -31,33 +38,33 @@ and restarts itself if it ever stops.
    | `CLOUD_API_KEY`    | The ingest key from the cloud server's `.env` — the two must match       |
 
    **Finding the COM port:** plug in the indicator, open Device Manager, and
-   look under _Ports (COM & LPT)_.
+   look under _Ports (COM & LPT)_. The `sniff` tool shows what the indicator is
+   actually sending: `npm run sniff COM3`.
 
-4. **Install the dependencies and build**, in a command prompt in that folder:
+## Every day
 
-   ```
-   npm install --omit=dev
-   npm install node-windows
-   ```
+**The operator double-clicks _Suarza Weighbridge_ on the desktop.** That is the
+whole routine, including after a power cut.
 
-5. **Install the service** — this step needs an **Administrator** command
-   prompt (right-click Command Prompt → _Run as administrator_):
+The icon:
 
-   ```
-   node windows\install-service.cjs
-   ```
+- starts the software if it is not running, in a minimised window that can be
+  ignored;
+- waits until it is ready, then opens the weighing screen;
+- if it is **already** running, just reopens the screen — it never starts a
+  second copy. Two copies cannot both hold the port and the database file, and
+  the error the second one produces (`EADDRINUSE`) means nothing to the person
+  reading it.
 
-   It installs the service and starts it. You should see
-   _"Suarza Weighbridge Agent is running."_
+Closing the weighing screen does not stop the software. Clicking the icon again
+brings the screen straight back.
+
+To stop it completely, close the minimised **Suarza Weighbridge Agent** window.
 
 ## Checking it works
 
 - Open `http://localhost:3100` in Chrome — the operator screen should appear.
 - Open `http://localhost:3100/health` — it should show `{"status":"ok"…}`.
-- In Windows, open _Services_ (`services.msc`) and find
-  **Suarza Weighbridge Agent**. Startup type should be **Automatic**.
-- Restart the PC and check `http://localhost:3100` again without logging in
-  first. That confirms it really does start at boot.
 
 ## Silent printing
 
@@ -75,18 +82,15 @@ that prints without asking.
 
 ## Day-to-day
 
-- **Logs:** the service writes to `daemon\` inside the agent folder.
-- **Restart it:** Services → _Suarza Weighbridge Agent_ → Restart.
 - **Backups:** set a backup folder in the operator app's Settings — ideally a
   different drive or a USB stick. The last 14 copies are kept.
-- **Uninstall:** from an Administrator prompt,
-  `node windows\uninstall-service.cjs`. Your records are not deleted.
+- **Restart it:** close the agent window and start it again.
 
 ## If something goes wrong
 
 | What you see                                 | What it means                                                                                             |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | Operator screen says **"No signal"**         | The indicator is off, unplugged, or on a different COM port. Weighing still works — use _Enter manually_. |
-| Operator screen says **"Service offline"**   | The Windows service is not running. Check Services.                                                       |
+| Operator screen says **"Service offline"**   | The agent is not running. Start it again.                                                                 |
 | **"Cloud offline"** with a pending count     | No internet. Nothing is lost — records sync by themselves when it returns.                                |
 | Receipts print in the wrong place on the pad | Settings → _Test print_, then adjust the top/left offsets.                                                |
