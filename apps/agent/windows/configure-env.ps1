@@ -36,7 +36,7 @@ function Set-EnvValue {
 }
 
 if (Test-Path $envPath) {
-  Write-Host 'Configuration already exists (apps\agent\.env) — leaving it as it is.'
+  Write-Host 'Configuration already exists (apps\agent\.env) - leaving it as it is.'
   $current = Get-Content $envPath
   ($current | Where-Object { $_ -match '^\s*(SERIAL_PORT|USE_SIMULATOR)\s*=' }) |
     ForEach-Object { Write-Host "  $_" }
@@ -58,7 +58,7 @@ if ($ports.Count -gt 0) {
   Write-Host "Weight indicator: using $chosen." -ForegroundColor Green
   if ($ports.Count -gt 1) {
     Write-Host "  Other ports on this PC: $($ports -join ', ')"
-    Write-Host '  If the weight never moves, the indicator is on one of those —'
+    Write-Host '  If the weight never moves, the indicator is on one of those -'
     Write-Host "  change SERIAL_PORT in $envPath"
   }
 } else {

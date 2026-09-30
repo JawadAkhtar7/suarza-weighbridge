@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 rem ---------------------------------------------------------------------------
-rem  Suarza Weighbridge — update.
+rem  Suarza Weighbridge - update.
 rem
 rem  Stops the software, backs up the records, fetches the new version, rebuilds
 rem  and starts it again. If the new version does not come up, it puts the old
@@ -16,7 +16,7 @@ cd /d "%~dp0..\..\.."
 set "REPO=%cd%"
 set "AGENT=%REPO%\apps\agent"
 
-echo Suarza Weighbridge — update
+echo Suarza Weighbridge - update
 echo ===========================
 echo.
 
@@ -90,7 +90,7 @@ exit /b 0
 rem --- Nothing to do ----------------------------------------------------------
 :alreadyCurrent
 echo.
-echo Already up to date — nothing to install.
+echo Already up to date - nothing to install.
 call :startAgent
 call :waitForAgent
 start "" "%~dp0weighbridge.bat"
@@ -140,7 +140,7 @@ exit /b 1
 
 :notAClone
 echo This copy of the software was not downloaded with Git, so it cannot
-echo update itself. Call Jawad — it is a one-time fix.
+echo update itself. Call Jawad - it is a one-time fix.
 echo.
 pause
 exit /b 1

@@ -30,5 +30,5 @@ function New-DesktopShortcut {
 New-DesktopShortcut -Name 'Suarza Weighbridge' -Script 'weighbridge.bat' -Description 'Start the weighbridge software' -WindowStyle 7
 
 # Normal window: an update takes minutes and the operator needs to read how it
-# went — especially the line that says the old version was put back.
+# went - especially the line that says the old version was put back.
 New-DesktopShortcut -Name 'Update Weighbridge' -Script 'update.bat' -Description 'Fetch and install the latest version' -WindowStyle 1

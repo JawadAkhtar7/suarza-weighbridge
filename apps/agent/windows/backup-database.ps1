@@ -1,7 +1,7 @@
 <#
   Copies the weighbridge database somewhere safe before an update.
 
-  SQLite in WAL mode is three files — the database, its write-ahead log and its
+  SQLite in WAL mode is three files - the database, its write-ahead log and its
   shared-memory index. Copying only the .sqlite can lose the most recent
   weighments, which are exactly the ones nobody has written down anywhere else.
 #>
@@ -26,8 +26,8 @@ if (Test-Path $envPath) {
 }
 
 if (-not (Test-Path $dbPath)) {
-  # Nothing recorded yet — a fresh install has no database to lose.
-  Write-Host "No database yet at $dbPath — nothing to back up."
+  # Nothing recorded yet - a fresh install has no database to lose.
+  Write-Host "No database yet at $dbPath - nothing to back up."
   exit 0
 }
 

@@ -16,7 +16,7 @@ rem ---------------------------------------------------------------------------
 rem windows -> agent -> apps -> repository root
 cd /d "%~dp0..\..\.."
 
-echo Suarza Weighbridge — setup
+echo Suarza Weighbridge - setup
 echo ==========================
 echo.
 echo Working in: %cd%
@@ -36,7 +36,7 @@ echo Node.js %NODE_VERSION% found.
 
 rem The SQLite driver ships prebuilt binaries only for certain Node versions.
 rem On anything else Windows falls back to compiling it, which needs Python and
-rem Visual Studio — a long detour that ends in failure on a plain office PC.
+rem Visual Studio - a long detour that ends in failure on a plain office PC.
 rem Checked here so it is caught in a second rather than five minutes in.
 for /f "tokens=1 delims=." %%v in ("%NODE_VERSION%") do set "NODE_MAJOR=%%v"
 set "NODE_MAJOR=%NODE_MAJOR:v=%"
@@ -57,7 +57,7 @@ for /f "delims=" %%v in ('pnpm --version') do echo pnpm %%v found.
 
 rem --- Configuration -----------------------------------------------------------
 rem Detects the indicator's COM port and writes the settings file. Nothing to
-rem edit by hand — see configure-env.ps1 for what it decides.
+rem edit by hand - see configure-env.ps1 for what it decides.
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0configure-env.ps1"
 if errorlevel 1 goto :failed
@@ -74,7 +74,7 @@ call pnpm build
 if errorlevel 1 goto :failed
 
 rem --- Desktop icon ------------------------------------------------------------
-rem A shortcut is a COM object, so PowerShell makes it — see make-shortcut.ps1.
+rem A shortcut is a COM object, so PowerShell makes it - see make-shortcut.ps1.
 echo.
 echo Creating the desktop icon...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0make-shortcut.ps1"
@@ -106,7 +106,7 @@ exit /b 1
 
 :failed
 echo.
-echo Setup failed — see the messages above.
+echo Setup failed - see the messages above.
 echo.
 pause
 exit /b 1

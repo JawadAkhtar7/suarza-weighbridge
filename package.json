@@ -12,6 +12,7 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
+    "check:windows": "node scripts/check-windows-scripts.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "dev:web": "turbo run dev --filter=@suarza/operator-web --filter=@suarza/manager-web",

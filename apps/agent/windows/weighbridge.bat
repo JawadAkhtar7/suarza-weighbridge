@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 rem ---------------------------------------------------------------------------
-rem  Suarza Weighbridge — the operator's desktop icon points here.
+rem  Suarza Weighbridge - the operator's desktop icon points here.
 rem
 rem  Starts the agent if it is not already running, waits until it answers, then
 rem  opens the operator screen. Clicking the icon again does NOT start a second
@@ -95,7 +95,7 @@ exit /b 0
 rem --- Succeeds only when the agent's health route answers --------------------
 rem
 rem  Deliberately written without an if(...) block. Inside parentheses batch
-rem  expands %errorlevel% when it PARSES the block, not when it runs it — so the
+rem  expands %errorlevel% when it PARSES the block, not when it runs it - so the
 rem  exit code here would be whatever it was before curl ran, and this check
 rem  would report "already running" every time.
 :isUp
