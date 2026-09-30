@@ -19,14 +19,22 @@ uses the desktop icon.
 
 1. **Install Node.js 20 or newer** from nodejs.org (the LTS installer).
 
-2. **Copy the agent folder** onto the PC, for example `C:\suarza\agent`.
+2. **Install Git for Windows** from git-scm.com (the defaults are fine). It is
+   what lets the software update itself later.
 
-3. **Run `windows\install.bat`** (double-click it). It installs the
-   dependencies, builds the software, creates a `.env` for you to fill in, and
-   puts a **Suarza Weighbridge** icon on the desktop.
+3. **Download the project with Git** — not by copying a folder, or updates will
+   not work:
 
-4. **Open `.env` in Notepad** and set the values below. The one that always
-   needs changing is `SERIAL_PORT`.
+   ```
+   git clone <repository url> C:\suarza\weighbridge
+   ```
+
+4. **Run `windows\install.bat`** (double-click it). It installs everything,
+   builds the software, works out which COM port the indicator is on, and puts
+   two icons on the desktop: **Suarza Weighbridge** and **Update Weighbridge**.
+
+   The settings it writes are below, for reference — there is nothing to edit by
+   hand unless something is wrong.
 
    | Setting            | What to put                                                              |
    | ------------------ | ------------------------------------------------------------------------ |
@@ -60,6 +68,33 @@ Closing the weighing screen does not stop the software. Clicking the icon again
 brings the screen straight back.
 
 To stop it completely, close the minimised **Suarza Weighbridge Agent** window.
+
+## Updating
+
+When there is a new version, Jawad will ask the operator to **double-click
+_Update Weighbridge_**.
+
+It takes a couple of minutes, during which weighing is not possible — so run it
+when the yard is quiet, not with a truck on the bridge. It:
+
+1. copies the records somewhere safe first;
+2. stops the software;
+3. fetches the new version and rebuilds it;
+4. starts it again and checks it actually answers.
+
+**If the new version does not start, it puts the old one back by itself** and
+says so. The records are never touched by any of this.
+
+The only thing the operator has to do is read the last line:
+
+| It says                         | What it means                                     |
+| ------------------------------- | -------------------------------------------------- |
+| _Update finished_               | Done. Carry on.                                    |
+| _The previous version is running again_ | The update failed and was undone. Tell Jawad. |
+| _THE SOFTWARE IS NOT RUNNING_   | Call Jawad. The records are safe.                  |
+
+Backups pile up in `apps\agent\data\backups\` — one folder per update, named
+by date. They are small; delete old ones once a year.
 
 ## Checking it works
 

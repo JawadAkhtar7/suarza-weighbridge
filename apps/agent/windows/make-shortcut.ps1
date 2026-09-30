@@ -10,16 +10,25 @@ $ErrorActionPreference = 'Stop'
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $desktop = [Environment]::GetFolderPath('Desktop')
-$linkPath = Join-Path $desktop 'Suarza Weighbridge.lnk'
-
 $shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($linkPath)
-$shortcut.TargetPath = Join-Path $here 'weighbridge.bat'
-$shortcut.WorkingDirectory = $here
-$shortcut.IconLocation = Join-Path $here 'suarza.ico'
-$shortcut.Description = 'Start the weighbridge software'
-# Minimised: the operator wants the weighing screen, not this window.
-$shortcut.WindowStyle = 7
-$shortcut.Save()
 
-Write-Host "Desktop icon created: $linkPath"
+function New-DesktopShortcut {
+  param([string]$Name, [string]$Script, [string]$Description, [int]$WindowStyle)
+
+  $path = Join-Path $desktop "$Name.lnk"
+  $shortcut = $shell.CreateShortcut($path)
+  $shortcut.TargetPath = Join-Path $here $Script
+  $shortcut.WorkingDirectory = $here
+  $shortcut.IconLocation = Join-Path $here 'suarza.ico'
+  $shortcut.Description = $Description
+  $shortcut.WindowStyle = $WindowStyle
+  $shortcut.Save()
+  Write-Host "Desktop icon created: $path"
+}
+
+# Minimised: the operator wants the weighing screen, not this window.
+New-DesktopShortcut -Name 'Suarza Weighbridge' -Script 'weighbridge.bat' -Description 'Start the weighbridge software' -WindowStyle 7
+
+# Normal window: an update takes minutes and the operator needs to read how it
+# went — especially the line that says the old version was put back.
+New-DesktopShortcut -Name 'Update Weighbridge' -Script 'update.bat' -Description 'Fetch and install the latest version' -WindowStyle 1

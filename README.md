@@ -297,6 +297,14 @@ A desktop icon rather than a Windows service: one visible thing that is either
 running or not, which the operator can start themselves and anyone can reason
 about over the phone.
 
+**Updating a machine hundreds of kilometres away:** a second icon, **Update
+Weighbridge**, pulls the new version, rebuilds and restarts — and puts the old
+version back by itself if the new one does not come up. It backs up the SQLite
+database before it touches anything. Push to the repository, ring the operator,
+ask them to double-click it.
+
+That is why the PC must be set up with `git clone` rather than a copied folder.
+
 > **Not verified on Windows.** The guide was written and checked here, but this
 > project was built on Linux — the install and a reboot still need one
 > run-through on the actual PC. Everything else in this README has been run.
