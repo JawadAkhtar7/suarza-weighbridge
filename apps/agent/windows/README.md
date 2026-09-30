@@ -87,11 +87,11 @@ says so. The records are never touched by any of this.
 
 The only thing the operator has to do is read the last line:
 
-| It says                         | What it means                                     |
-| ------------------------------- | -------------------------------------------------- |
-| _Update finished_               | Done. Carry on.                                    |
-| _The previous version is running again_ | The update failed and was undone. Tell Jawad. |
-| _THE SOFTWARE IS NOT RUNNING_   | Call Jawad. The records are safe.                  |
+| It says                                  | What to do                                          |
+| ---------------------------------------- | ---------------------------------------------------- |
+| _Update finished_                        | Click the Suarza icon and carry on.                 |
+| _The previous version has been put back_ | Click the icon, carry on, and tell Jawad.           |
+| _THE SOFTWARE IS NOT RUNNING_            | Call Jawad. The records are safe.                   |
 
 Backups pile up in `apps\agent\data\backups\` — one folder per update, named
 by date. They are small; delete old ones once a year.

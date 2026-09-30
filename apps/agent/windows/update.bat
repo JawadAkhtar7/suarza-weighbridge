@@ -48,7 +48,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0backup-database.ps1" -
 if errorlevel 1 goto :backupFailed
 
 rem --- Stop the software ------------------------------------------------------
-echo Stopping the software...
+echo Closing the weighing screen and stopping the software...
+call :stopScreen
 call :stopAgent
 
 rem --- Remember where we are, so we can come back -----------------------------
@@ -77,13 +78,13 @@ if errorlevel 1 goto :rollback
 
 echo.
 echo ===========================
-echo Update finished. The software is running the new version.
+echo Update finished.
+echo.
+echo Now double-click "Suarza Weighbridge" on the desktop to start weighing.
 echo.
 echo Records were backed up to:
 echo   %BACKUP%
 echo.
-rem Bring the weighing screen back up for the operator.
-start "" "%~dp0weighbridge.bat"
 pause
 exit /b 0
 
@@ -91,9 +92,8 @@ rem --- Nothing to do ----------------------------------------------------------
 :alreadyCurrent
 echo.
 echo Already up to date - nothing to install.
-call :startAgent
-call :waitForAgent
-start "" "%~dp0weighbridge.bat"
+echo.
+echo Double-click "Suarza Weighbridge" on the desktop to start weighing again.
 echo.
 pause
 exit /b 0
@@ -111,11 +111,12 @@ if errorlevel 1 goto :rollbackFailed
 
 echo.
 echo ===========================
-echo The previous version is running again. Nothing was lost.
-echo Tell Jawad the update did not work, and read him this line:
+echo The previous version has been put back. Nothing was lost.
+echo.
+echo Double-click "Suarza Weighbridge" to carry on working, then tell Jawad
+echo the update did not work and read him this line:
 echo   rollback to %BEFORE%
 echo.
-start "" "%~dp0weighbridge.bat"
 pause
 exit /b 1
 
@@ -155,16 +156,27 @@ exit /b 1
 
 :pullFailed
 echo.
-echo Could not fetch the new version. The old one is being started again.
+echo Could not fetch the new version. Nothing has been changed.
 echo Check the internet connection, or call Jawad.
 echo.
-call :startAgent
-call :waitForAgent
-start "" "%~dp0weighbridge.bat"
+echo Double-click "Suarza Weighbridge" to carry on with the version you have.
+echo.
 pause
 exit /b 1
 
 rem --- Helpers ------------------------------------------------------------------
+
+rem Closes the weighing screen.
+rem
+rem It must be closed, not just left alone: the operator app is a PWA, so an
+rem open window keeps serving the version the browser already cached. Closing it
+rem and opening it again from the icon is what makes the new version appear.
+rem Only windows showing this app are touched - any other Chrome window, and
+rem any other browser, is left alone.
+:stopScreen
+powershell -NoProfile -Command "Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like '*Suarza Weighbridge*' } | ForEach-Object { $_.CloseMainWindow() | Out-Null }" >nul 2>&1
+ping -n 3 127.0.0.1 >nul
+exit /b 0
 
 rem Stops whatever is listening on the port, whichever way it was started.
 :stopAgent
