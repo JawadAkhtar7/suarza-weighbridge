@@ -40,7 +40,7 @@ const OPTIONS: ModeOption[] = [
     key: 'first',
     step: '1',
     title: 'First Weight',
-    detail: 'Empty Truck arrived — weigh it and start a slip',
+    detail: 'Empty Truck arrived — weigh it and start a slip.',
     icon: EmptyTruckIcon,
   },
   {
