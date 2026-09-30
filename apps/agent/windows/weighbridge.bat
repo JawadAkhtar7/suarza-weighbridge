@@ -33,12 +33,14 @@ where curl >nul 2>&1 || set "PROBE=powershell"
 echo Suarza Weighbridge
 echo ------------------
 
+rem `goto` out of a parenthesised block is another thing batch does not always
+rem do properly, so every branch here is flat.
 call :isUp
-if not errorlevel 1 (
-  echo Already running. Opening the screen...
-  goto :openBrowser
-)
+if errorlevel 1 goto :notRunning
+echo Already running. Opening the screen...
+goto :openBrowser
 
+:notRunning
 if not exist "dist\index.js" (
   echo.
   echo The software has not been built yet.
@@ -77,23 +79,30 @@ if not defined CHROME if exist "%LocalAppData%\Google\Chrome\Application\chrome.
 if not defined CHROME set "PF86=%ProgramFiles(x86)%"
 if not defined CHROME if exist "!PF86!\Google\Chrome\Application\chrome.exe" set "CHROME=!PF86!\Google\Chrome\Application\chrome.exe"
 
-if defined CHROME (
-  rem --app gives a window with no address bar; --kiosk-printing sends receipts
-  rem straight to the default printer instead of showing a print dialog.
-  start "" "!CHROME!" --app=%URL% --kiosk-printing
-) else (
-  echo Chrome was not found, opening the default browser instead.
-  echo Receipts will ask before printing until Chrome is installed.
-  start "" %URL%
-)
+if not defined CHROME goto :noChrome
 
+rem --app gives a window with no address bar; --kiosk-printing sends receipts
+rem straight to the default printer instead of showing a print dialog.
+start "" "!CHROME!" --app=%URL% --kiosk-printing
+exit /b 0
+
+:noChrome
+echo Chrome was not found, opening the default browser instead.
+echo Receipts will ask before printing until Chrome is installed.
+start "" %URL%
 exit /b 0
 
 rem --- Succeeds only when the agent's health route answers --------------------
+rem
+rem  Deliberately written without an if(...) block. Inside parentheses batch
+rem  expands %errorlevel% when it PARSES the block, not when it runs it — so the
+rem  exit code here would be whatever it was before curl ran, and this check
+rem  would report "already running" every time.
 :isUp
-if "%PROBE%"=="curl" (
-  curl --silent --fail --max-time 2 --output nul "%URL%/health"
-  exit /b %errorlevel%
-)
+if "%PROBE%"=="powershell" goto :isUpPowershell
+curl --silent --fail --max-time 2 --output nul "%URL%/health"
+exit /b %errorlevel%
+
+:isUpPowershell
 powershell -NoProfile -Command "try { Invoke-WebRequest -Uri '%URL%/health' -UseBasicParsing -TimeoutSec 2 | Out-Null; exit 0 } catch { exit 1 }"
 exit /b %errorlevel%

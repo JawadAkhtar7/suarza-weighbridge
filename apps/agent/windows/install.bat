@@ -4,15 +4,22 @@ setlocal
 rem ---------------------------------------------------------------------------
 rem  One-time setup for the weighbridge PC.
 rem
-rem  Installs the dependencies, builds the software, and puts a "Suarza
-rem  Weighbridge" icon on the desktop. Run it once; after that the operator only
-rem  ever uses the icon.
+rem  Installs everything, builds it, and puts a "Suarza Weighbridge" icon on the
+rem  desktop. Run once; after that the operator only ever uses the icon.
+rem
+rem  Works from the repository root because the agent shares code with the rest
+rem  of the project (@suarza/shared, @suarza/receipt-pdf) and serves the
+rem  operator screen from apps\operator-web\dist. Installing the agent folder on
+rem  its own would be missing all of that.
 rem ---------------------------------------------------------------------------
 
-cd /d "%~dp0.."
+rem windows -> agent -> apps -> repository root
+cd /d "%~dp0..\..\.."
 
 echo Suarza Weighbridge — setup
 echo ==========================
+echo.
+echo Working in: %cd%
 echo.
 
 rem --- Node --------------------------------------------------------------------
@@ -24,32 +31,46 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-for /f "delims=" %%v in ('node --version') do echo Node.js %%v found.
+for /f "delims=" %%v in ('node --version') do set "NODE_VERSION=%%v"
+echo Node.js %NODE_VERSION% found.
+
+rem The SQLite driver ships prebuilt binaries only for certain Node versions.
+rem On anything else Windows falls back to compiling it, which needs Python and
+rem Visual Studio — a long detour that ends in failure on a plain office PC.
+rem Checked here so it is caught in a second rather than five minutes in.
+for /f "tokens=1 delims=." %%v in ("%NODE_VERSION%") do set "NODE_MAJOR=%%v"
+set "NODE_MAJOR=%NODE_MAJOR:v=%"
+if %NODE_MAJOR% LSS 20 goto :wrongNode
+if %NODE_MAJOR% GTR 22 goto :wrongNode
+
+rem --- pnpm --------------------------------------------------------------------
+rem The project is a pnpm workspace. Corepack ships with Node and installs the
+rem exact pnpm version the lockfile was written with.
+call corepack enable >nul 2>&1
+where pnpm >nul 2>&1
+if errorlevel 1 (
+  echo Installing pnpm...
+  call npm install -g pnpm
+  if errorlevel 1 goto :failed
+)
+for /f "delims=" %%v in ('pnpm --version') do echo pnpm %%v found.
 
 rem --- Configuration -----------------------------------------------------------
-if not exist ".env" (
-  if exist ".env.example" (
-    copy ".env.example" ".env" >nul
-    echo.
-    echo A configuration file has been created: .env
-    echo Open it in Notepad and set SERIAL_PORT to the indicator's COM port
-    echo before weighing anything.
-  ) else (
-    echo No .env or .env.example found. Cannot continue.
-    pause
-    exit /b 1
-  )
-)
-
-rem --- Dependencies and build --------------------------------------------------
+rem Detects the indicator's COM port and writes the settings file. Nothing to
+rem edit by hand — see configure-env.ps1 for what it decides.
 echo.
-echo Installing dependencies. This takes a few minutes the first time...
-call npm install --omit=dev
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0configure-env.ps1"
+if errorlevel 1 goto :failed
+
+rem --- Install and build -------------------------------------------------------
+echo.
+echo Installing dependencies. The first time takes a few minutes...
+call pnpm install
 if errorlevel 1 goto :failed
 
 echo.
 echo Building...
-call npm run build
+call pnpm build
 if errorlevel 1 goto :failed
 
 rem --- Desktop icon ------------------------------------------------------------
@@ -70,6 +91,18 @@ echo The operator double-clicks "Suarza Weighbridge" on the desktop to start.
 echo.
 pause
 exit /b 0
+
+:wrongNode
+echo.
+echo   This Node.js version (%NODE_VERSION%) will not work here.
+echo   Install Node.js 22 LTS from:  https://nodejs.org/dist/latest-v22.x/
+echo   (pick the file ending in x64.msi, uninstall the current Node first)
+echo.
+echo   Why: the SQLite driver has no prebuilt binary for Node %NODE_MAJOR%, so
+echo   Windows tries to compile it and needs Visual Studio and Python.
+echo.
+pause
+exit /b 1
 
 :failed
 echo.
