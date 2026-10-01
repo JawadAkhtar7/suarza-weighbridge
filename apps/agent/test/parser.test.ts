@@ -100,3 +100,31 @@ describe('WeightParser — lenient fallback', () => {
     expect(parser.parse('garbage 4321')).toBeNull();
   });
 });
+
+describe('STX/ETX framing', () => {
+  it('ignores the leading STX left over after splitting on ETX', () => {
+    // A frame captured from the site indicator with `pnpm sniff` (empty bridge).
+    const reading = kg().parse('\x02Aa+00000000000000` I');
+    expect(reading).toMatchObject({ weightKg: 0 });
+  });
+
+  it('reads the site indicator frame with its SERIAL_PATTERN', () => {
+    // Display showed 65 kg; the lenient fallback had read all 14 digits.
+    const parser = new WeightParser({
+      unit: 'kg',
+      pattern: '^[A-Za-z]{2}(?<weight>[+-]\\d{6})\\d{8}',
+    });
+    expect(parser.parse('\x02Aa+00006500000000` I')).toMatchObject({
+      weightKg: 65,
+      stable: null,
+      fallback: false,
+    });
+    expect(parser.parse('\x02Aa+00000000000000` I')).toMatchObject({ weightKg: 0 });
+  });
+
+  it('unescapes \\xHH delimiters', async () => {
+    const { unescapeDelimiter } = await import('../src/config.js');
+    expect(unescapeDelimiter('\\x03')).toBe('\x03');
+    expect(unescapeDelimiter('\\r\\n')).toBe('\r\n');
+  });
+});

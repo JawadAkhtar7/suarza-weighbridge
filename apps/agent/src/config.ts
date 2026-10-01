@@ -86,9 +86,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
   return result.data;
 }
 
-/** `\r\n` arrives from .env as the four characters `\`,`r`,`\`,`n`. */
+/**
+ * `\r\n` arrives from .env as the four characters `\`,`r`,`\`,`n`. `\xHH`
+ * covers STX/ETX-framed indicators, which send no line ending at all —
+ * `\x03` splits on ETX.
+ */
 export function unescapeDelimiter(raw: string): string {
   return raw
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
     .replace(/\\r/g, '\r')
     .replace(/\\n/g, '\n')
     .replace(/\\t/g, '\t')

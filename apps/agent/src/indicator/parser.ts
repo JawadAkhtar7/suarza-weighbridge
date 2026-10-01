@@ -79,7 +79,9 @@ export class WeightParser {
   }
 
   parse(line: string): ParsedReading | null {
-    const raw = line.trim();
+    // Framing bytes (STX and friends) survive the delimiter split and would
+    // otherwise defeat the `^` anchor; trim() only removes whitespace.
+    const raw = line.replace(/[\x00-\x08\x0e-\x1f\x7f]/g, '').trim();
     if (raw === '') return null;
 
     const match = this.regex.exec(raw);

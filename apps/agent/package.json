@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
-    "dev": "SERVE_OPERATOR_WEB=false tsx watch src/index.ts",
+    "dev": "cross-env SERVE_OPERATOR_WEB=false tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "sniff": "tsx src/tools/sniff-indicator.ts",
@@ -17,17 +17,18 @@
   "dependencies": {
     "@fastify/cors": "^10.0.1",
     "@fastify/static": "^8.0.1",
+    "@suarza/receipt-pdf": "workspace:*",
     "@suarza/shared": "workspace:*",
     "better-sqlite3": "^11.5.0",
     "dotenv": "^16.4.5",
     "fastify": "^5.1.0",
     "serialport": "^12.0.0",
-    "zod": "^3.23.8",
-    "@suarza/receipt-pdf": "workspace:*"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.9.0",
+    "cross-env": "^10.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vitest": "^2.1.4"
