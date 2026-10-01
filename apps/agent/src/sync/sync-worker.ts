@@ -1,16 +1,19 @@
 /**
  * Outbox sync worker (brief §11).
  *
- * The local database is the source of truth; this drains it upward. Four
- * triggers, each covering a different way the naive version fails:
+ * The local database is the source of truth; this drains it upward. Two
+ * triggers, and deliberately no more:
  *
- *  (a) event-driven on every commit — the normal case, syncs in a second
- *  (b) exponential backoff on failure (5s → 15s → 60s → cap 2min) — so a dead
- *      link is not hammered, and a thousand queued records do not stampede
- *  (c) a sweep the moment a retry succeeds — that IS the reconnect trigger;
- *      Node has no reliable "the internet came back" event, so the retry
- *      doubles as the probe and a success immediately drains the rest
- *  (d) a loose periodic backstop — insurance against a trigger being missed
+ *  (a) on every commit — so the operator sees "synced" straight after weighing
+ *  (b) every few minutes — which is also how a restored connection is noticed
+ *
+ * There is no retry schedule. A failed attempt simply waits for the next tick:
+ * the dashboard does not need to be fresher than that, and a backoff ladder
+ * bought minutes of freshness at the cost of a failure counter, a second timer
+ * and the reconnect sweep that existed only to undo it.
+ *
+ * Each run drains the whole outbox, batch after batch, so a day offline goes up
+ * in one pass rather than one batch per tick.
  *
  * A record is marked synced only on a confirmed 2xx that names its id. Marking
  * optimistically would lose weighments permanently on a failure.
@@ -22,9 +25,6 @@ import type { WeighmentRepository } from '../db/weighments.js';
 import { toDto } from '../db/weighments.js';
 import type { AuditRepository } from '../db/audit.js';
 import { CloudError, type CloudClient } from './cloud-client.js';
-
-/** Brief §11b. Capped so a long outage still retries every couple of minutes. */
-export const BACKOFF_MS = [5_000, 15_000, 60_000, 120_000];
 
 /** Bounded so a week of offline records syncs in batches, not one huge POST. */
 export const BATCH_SIZE = 50;
@@ -59,8 +59,6 @@ export class SyncWorker {
   private started = false;
   /** Set when a commit lands mid-sync, so the new record isn't left behind. */
   private rerunRequested = false;
-  private failureCount = 0;
-  private retryTimer: NodeJS.Timeout | null = null;
   private periodicTimer: NodeJS.Timeout | null = null;
 
   private online = false;
@@ -90,9 +88,7 @@ export class SyncWorker {
   stop(): void {
     this.stopped = true;
     this.started = false;
-    if (this.retryTimer) this.clearTimeoutFn(this.retryTimer);
     if (this.periodicTimer) this.clearTimeoutFn(this.periodicTimer);
-    this.retryTimer = null;
     this.periodicTimer = null;
   }
 
@@ -152,7 +148,7 @@ export class SyncWorker {
         if (pending.length === 0) break;
 
         const sent = await this.sendBatch(pending);
-        if (!sent) return; // Failure already scheduled a retry.
+        if (!sent) return; // Noted as offline; the next tick tries again.
         drainedSomething = true;
       }
 
@@ -161,7 +157,7 @@ export class SyncWorker {
       // this second pass those entries would sit in the outbox forever and the
       // cloud would have no record that a receipt was reprinted.
       const orphans = await this.drainOrphanAudit();
-      if (orphans === 'failed') return; // A retry is already scheduled.
+      if (orphans === 'failed') return; // Same: wait for the next tick.
 
       if (drainedSomething || orphans === 'drained') {
         this.markOnline();
@@ -174,8 +170,7 @@ export class SyncWorker {
       // is to ask.
       if (await this.options.client.ping()) {
         this.markOnline();
-      } else if (this.online || this.failureCount === 0) {
-        // Only note the drop once; the backoff timer takes it from here.
+      } else {
         this.fail(new CloudError('Cloud is not reachable', null, false));
       }
     } finally {
@@ -297,29 +292,15 @@ export class SyncWorker {
     this.online = true;
     this.lastError = null;
     this.lastSuccessAt = nowUtc();
-    this.failureCount = 0;
-    if (this.retryTimer) {
-      this.clearTimeoutFn(this.retryTimer);
-      this.retryTimer = null;
-    }
   }
 
   private fail(error: unknown): void {
     this.online = false;
     this.lastError = error instanceof Error ? error.message : String(error);
 
-    const delay = BACKOFF_MS[Math.min(this.failureCount, BACKOFF_MS.length - 1)]!;
-    this.failureCount += 1;
-
+    // A missing internet link is the expected state at a weighbridge, not an
+    // incident. Nothing is scheduled here: the periodic tick is the retry.
     const level = error instanceof CloudError && !error.isServerResponse ? 'info' : 'warn';
-    // A missing internet link is the expected state here, not an incident.
-    this.options.onLog?.(level, `Sync failed (retrying in ${delay / 1000}s): ${this.lastError}`);
-
-    if (this.retryTimer) this.clearTimeoutFn(this.retryTimer);
-    this.retryTimer = this.setTimeoutFn(() => {
-      this.retryTimer = null;
-      void this.sync();
-    }, delay);
-    this.retryTimer.unref?.();
+    this.options.onLog?.(level, `Sync failed, will try again shortly: ${this.lastError}`);
   }
 }

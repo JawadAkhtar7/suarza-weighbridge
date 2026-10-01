@@ -46,7 +46,9 @@ export const stationSettingsSchema = z.object({
   auto_print: z.boolean().default(true),
   pricing: pricingTableSchema.default({}),
   /** Sync backstop cadence in seconds (brief §11d). */
-  sync_interval_seconds: z.number().int().min(30).max(3600).default(180),
+  /* How often the agent checks in with the cloud when nothing has just been
+     saved. Also how long a restored connection can go unnoticed. */
+  sync_interval_seconds: z.number().int().min(30).max(3600).default(300),
   /** Where the scheduled SQLite copy is written (brief §12). */
   backup_path: z.string().default(''),
   backup_interval_hours: z.number().int().min(1).max(168).default(24),

@@ -65,7 +65,7 @@ const configSchema = z.object({
   // --- Cloud sync (wired up in M6) -----------------------------------------
   CLOUD_API_URL: z.string().default(''),
   CLOUD_API_KEY: z.string().default(''),
-  SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(3600).default(180),
+  SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
 
   BACKUP_PATH: z.string().default(''),
   BACKUP_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(24),

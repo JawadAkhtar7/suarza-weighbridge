@@ -44,7 +44,7 @@ USE_SIMULATOR=false       # true runs a realistic fake scale, no hardware needed
 # --- Cloud ---------------------------------------------------------------
 CLOUD_API_URL=https://weighbridge.example.com
 CLOUD_API_KEY=            # Must equal the server's INGEST_API_KEY
-SYNC_INTERVAL_SECONDS=180 # A backstop only; records sync the moment they save
+SYNC_INTERVAL_SECONDS=300 # How often to check in; records also sync the moment they save
 ```
 
 Leaving `CLOUD_API_URL` or `CLOUD_API_KEY` blank runs the agent purely offline,

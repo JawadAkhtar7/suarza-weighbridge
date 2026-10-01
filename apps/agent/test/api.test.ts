@@ -378,3 +378,66 @@ describe('GET /weighments/:slip/pdf', () => {
     expect(response.json().error.code).toBe('SLIP_NOT_FOUND');
   });
 });
+
+describe('the recent weighments list', () => {
+  it('puts a one-visit weighing at the top, where it just happened', async () => {
+    // The bug this covers: open tickets used to be pinned above everything, so
+    // a Third Weight record - completed the instant it is saved - appeared
+    // below every open slip and looked as though it had not been recorded.
+    const open = await app.inject({
+      method: 'POST',
+      url: '/weighments',
+      payload: {
+        vehicle_type: 'truck',
+        vehicle_plate: 'OPEN-1',
+        first_weight_kg: 12_000,
+      },
+    });
+    expect(open.statusCode).toBe(201);
+
+    const completed = await app.inject({
+      method: 'POST',
+      url: '/weighments/complete',
+      payload: {
+        vehicle_type: 'truck',
+        vehicle_plate: 'ONE-VISIT',
+        first_weight_kg: 14_300,
+        second_weight_kg: 29_900,
+      },
+    });
+    expect(completed.statusCode).toBe(201);
+
+    const list = await app.inject({ method: 'GET', url: '/weighments?limit=5' });
+    const rows = list.json().rows as { vehicle_plate: string; status: string }[];
+
+    expect(rows[0]?.vehicle_plate).toBe('ONE-VISIT');
+    expect(rows[0]?.status).toBe('COMPLETED');
+    // The open ticket is still there, just not pinned above newer work.
+    expect(rows.some((row) => row.vehicle_plate === 'OPEN-1')).toBe(true);
+  });
+
+  it('brings a slip back to the top when its second weight lands', async () => {
+    const first = await app.inject({
+      method: 'POST',
+      url: '/weighments',
+      payload: { vehicle_type: 'truck', vehicle_plate: 'RETURNS', first_weight_kg: 10_000 },
+    });
+    const slip = first.json().weighment.slip_number as string;
+
+    const completed = await app.inject({
+      method: 'PATCH',
+      url: `/weighments/${slip}/complete`,
+      payload: { second_weight_kg: 25_000, amount_charged: 300 },
+    });
+    // Asserted, or a 404 here would leave this test passing for the wrong
+    // reason: RETURNS is the newest record either way.
+    expect(completed.statusCode).toBe(200);
+
+    const list = await app.inject({ method: 'GET', url: '/weighments?limit=5' });
+    const rows = list.json().rows as { vehicle_plate: string }[];
+
+    // Ordered by when a record was last touched, so finishing a weighing moves
+    // it up rather than leaving it wherever it started this morning.
+    expect(rows[0]?.vehicle_plate).toBe('RETURNS');
+  });
+});

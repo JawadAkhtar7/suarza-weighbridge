@@ -308,8 +308,12 @@ export class WeighmentRepository {
     const rows = this.db
       .prepare(
         `${SELECT_ALL} ${filter.sql}
-         ORDER BY CASE WHEN status = 'OPEN' THEN 0 ELSE 1 END,
-                  first_weight_at DESC,
+         -- Most recently touched first, which is what "recent" means to the
+         -- person reading it. Open tickets used to be pinned above everything,
+         -- which was useful when every record began as an open ticket -- but a
+         -- one-visit weighing is completed the moment it is saved, so it landed
+         -- below every open slip and looked like it had not been recorded.
+         ORDER BY COALESCE(second_weight_at, first_weight_at) DESC,
                   -- Breaks the tie. Several trucks weighed in the same second
                   -- would otherwise come back in whatever order SQLite felt
                   -- like, and a paged list with an unstable order repeats some

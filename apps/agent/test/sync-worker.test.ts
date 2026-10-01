@@ -9,7 +9,7 @@ import { openDatabase, type Db } from '../src/db/connection.js';
 import { WeighmentRepository } from '../src/db/weighments.js';
 import { AuditRepository } from '../src/db/audit.js';
 import { WeighmentService } from '../src/services/weighment-service.js';
-import { BACKOFF_MS, SyncWorker } from '../src/sync/sync-worker.js';
+import { SyncWorker } from '../src/sync/sync-worker.js';
 import { CloudError, type CloudClient } from '../src/sync/cloud-client.js';
 
 let db: Db;
@@ -200,9 +200,9 @@ describe('when the link is down', () => {
     expect(worker.getStatus().online).toBe(true);
   });
 
-  it('backs off 5s, 15s, 60s then caps at 2 minutes', async () => {
-    expect(BACKOFF_MS).toEqual([5_000, 15_000, 60_000, 120_000]);
-
+  it('schedules nothing of its own when a send fails', async () => {
+    // The periodic tick IS the retry. A failure that scheduled its own timer
+    // would be a second schedule to reason about, for freshness nobody needs.
     const delays: number[] = [];
     const fakeSetTimeout = ((fn: () => void, ms: number) => {
       delays.push(ms);
@@ -220,8 +220,25 @@ describe('when the link is down', () => {
 
     for (let i = 0; i < 6; i++) await worker.sync();
 
-    // Capped rather than growing forever, so a long outage still retries.
-    expect(delays).toEqual([5_000, 15_000, 60_000, 120_000, 120_000, 120_000]);
+    expect(delays).toEqual([]);
+  });
+
+  it('sends everything that piled up as soon as the link is back', async () => {
+    // The case that matters after a long outage: one run drains the lot, so
+    // a day of records does not trickle up one tick at a time.
+    const cloud = fakeCloud();
+    cloud.goOffline();
+
+    for (let i = 0; i < 3; i++) service.createFirstWeight(firstWeight());
+    const worker = newWorker(cloud.client);
+    await worker.sync();
+    expect(weighments.listUnsynced()).toHaveLength(3);
+
+    cloud.goOnline();
+    await worker.sync();
+
+    expect(weighments.listUnsynced()).toHaveLength(0);
+    expect(worker.getStatus().online).toBe(true);
   });
 
   it('counts an attempt against the record even when it fails', async () => {

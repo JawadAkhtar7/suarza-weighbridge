@@ -231,15 +231,22 @@ server-rendered — not a second copy of the markup.
 
 ## Sync engine
 
-The agent drains its local database upward through an outbox (brief §11). Four
-triggers, each covering a different way the naive version fails:
+The agent drains its local database upward through an outbox (brief §11). Two
+triggers, and deliberately no more:
 
-| Trigger                                                    | Why it exists                                                                                                           |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Event-driven, on every commit                              | The normal case — a record syncs within a second                                                                        |
-| Exponential backoff on failure (5s → 15s → 60s → cap 2min) | A dead link isn't hammered, and a large backlog doesn't stampede                                                        |
-| Sweep the moment a retry succeeds                          | Node has no reliable "the internet is back" event, so the retry **is** the probe; a success immediately drains the rest |
-| Loose periodic backstop                                    | Insurance against a trigger being missed                                                                                |
+| Trigger                       | Why it exists                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| Event-driven, on every commit | The normal case — a record syncs within a second, and the operator sees it        |
+| Every 5 minutes               | Covers a failed send, and is how a restored connection is noticed                 |
+
+There is no retry schedule. A failed attempt waits for the next tick: the
+dashboard does not need to be fresher than five minutes, and the backoff ladder
+this replaced (5s → 15s → 60s → 2min) bought that freshness at the cost of a
+failure counter, a second timer, and a reconnect sweep that existed only to
+undo the waiting the backoff had introduced.
+
+Each run drains the **whole** outbox, batch after batch, so a day offline goes
+up in one pass rather than one batch per tick.
 
 A record is marked synced **only** on a confirmed 2xx that names its id.
 Marking optimistically would lose weighments permanently on a partial failure.
