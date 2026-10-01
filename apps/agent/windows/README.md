@@ -42,12 +42,20 @@ uses the desktop icon.
    | `SERIAL_BAUD_RATE` | From the indicator's manual, usually `9600`                              |
    | `USE_SIMULATOR`    | `false` on a real bridge; `true` to test with no hardware                |
    | `DATABASE_PATH`    | Leave as is, or point somewhere like `C:\suarza\data\weighbridge.sqlite` |
-   | `CLOUD_API_URL`    | The address of the cloud server                                          |
-   | `CLOUD_API_KEY`    | The ingest key from the cloud server's `.env` — the two must match       |
 
    **Finding the COM port:** plug in the indicator, open Device Manager, and
    look under _Ports (COM & LPT)_. The `sniff` tool shows what the indicator is
    actually sending: `npm run sniff COM3`.
+
+## What is set where
+
+| Setting                      | Where it lives            | Changed by            |
+| ---------------------------- | ------------------------- | --------------------- |
+| COM port, baud rate          | `apps\agent\.env`         | `install.bat`, on site |
+| Cloud address and key        | `apps\agent\src\deployment.ts` | Pushing code, then Update Weighbridge |
+| Company details, rates, printing | The app's Settings screen | The operator or manager |
+
+Only the first needs anyone to be at the machine - which is the point.
 
 ## Every day
 

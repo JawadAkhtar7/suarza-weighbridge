@@ -42,12 +42,16 @@ READING_STALE_MS=3000     # Older than this and the indicator counts as silent
 USE_SIMULATOR=false       # true runs a realistic fake scale, no hardware needed
 
 # --- Cloud ---------------------------------------------------------------
-CLOUD_API_URL=https://weighbridge.example.com
-CLOUD_API_KEY=            # Must equal the server's INGEST_API_KEY
 SYNC_INTERVAL_SECONDS=300 # How often to check in; records also sync the moment they save
 ```
 
-Leaving `CLOUD_API_URL` or `CLOUD_API_KEY` blank runs the agent purely offline,
+The cloud address and key are **not** here: they live in
+`apps/agent/src/deployment.ts`, so they travel with the code and can be changed
+on a weighbridge PC nobody can visit - push, and the operator presses Update.
+A developer's `.env` may still set `CLOUD_API_URL`/`CLOUD_API_KEY` to point at a
+local server; the operator PC has no such entries.
+
+Leaving the address in `deployment.ts` blank runs the agent purely offline,
 which is a valid way to work — records queue until it is configured.
 
 ### Fitting the real indicator
@@ -86,7 +90,7 @@ NODE_ENV=production
 
 JWT_SECRET=          # openssl rand -base64 48
 JWT_EXPIRES_IN=12h
-INGEST_API_KEY=      # openssl rand -hex 32 — must equal the agent's CLOUD_API_KEY
+INGEST_API_KEY=      # openssl rand -hex 32 — must equal CLOUD_API_KEY in apps/agent/src/deployment.ts
 
 # Fallback only — see the note below.
 COMPANY_NAME=Suarza International

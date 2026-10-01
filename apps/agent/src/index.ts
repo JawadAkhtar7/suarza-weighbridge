@@ -8,6 +8,7 @@
  * (brief §3B, §7.3, §7.5, §11).
  */
 
+import { cloudSettings } from './deployment.js';
 import { loadConfig } from './config.js';
 import { closeDatabase, openDatabase } from './db/connection.js';
 import { WeighmentRepository } from './db/weighments.js';
@@ -24,6 +25,10 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const log = (message: string) => process.stdout.write(`${message}\n`);
 
+  /* Where this weighbridge syncs to - in code so it can be changed by pushing
+     rather than by visiting the site. See deployment.ts. */
+  const cloud = cloudSettings();
+
   const db = openDatabase({ path: config.DATABASE_PATH, verbose: log });
 
   // Settings live in the database so a print calibration or an edited rate
@@ -36,7 +41,7 @@ async function main(): Promise<void> {
     // The public receipt page is served by the cloud API, on the same host the
     // agent already syncs to — so an unconfigured QR address defaults to it
     // instead of printing slips with no QR at all.
-    receipt_base_url: config.CLOUD_API_URL,
+    receipt_base_url: cloud.url,
   });
 
   // --- Sync worker ---------------------------------------------------------
@@ -44,13 +49,13 @@ async function main(): Promise<void> {
   // configured the agent runs purely offline, which is a valid way to work.
   let syncWorker: SyncWorker | null = null;
 
-  if (config.CLOUD_API_URL && config.CLOUD_API_KEY) {
+  if (cloud.url && cloud.apiKey) {
     syncWorker = new SyncWorker({
       weighments: new WeighmentRepository(db),
       audit: new AuditRepository(db),
       client: createCloudClient({
-        baseUrl: config.CLOUD_API_URL,
-        apiKey: config.CLOUD_API_KEY,
+        baseUrl: cloud.url,
+        apiKey: cloud.apiKey,
         stationId: config.STATION_ID,
         // Read per send, so editing the address in Settings reaches the public
         // receipt page on the next sync rather than on the next restart.
@@ -60,17 +65,17 @@ async function main(): Promise<void> {
       onLog: (level, message) => log(`[sync:${level}] ${message}`),
     });
   } else {
-    log('[sync:info] Cloud sync disabled — no CLOUD_API_URL/CLOUD_API_KEY configured');
+    log('[sync:info] Cloud sync disabled — no cloud address set in deployment.ts');
   }
 
   // The manager's lists, pulled on the operator's button. Absent with no cloud
   // configured, which is a valid way to run a bridge.
   const catalogueSync =
-    config.CLOUD_API_URL && config.CLOUD_API_KEY
+    cloud.url && cloud.apiKey
       ? new CatalogueSync({
           db,
-          baseUrl: config.CLOUD_API_URL,
-          apiKey: config.CLOUD_API_KEY,
+          baseUrl: cloud.url,
+          apiKey: cloud.apiKey,
         })
       : undefined;
 
@@ -119,7 +124,7 @@ async function main(): Promise<void> {
       station_id: config.STATION_ID,
       indicator: reader.kind,
       database: config.DATABASE_PATH,
-      cloud: config.CLOUD_API_URL || '(disabled)',
+      cloud: cloud.url || '(disabled)',
     },
     `Weighbridge agent listening on http://${config.HOST}:${config.PORT}`,
   );

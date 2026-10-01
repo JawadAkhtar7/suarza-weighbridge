@@ -63,8 +63,8 @@ const configSchema = z.object({
   SERVE_OPERATOR_WEB: booleanish.default(true),
 
   // --- Cloud sync (wired up in M6) -----------------------------------------
-  CLOUD_API_URL: z.string().default(''),
-  CLOUD_API_KEY: z.string().default(''),
+  /* Deliberately absent: the cloud address and key live in deployment.ts so a
+     change can be pushed to a machine nobody can visit. See that file. */
   SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
 
   BACKUP_PATH: z.string().default(''),
