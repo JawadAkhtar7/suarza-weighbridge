@@ -1,0 +1,44 @@
+# Push to main -> deploy to the preview droplet.
+#
+# The build happens ON the droplet rather than here, so what runs in
+# production is built by the same Node, pnpm and native toolchain that the
+# box has. Shipping artefacts built on a GitHub runner would mean
+# better-sqlite3 was compiled somewhere else than it runs.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time. Two overlapping `git reset --hard` + build runs on a
+# single-core box is how you get a half-built dist serving traffic.
+concurrency:
+  group: deploy-droplet
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authorise against the droplet
+        env:
+          SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+          HOST: ${{ secrets.DROPLET_HOST }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # Pin the host key instead of trusting it blindly on first contact.
+          ssh-keyscan -t ed25519 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy
+        env:
+          HOST: ${{ secrets.DROPLET_HOST }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes \
+            "root@$HOST" 'bash -s' < scripts/deploy-droplet.sh
