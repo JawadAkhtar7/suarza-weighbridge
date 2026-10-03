@@ -1,0 +1,29 @@
+/*
+ * The four families the slip is drawn in.
+ *
+ * Self-hosted rather than fetched from Google. The weighbridge PC can be
+ * offline for days, and a receipt that falls back to Arial is a receipt the
+ * client will reject — the artwork's whole character is in these faces.
+ *
+ * Only the weights the artwork uses are here. Each extra one is a file the
+ * operator's browser has to load before the first slip can print.
+ */
+
+/* Headings, labels, every figure. */
+@import '@fontsource/montserrat/500.css';
+@import '@fontsource/montserrat/600.css';
+@import '@fontsource/montserrat/700.css';
+@import '@fontsource/montserrat/900.css';
+
+/* Urdu. */
+@import '@fontsource/noto-naskh-arabic/400.css';
+@import '@fontsource/noto-naskh-arabic/600.css';
+@import '@fontsource/noto-naskh-arabic/700.css';
+
+/* The header's contact lines. */
+@import '@fontsource/archivo/500.css';
+@import '@fontsource/archivo/600.css';
+
+/* A handful of small labels the artwork sets apart. */
+@import '@fontsource/open-sans/600.css';
+@import '@fontsource/open-sans/700.css';

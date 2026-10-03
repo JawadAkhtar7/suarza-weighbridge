@@ -18,6 +18,7 @@ import type {
 } from '@suarza/shared';
 import {
   DEFAULT_CURRENCY,
+  currentSlipYear,
   generateSlipNumber,
   netWeightKg,
   newId,
@@ -552,8 +553,16 @@ export class WeighmentService {
    * able to slip in between and take the same number.
    */
   private nextSlipNumber(): string {
-    const fromMeta = this.meta.getNumber(META_KEYS.slipCounter, 0);
-    const fromRows = this.weighments.maxSlipCounter();
+    const year = currentSlipYear();
+
+    /* The stored counter carries the year it belongs to. On the first weighing
+       of a new January the stored year no longer matches and the count starts
+       again at one, which is the whole point of putting the year in front. */
+    const stored = this.meta.get(META_KEYS.slipCounter) ?? '';
+    const [storedYear, storedCounter] = stored.split(':');
+    const fromMeta = Number(storedYear) === year ? Number(storedCounter) || 0 : 0;
+
+    const fromRows = this.weighments.maxSlipCounter(year);
     // The meta counter can be behind if a previous run died mid-transaction;
     // the table is authoritative, so take whichever is further along.
     const lastCounter = Math.max(fromMeta, fromRows);
@@ -561,11 +570,12 @@ export class WeighmentService {
     const { slipNumber, counter } = generateSlipNumber({
       mode: 'counter',
       lastCounter,
+      year,
       stationId: this.options.stationId,
       isTaken: (slip) => this.weighments.slipExists(slip),
     });
 
-    this.meta.set(META_KEYS.slipCounter, String(counter));
+    this.meta.set(META_KEYS.slipCounter, `${year}:${counter}`);
     return slipNumber;
   }
 }

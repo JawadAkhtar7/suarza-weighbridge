@@ -67,14 +67,14 @@ describe('fetching a slip', () => {
     const { user } = renderFlow();
     await fetchSlip(user);
 
-    expect(await screen.findByText('SI-000001')).toBeInTheDocument();
+    expect(await screen.findByText('20261')).toBeInTheDocument();
     expect(screen.getByText('Ali Raza')).toBeInTheDocument();
     expect(screen.getByText(/cannot be changed/i)).toBeInTheDocument();
   });
 
   it('reports a slip that does not exist without blocking anything', async () => {
     mocked.getWeighment.mockRejectedValue(
-      new AgentApiError('SLIP_NOT_FOUND', 'No weighment found for slip SI-999999.', 404),
+      new AgentApiError('SLIP_NOT_FOUND', 'No weighment found for slip 2026999999.', 404),
     );
 
     const { user } = renderFlow();
@@ -128,7 +128,7 @@ describe('completing the second weighing', () => {
 
     await waitFor(() => expect(mocked.completeWeighment).toHaveBeenCalled());
     expect(mocked.completeWeighment).toHaveBeenCalledWith(
-      'SI-000001',
+      '20261',
       expect.objectContaining({
         second_weight_kg: 20_000,
         second_weight_src: 'MANUAL',
@@ -158,7 +158,7 @@ describe('completing the second weighing', () => {
     // A race between two windows, or a second station. The operator is shown
     // the truth rather than left arguing with a rejected save.
     mocked.completeWeighment.mockRejectedValue(
-      new AgentApiError('ALREADY_COMPLETED', 'Slip SI-000001 is already completed.', 409),
+      new AgentApiError('ALREADY_COMPLETED', 'Slip 20261 is already completed.', 409),
     );
     mocked.getWeighment
       .mockResolvedValueOnce({ weighment: weighment(), net: { kg: 0, ton: 0, maund: 0 } })
@@ -252,7 +252,7 @@ describe('voiding an abandoned ticket', () => {
 
     await waitFor(() =>
       expect(mocked.voidWeighment).toHaveBeenCalledWith(
-        'SI-000001',
+        '20261',
         expect.objectContaining({ reason: 'Truck never returned' }),
       ),
     );
@@ -311,7 +311,7 @@ describe('reprinting', () => {
     await fetchSlip(user);
     await user.click(await screen.findByRole('button', { name: /reprint receipt/i }));
 
-    await waitFor(() => expect(mocked.reprintWeighment).toHaveBeenCalledWith('SI-000001', 'FIRST'));
+    await waitFor(() => expect(mocked.reprintWeighment).toHaveBeenCalledWith('20261', 'FIRST'));
   });
 
   it('records the second receipt once the slip is completed', async () => {
@@ -330,7 +330,7 @@ describe('reprinting', () => {
     await user.click(await screen.findByRole('button', { name: /reprint receipt/i }));
 
     await waitFor(() =>
-      expect(mocked.reprintWeighment).toHaveBeenCalledWith('SI-000001', 'SECOND'),
+      expect(mocked.reprintWeighment).toHaveBeenCalledWith('20261', 'SECOND'),
     );
   });
 });

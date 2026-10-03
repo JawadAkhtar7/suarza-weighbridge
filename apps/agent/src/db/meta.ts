@@ -42,6 +42,7 @@ export class MetaStore {
 }
 
 export const META_KEYS = {
+  /** `"<year>:<sequence>"` — the year matters now that numbering restarts. */
   slipCounter: 'slip_counter',
   lastSyncSuccessAt: 'last_sync_success_at',
   lastSyncError: 'last_sync_error',

@@ -1,11 +1,11 @@
 /**
- * What each weighbridge station says its company details are (brief §8, §14).
+ * What each weighbridge station tells the cloud about itself (brief §8, §14).
  *
  * The operator edits these in the agent's Settings screen, and they arrive here
  * with the sync batches. The cloud keeps them so the public receipt page and
  * the PDF behind the QR code show exactly what the printed slip shows — the
  * alternative, configuring the same address twice, guarantees the two drift and
- * the customer sees a different company on the page than on their paper.
+ * the page behind a QR code is drawn for different paper than the slip.
  */
 
 import mongoose from 'mongoose';
@@ -19,11 +19,9 @@ const stationSchema = new Schema(
   {
     /** The station id, e.g. `A`. One document per weighbridge. */
     _id: { type: String, required: true },
-    company_name: { type: String, default: '' },
-    company_address: { type: String, default: '' },
-    company_phone: { type: String, default: '' },
-    company_email: { type: String, default: '' },
-    company_logo_url: { type: String, default: '' },
+    /* The company's details are no longer a station fact: they are the
+       same everywhere and live in code. Documents written before that
+       may still carry the old fields; nothing reads them. */
     /** What this station prints on; the downloaded PDF follows it. */
     paper_size: { type: String, enum: ['A4', 'A5', 'LETTER'], default: 'A5' },
     /** The station's own edit time, used to ignore a stale batch. */

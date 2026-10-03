@@ -8,7 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { netWeightAllUnits } from '@suarza/shared';
+import { COMPANY } from '@suarza/shared';
 import { ReceiptPanel } from '../src/components/receipt-panel.js';
 import { renderWithQuery, weighment } from './utils.js';
 
@@ -30,16 +30,26 @@ const completed = () =>
   });
 
 describe('the preview', () => {
-  it('shows the soft form, header and all', () => {
-    renderWithQuery(
-      <ReceiptPanel weighment={weighment()} net={netWeightAllUnits(8000, null)} variant="FIRST" />,
-    );
+  it('shows the whole slip, design and all', () => {
+    renderWithQuery(<ReceiptPanel weighment={weighment()} variant="FIRST" />);
 
     expect(screen.getByText(/receipt 1 — first weight/i)).toBeInTheDocument();
-    // The soft form's branding is the logo itself — the header no longer
-    // repeats the company name as text beside it.
+    // The same slip the printer and the QR page produce, not a second design.
+    expect(screen.getByText('WEIGHT BRIDGE SLIP')).toBeInTheDocument();
     expect(screen.getByAltText('Suarza International')).toBeInTheDocument();
-    expect(screen.getByText(/only the central block/i)).toBeInTheDocument();
+    expect(screen.getByText(/only the values/i)).toBeInTheDocument();
+  });
+
+  it("carries Suarza's own details, which come from code", () => {
+    // Not from Settings and not from the station profile any more: one
+    // constant, so the preview, the paper and the QR page cannot disagree.
+    renderWithQuery(<ReceiptPanel weighment={weighment()} variant="FIRST" />);
+
+    expect(screen.getByText(`Operator No.: ${COMPANY.phone}`)).toBeInTheDocument();
+    expect(screen.getByText(COMPANY.website)).toBeInTheDocument();
+    for (const line of COMPANY.addressLines) {
+      expect(screen.getByText(line)).toBeInTheDocument();
+    }
   });
 });
 
@@ -48,19 +58,18 @@ describe('printing', () => {
     renderWithQuery(
       <ReceiptPanel
         weighment={completed()}
-        net={netWeightAllUnits(8000, 20_000)}
         variant="SECOND"
       />,
     );
 
     await userEvent.setup().click(screen.getByRole('button', { name: /^print$/i }));
 
-    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('/print/SI-000001'), '_blank');
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('/print/20261'), '_blank');
   });
 
   it('tells the tab which receipt to render', async () => {
     renderWithQuery(
-      <ReceiptPanel weighment={completed()} net={netWeightAllUnits(8000, 20_000)} variant="SECOND" />,
+      <ReceiptPanel weighment={completed()} variant="SECOND" />,
     );
 
     await userEvent.setup().click(screen.getByRole('button', { name: /^print$/i }));
@@ -76,7 +85,6 @@ describe('printing', () => {
     renderWithQuery(
       <ReceiptPanel
         weighment={completed()}
-        net={netWeightAllUnits(8000, 20_000)}
         variant="SECOND"
       />,
     );
@@ -89,7 +97,6 @@ describe('printing', () => {
     renderWithQuery(
       <ReceiptPanel
         weighment={weighment()}
-        net={netWeightAllUnits(8000, null)}
         variant="FIRST"
         autoPrint
       />,
@@ -99,30 +106,25 @@ describe('printing', () => {
   });
 });
 
-describe('downloading', () => {
-  it('offers the full receipt as a PDF from the agent', () => {
-    // The agent, not the cloud: this has to work with the internet down.
+describe('getting a copy', () => {
+  it('offers the print tab and no separate file to download', async () => {
+    /*
+     * There is no PDF builder any more. The old one drew the receipt a second
+     * time with PDFKit, which cannot shape Arabic script, so it dropped every
+     * Urdu label the client's design is built on and could never match the
+     * paper slip. The print tab IS the slip, and the browser's own "Save as
+     * PDF" produces the file at A5 — one rendering, nothing to drift.
+     */
     renderWithQuery(
       <ReceiptPanel
         weighment={completed()}
-        net={netWeightAllUnits(8000, 20_000)}
         variant="SECOND"
       />,
     );
 
-    const link = screen.getByRole('link', { name: /download pdf/i });
-    expect(link).toHaveAttribute('href', '/weighments/SI-000001/pdf');
-    expect(link).toHaveAttribute('download');
-  });
+    expect(screen.queryByRole('link', { name: /download/i })).toBeNull();
 
-  it('explains that the PDF keeps the header and footer', () => {
-    renderWithQuery(
-      <ReceiptPanel
-        weighment={completed()}
-        net={netWeightAllUnits(8000, 20_000)}
-        variant="SECOND"
-      />,
-    );
-    expect(screen.getByText(/header and footer included/i)).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: /^print$/i }));
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('/print/20261'), '_blank');
   });
 });

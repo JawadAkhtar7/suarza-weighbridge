@@ -3,21 +3,21 @@ import { buildReceiptUrl, defaultReceiptSettings } from '../src/lib/receipt-sett
 
 describe('buildReceiptUrl', () => {
   it('builds the cloud receipt URL for a slip (brief §8)', () => {
-    expect(buildReceiptUrl('https://wb.example.com', 'SI-000123')).toBe(
-      'https://wb.example.com/r/SI-000123',
+    expect(buildReceiptUrl('https://wb.example.com', '2026123')).toBe(
+      'https://wb.example.com/r/2026123',
     );
   });
 
   it('tolerates a trailing slash on the configured address', () => {
-    expect(buildReceiptUrl('https://wb.example.com/', 'SI-000123')).toBe(
-      'https://wb.example.com/r/SI-000123',
+    expect(buildReceiptUrl('https://wb.example.com/', '2026123')).toBe(
+      'https://wb.example.com/r/2026123',
     );
   });
 
   it('returns null until the cloud address is configured', () => {
     // A QR that resolves nowhere must never be printed on a customer receipt.
-    expect(buildReceiptUrl('', 'SI-000123')).toBeNull();
-    expect(buildReceiptUrl('   ', 'SI-000123')).toBeNull();
+    expect(buildReceiptUrl('', '2026123')).toBeNull();
+    expect(buildReceiptUrl('   ', '2026123')).toBeNull();
   });
 
   it('escapes a slip number rather than pasting it into the URL raw', () => {

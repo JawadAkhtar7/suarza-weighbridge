@@ -41,7 +41,7 @@ function setup(rows: ReturnType<typeof weighment>[]) {
 const open = () =>
   weighment({
     id: '11111111-1111-4111-8111-111111111111',
-    slip_number: 'SI-000010',
+    slip_number: '202610',
     status: 'OPEN',
     second_weight_kg: null,
     net_weight_kg: 0,
@@ -49,7 +49,7 @@ const open = () =>
 const done = () =>
   weighment({
     id: '22222222-2222-4222-8222-222222222222',
-    slip_number: 'SI-000011',
+    slip_number: '202611',
     status: 'COMPLETED',
     // The shared helper defaults to an OPEN ticket, so a completed one has to
     // carry its second weight and net explicitly.
@@ -62,13 +62,13 @@ const done = () =>
 describe('what it lists', () => {
   it('shows tickets waiting for a second weight', async () => {
     setup([open()]);
-    expect(await screen.findByText('SI-000010')).toBeInTheDocument();
+    expect(await screen.findByText('202610')).toBeInTheDocument();
     expect(screen.getByText(/awaiting 2nd weight/i)).toBeInTheDocument();
   });
 
   it('shows completed ones too, so a driver with no slip can be found', async () => {
     setup([done()]);
-    expect(await screen.findByText('SI-000011')).toBeInTheDocument();
+    expect(await screen.findByText('202611')).toBeInTheDocument();
     expect(screen.getByText(/^completed$/i)).toBeInTheDocument();
   });
 
@@ -78,15 +78,15 @@ describe('what it lists', () => {
     // loaded. The guarantee that open tickets come first is asserted against
     // the repository, in the agent's own tests.
     setup([done(), open()]);
-    await screen.findByText('SI-000010');
+    await screen.findByText('202610');
 
-    const slips = screen.getAllByText(/^SI-\d{6}$/).map((el) => el.textContent);
-    expect(slips).toEqual(['SI-000011', 'SI-000010']);
+    const slips = screen.getAllByText(/^\d{5,}$/).map((el) => el.textContent);
+    expect(slips).toEqual(['202611', '202610']);
   });
 
   it('shows the first weight for an open ticket and the net for a finished one', async () => {
     setup([open(), done()]);
-    await screen.findByText('SI-000010');
+    await screen.findByText('202610');
 
     expect(screen.getByText('8,000 kg')).toBeInTheDocument();
     expect(screen.getByText('12,000 kg net')).toBeInTheDocument();
@@ -107,17 +107,17 @@ describe('what it lists', () => {
 describe('picking one', () => {
   it('fetches that slip instead of making the operator type it', async () => {
     const { onPick, user } = setup([open()]);
-    await screen.findByText('SI-000010');
+    await screen.findByText('202610');
 
-    await user.click(screen.getByText('SI-000010'));
-    expect(onPick).toHaveBeenCalledWith('SI-000010');
+    await user.click(screen.getByText('202610'));
+    expect(onPick).toHaveBeenCalledWith('202610');
   });
 });
 
 describe('staying current', () => {
   it('can be refreshed by hand', async () => {
     const { user } = setup([open()]);
-    await screen.findByText('SI-000010');
+    await screen.findByText('202610');
 
     // Relative, not absolute: the list also polls, so an exact call count
     // would be testing the clock rather than the button.

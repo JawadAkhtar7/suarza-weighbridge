@@ -55,13 +55,13 @@ describe('PUT /settings', () => {
       url: '/settings',
       payload: {
         ...current,
-        company_phone: '+92 300 2222222',
+        receipt_base_url: 'https://weighbridge.example.com',
         pricing: { truck: 450 },
       },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().company_phone).toBe('+92 300 2222222');
+    expect(response.json().receipt_base_url).toBe('https://weighbridge.example.com');
     expect((await app.inject({ url: '/settings' })).json().pricing.truck).toBe(450);
   });
 

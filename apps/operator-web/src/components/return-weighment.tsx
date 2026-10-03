@@ -446,7 +446,7 @@ export function ReturnWeighment({
 
       {/* Receipt #2 — the full receipt, printed once the weighing completes. */}
       {justCompleted && (
-        <ReceiptPanel weighment={weighment} net={record.net} variant="SECOND" autoPrint />
+        <ReceiptPanel weighment={weighment} variant="SECOND" autoPrint />
       )}
 
       <VoidDialog

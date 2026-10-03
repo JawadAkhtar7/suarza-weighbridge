@@ -6,6 +6,9 @@ import { App } from './App.js';
 import { PrintReceiptPage, parsePrintRequest } from './pages/print-receipt-page.js';
 import { ReceiptSettingsProvider } from './components/receipt-settings-provider.js';
 import './index.css';
+/* The slip's four families, self-hosted. The weighbridge PC can be offline for
+   days and a slip set in Arial is a slip the client rejects. */
+import '@suarza/ui/slip-fonts.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

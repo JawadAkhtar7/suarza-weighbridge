@@ -176,14 +176,21 @@ export class WeighmentRepository {
    * Highest counter-format slip in use, for seeding the next one. Station-mode
    * slips (`SI-A4K2P9Z`) are excluded by the GLOB — they carry no counter.
    */
-  maxSlipCounter(): number {
+  /**
+   * The highest sequence used in a given year.
+   *
+   * Per year, because the numbering restarts each January: a slip is the year
+   * followed by its sequence, so 2026's counter says nothing about 2027's. The
+   * four-digit year is stripped before the rest is read as a number.
+   */
+  maxSlipCounter(year: number): number {
     const row = this.db
       .prepare(
-        `SELECT MAX(CAST(SUBSTR(slip_number, 4) AS INTEGER)) AS max_counter
+        `SELECT MAX(CAST(SUBSTR(slip_number, 5) AS INTEGER)) AS max_counter
          FROM weighments
-         WHERE slip_number GLOB 'SI-[0-9]*'`,
+         WHERE slip_number GLOB ?`,
       )
-      .get() as { max_counter: number | null };
+      .get(`${year}[0-9]*`) as { max_counter: number | null };
     return row.max_counter ?? 0;
   }
 

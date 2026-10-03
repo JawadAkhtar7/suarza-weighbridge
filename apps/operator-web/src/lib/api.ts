@@ -200,10 +200,6 @@ export const agentApi = {
  *
  * Not the cloud's copy: the operator has to be able to hand a customer a PDF
  * with the internet down, which is precisely when the cloud one is unreachable.
- */
-export function receiptPdfUrl(slipNumber: string): string {
-  return `/weighments/${encodeURIComponent(slipNumber)}/pdf`;
-}
 
 /** The standalone printable page, opened in its own tab. */
 export function printPageUrl(slipNumber: string, variant: 'FIRST' | 'SECOND'): string {

@@ -95,11 +95,6 @@ export class SettingsService {
     const settings = this.get();
     return {
       station_id: settings.station_id,
-      company_name: settings.company_name,
-      company_address: settings.company_address,
-      company_phone: settings.company_phone,
-      company_email: settings.company_email,
-      company_logo_url: settings.company_logo_url,
       paper_size: settings.print.paper_size === 'CUSTOM' ? 'A5' : settings.print.paper_size,
       // Never edited on this station: epoch, so any real edit anywhere wins.
       updated_at: this.meta.get(META_KEYS.settingsUpdatedAt) ?? new Date(0).toISOString(),

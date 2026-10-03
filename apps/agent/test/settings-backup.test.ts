@@ -27,7 +27,10 @@ describe('SettingsService', () => {
   it('starts from the schema defaults', () => {
     const settings = new SettingsService(db).get();
     expect(settings.print.paper_size).toBe('A5');
-    expect(settings.company_name).toBe('Suarza International');
+    expect(settings.auto_print).toBe(true);
+    /* The company's details are deliberately NOT here: they are the same on
+       every station and live in code, so there is nothing to default. */
+    expect(settings).not.toHaveProperty('company_name');
   });
 
   it('seeds from the environment on a fresh install', () => {
@@ -39,10 +42,12 @@ describe('SettingsService', () => {
   it('persists a change across a fresh read', () => {
     const service = new SettingsService(db);
     const current = service.get();
-    service.replace({ ...current, company_phone: '+92 300 1111111' });
+    service.replace({ ...current, receipt_base_url: 'https://weighbridge.example.com' });
 
     // A new instance, as a restarted agent would build.
-    expect(new SettingsService(db).get().company_phone).toBe('+92 300 1111111');
+    expect(new SettingsService(db).get().receipt_base_url).toBe(
+      'https://weighbridge.example.com',
+    );
   });
 
   it('normalises paper and alignment, which the operator can no longer edit', () => {
@@ -116,7 +121,7 @@ describe('backup', () => {
       slip_number: string;
       first_weight_kg: number;
     };
-    expect(row).toEqual({ slip_number: 'SI-000001', first_weight_kg: 8000 });
+    expect(row).toEqual({ slip_number: '20261', first_weight_kg: 8000 });
     restored.close();
   });
 

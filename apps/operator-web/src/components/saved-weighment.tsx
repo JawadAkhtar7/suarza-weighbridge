@@ -11,7 +11,6 @@ import {
   formatDateTimePkt,
   formatKg,
   formatPKR,
-  netWeightAllUnits,
   vehicleTypeLabel,
   type Weighment,
 } from '@suarza/shared';
@@ -131,7 +130,6 @@ export function SavedWeighment({ weighment, onNext }: SavedWeighmentProps) {
           the "1 of 2" numbering is dropped in that case. */}
       <ReceiptPanel
         weighment={weighment}
-        net={netWeightAllUnits(weighment.first_weight_kg, weighment.second_weight_kg)}
         variant={isComplete ? 'SECOND' : 'FIRST'}
         title={isComplete ? 'Weighing receipt' : undefined}
         autoPrint

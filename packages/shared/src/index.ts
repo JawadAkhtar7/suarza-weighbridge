@@ -1,6 +1,7 @@
 /** Public surface of @suarza/shared — the one place domain rules are defined. */
 
 // Constants
+export * from './constants/company.js';
 export * from './constants/domain.js';
 export * from './constants/vehicle-types.js';
 export * from './constants/users.js';

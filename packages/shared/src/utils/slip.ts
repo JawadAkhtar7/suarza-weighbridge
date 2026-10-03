@@ -2,54 +2,120 @@
  * Slip numbers (brief §6) — the human-facing ID the driver carries back for
  * the second weighing, so it must be short, unambiguous and speakable.
  *
- * Two generation modes:
- *  - `counter` (default): `SI-000123`, a zero-padded local counter seeded from
- *    the SQLite max. Matches the printed `SI-XXXXXX` format exactly and is the
- *    easiest for an operator to read off a slip and type back in.
- *  - `station`: `SI-A4K2P9Z`, a station char + 6 base36 chars. Collision-free
- *    across multiple offline stations; switch to this if the client ever adds
- *    a second bridge (the schema already carries `station_id`).
+ * The format is the year followed by a counter that restarts each year:
  *
- * Either way the caller MUST pass an `isTaken` check so uniqueness is decided
- * against the local DB before commit — no generator can guarantee it alone.
+ *   20261, 20262, 20263 … 2026147 …   then 20271 on the first of January
+ *
+ * Plain digits, deliberately. It used to be `SI-000123`, which meant the
+ * operator typing a slip back in had to find the letters, then the dash, then
+ * pad the number with zeros — four chances to mistype on a keyboard in a
+ * weighbridge cabin, for an ID that is only ever read off a slip and typed
+ * straight back. The year carries the only information the prefix ever did:
+ * which run of numbers this slip belongs to.
+ *
+ * The year is always four digits, so a slip number splits unambiguously into
+ * the year and the sequence no matter how long the sequence grows.
+ *
+ * The caller MUST pass an `isTaken` check so uniqueness is decided against the
+ * local DB before commit — no generator can guarantee it alone.
  */
 
 import { DEFAULT_STATION_ID } from '../constants/domain.js';
 
-export const SLIP_PREFIX = 'SI-';
-export const SLIP_COUNTER_DIGITS = 6;
-export const SLIP_RANDOM_CHARS = 6;
+/** Four digits of year, then at least one of sequence. */
+export const SLIP_NUMBER_REGEX = /^\d{5,}$/;
 
-/** Accepts both modes: `SI-000123` and `SI-A4K2P9Z`. */
-export const SLIP_NUMBER_REGEX = /^SI-(?:\d{6}|[A-Z][0-9A-Z]{6})$/;
+/**
+ * Years a four-digit prefix is believed to be.
+ *
+ * This is what lets `normalizeSlipNumber` tell "20265" (slip 5 of 2026) from
+ * "10000" (slip 10000 of this year, typed without its prefix). Without a
+ * bounded range the two are the same string of digits with two meanings.
+ */
+const EARLIEST_YEAR = 2020;
+const LATEST_YEAR = 2099;
 
 export type SlipMode = 'counter' | 'station';
 
-const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
 export function isValidSlipNumber(slip: string): boolean {
-  return SLIP_NUMBER_REGEX.test(slip);
+  if (!SLIP_NUMBER_REGEX.test(slip)) return false;
+  const year = Number(slip.slice(0, 4));
+  return year >= EARLIEST_YEAR && year <= LATEST_YEAR;
 }
 
-/** Normalise operator input: trims, uppercases, and adds a missing `SI-`
- *  prefix so typing just the digits off the slip works. */
-export function normalizeSlipNumber(input: string): string {
-  const raw = input.trim().toUpperCase().replace(/\s+/g, '');
-  if (!raw) return '';
-  const body = raw.startsWith(SLIP_PREFIX) ? raw.slice(SLIP_PREFIX.length) : raw;
-  // A bare counter entry ("123") is padded back to the printed width.
-  if (/^\d+$/.test(body) && body.length < SLIP_COUNTER_DIGITS) {
-    return SLIP_PREFIX + body.padStart(SLIP_COUNTER_DIGITS, '0');
-  }
-  return SLIP_PREFIX + body;
+/** The year a slip belongs to, or null if it is not a slip number. */
+export function slipYear(slip: string): number | null {
+  return isValidSlipNumber(slip) ? Number(slip.slice(0, 4)) : null;
 }
 
-export function formatCounterSlip(counter: number): string {
-  const n = Math.max(0, Math.floor(counter));
-  // Past 999999 the counter simply widens rather than wrapping into a
-  // collision — a wider slip prints fine, a duplicate does not.
-  return SLIP_PREFIX + String(n).padStart(SLIP_COUNTER_DIGITS, '0');
+/** Its sequence within that year, or null. */
+export function slipSequence(slip: string): number | null {
+  return isValidSlipNumber(slip) ? Number(slip.slice(4)) : null;
 }
+
+/**
+ * The shape slip numbers had before this one: `SI-` and six padded digits.
+ *
+ * Nothing generates these any more. They stay recognised because records
+ * written by an older agent are already in SQLite and in Mongo, and a stored
+ * record that cannot be validated is a record that can never sync, never be
+ * read back, and never be corrected — the cloud would reject the batch
+ * forever. Tolerating the old shape on the way IN costs nothing; what matters
+ * is that nothing new is ever minted in it.
+ */
+export const LEGACY_SLIP_NUMBER_REGEX = /^SI-\d{6}$/;
+
+export function isLegacySlipNumber(slip: string): boolean {
+  return LEGACY_SLIP_NUMBER_REGEX.test(slip);
+}
+
+/**
+ * Is this a slip number some version of this software could have issued?
+ *
+ * Use this to validate a record that already exists. Use `isValidSlipNumber`
+ * for anything that decides what a NEW number looks like.
+ */
+export function isStorableSlipNumber(slip: string): boolean {
+  return isValidSlipNumber(slip) || isLegacySlipNumber(slip);
+}
+
+export function currentSlipYear(now: Date = new Date()): number {
+  return now.getFullYear();
+}
+
+export function formatCounterSlip(counter: number, year = currentSlipYear()): string {
+  // Never zero: a slip numbered 20260 would read as year 2026, sequence 0,
+  // and the first slip of a year is the first, not the zeroth.
+  const n = Math.max(1, Math.floor(counter));
+  return `${year}${n}`;
+}
+
+/**
+ * Normalise operator input.
+ *
+ * The second-weighing screen shows the year as a fixed prefix and the operator
+ * types only the sequence, so what arrives is usually already complete. This
+ * still accepts a bare sequence, because the manager's search box has no such
+ * prefix and somebody will type "5" there.
+ *
+ * Anything that is not already a plausible year-and-sequence is read as a
+ * sequence in the current year. That is what makes "10000" the ten-thousandth
+ * slip of this year rather than a slip from the year 1000.
+ */
+export function normalizeSlipNumber(input: string, now: Date = new Date()): string {
+  // An old SI- number is still printed on slips in the office drawer, and the
+  // record it names is still in the database. Pass it through untouched rather
+  // than stripping it down to digits that would name a different slip.
+  const trimmed = input.trim().toUpperCase();
+  if (isLegacySlipNumber(trimmed)) return trimmed;
+
+  const digits = input.replace(/\D+/g, '');
+  if (!digits) return '';
+  if (isValidSlipNumber(digits)) return digits;
+  return formatCounterSlip(Number(digits), currentSlipYear(now));
+}
+
+const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 function randomBase36(length: number, rng: () => number): string {
   let out = '';
@@ -59,14 +125,27 @@ function randomBase36(length: number, rng: () => number): string {
   return out;
 }
 
-export function formatStationSlip(stationId: string, rng: () => number = Math.random): string {
+/**
+ * The multi-station form: year, station digit, then six random base-36 chars.
+ *
+ * Unused today — there is one weighbridge. It stays because the schema already
+ * carries `station_id`, and because two offline stations sharing a counter
+ * would hand out the same number to two different trucks.
+ */
+export const SLIP_RANDOM_CHARS = 6;
+
+export function formatStationSlip(
+  stationId: string,
+  rng: () => number = Math.random,
+  year = currentSlipYear(),
+): string {
   const station = (stationId || DEFAULT_STATION_ID).trim().toUpperCase().charAt(0) || 'A';
-  return SLIP_PREFIX + station + randomBase36(SLIP_RANDOM_CHARS, rng);
+  return `${year}${station}${randomBase36(SLIP_RANDOM_CHARS, rng)}`;
 }
 
 export interface GenerateSlipOptions {
   mode?: SlipMode;
-  /** Highest counter already used locally (from `SELECT MAX(...)`). */
+  /** Highest sequence already used THIS YEAR (from `SELECT MAX(...)`). */
   lastCounter?: number;
   stationId?: string;
   /** Uniqueness check against the local DB. Required for a real commit. */
@@ -74,11 +153,13 @@ export interface GenerateSlipOptions {
   /** Attempts before giving up, so a broken `isTaken` can't spin forever. */
   maxAttempts?: number;
   rng?: () => number;
+  /** The year to number within. Defaults to today's. */
+  year?: number;
 }
 
 export interface GeneratedSlip {
   slipNumber: string;
-  /** Next counter value to persist, when mode is `counter`. */
+  /** Next sequence value to persist, when mode is `counter`. */
   counter: number;
   attempts: number;
 }
@@ -98,6 +179,7 @@ export function generateSlipNumber(options: GenerateSlipOptions = {}): Generated
     isTaken = () => false,
     maxAttempts = 1000,
     rng = Math.random,
+    year = currentSlipYear(),
   } = options;
 
   let counter = Math.max(0, Math.floor(lastCounter));
@@ -106,9 +188,9 @@ export function generateSlipNumber(options: GenerateSlipOptions = {}): Generated
     let candidate: string;
     if (mode === 'counter') {
       counter += 1;
-      candidate = formatCounterSlip(counter);
+      candidate = formatCounterSlip(counter, year);
     } else {
-      candidate = formatStationSlip(stationId, rng);
+      candidate = formatStationSlip(stationId, rng, year);
     }
     if (!isTaken(candidate)) {
       return { slipNumber: candidate, counter, attempts: attempt };

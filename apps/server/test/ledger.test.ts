@@ -233,7 +233,7 @@ describe('charges from weighings', () => {
     await ingest(
       [
         completedWeighment({
-          slip_number: 'SI-000002',
+          slip_number: '20262',
           customer_name: 'ALI  RAZA',
           customer_company: 'raza traders',
           amount_charged: 200,
@@ -285,7 +285,7 @@ describe('payments and adjustments', () => {
     await ingest(
       [
         completedWeighment({
-          slip_number: 'SI-000002',
+          slip_number: '20262',
           amount_charged: 300,
           payment_status: 'ON_ACCOUNT',
         }),
@@ -373,7 +373,7 @@ describe('the summary', () => {
     await ingest(
       [
         completedWeighment({
-          slip_number: 'SI-000009',
+          slip_number: '20269',
           customer_name: 'Payer',
           customer_company: 'Payer Co',
           amount_charged: 100,

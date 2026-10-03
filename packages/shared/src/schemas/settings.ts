@@ -32,13 +32,10 @@ export const pricingTableSchema = z.record(z.enum(VEHICLE_TYPES), z.number().min
 
 export const stationSettingsSchema = z.object({
   station_id: z.string().min(1).max(16).default('A'),
-  /** Company details printed on the soft receipt. `[PLACEHOLDER]` until the
-   *  client supplies the real logo, address and contact numbers. */
-  company_name: z.string().default('Suarza International'),
-  company_address: z.string().default('[PLACEHOLDER] Address line, City, Pakistan'),
-  company_phone: z.string().default('[PLACEHOLDER] +92 300 0000000'),
-  company_email: z.string().default(''),
-  company_logo_url: z.string().default('/logo.png'),
+  /* The company's name, address, phone and website are NOT here. They are the
+     same for every station and the same on every slip, so they live in code —
+     see COMPANY in @suarza/shared. A weighbridge operator changing the
+     company's address by accident is not a feature. */
   /** Base URL the receipt QR points at, e.g. https://app.example.com. */
   receipt_base_url: z.string().default(''),
   print: printSettingsSchema.default({}),

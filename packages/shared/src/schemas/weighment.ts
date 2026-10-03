@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 import { WEIGHMENT_STATUSES, WEIGHT_SOURCES, DEFAULT_CURRENCY } from '../constants/domain.js';
-import { SLIP_NUMBER_REGEX } from '../utils/slip.js';
+import { isStorableSlipNumber } from '../utils/slip.js';
 
 /**
  * A vehicle type key. A key, not one of a fixed set — the manager keeps the
@@ -27,9 +27,14 @@ export const vehicleTypeSchema = z
 export const weighmentStatusSchema = z.enum(WEIGHMENT_STATUSES);
 export const weightSourceSchema = z.enum(WEIGHT_SOURCES);
 
+/**
+ * Describes a slip number on a record that EXISTS, so it also accepts the
+ * pre-2026 `SI-000123` shape. New numbers come from `generateSlipNumber`,
+ * which only ever mints the current format.
+ */
 export const slipNumberSchema = z
   .string()
-  .regex(SLIP_NUMBER_REGEX, 'Slip number must look like SI-000123');
+  .refine(isStorableSlipNumber, 'Slip number must be the year and a number, like 20265');
 
 const utcDateTime = z.string().datetime({ offset: true });
 

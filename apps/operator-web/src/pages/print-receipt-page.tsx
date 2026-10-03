@@ -1,22 +1,27 @@
 /**
- * The printable receipt, in its own tab (operator feedback).
+ * The printable slip, in its own tab (operator feedback).
  *
  * Opened with `window.open` from the weighing screens rather than printed from
  * a hidden frame, so the operator can see exactly what is about to come out,
  * print it again without redoing the weighing, and close it when they are done
  * — all without leaving the weighing screen behind it.
  *
- * On screen this is the SOFT form: header and footer included, so it reads like
- * the page a customer would see. What the printer produces is still the central
- * block only, because `@media print` hides the rest (brief §8).
+ * TWO slips are rendered here, and only ever one reaches paper:
+ *
+ *   on screen   the whole design, so the operator sees the finished slip
+ *   on paper    the values alone, and nothing else
+ *
+ * They are the same component reading the same coordinates, so a value cannot
+ * sit in one place on screen and another on the paper. The paper the operator
+ * feeds in already carries the design; the printer only has to add what this
+ * particular weighing says.
  */
 
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Receipt, buildPageStyle } from '@suarza/ui';
-import { netWeightAllUnits } from '@suarza/shared';
-import { Download, Loader2, Printer, X } from 'lucide-react';
-import { agentApi, receiptPdfUrl } from '../lib/api.js';
+import { Button, SlipA5, SLIP_PAGE_CSS, slipValues } from '@suarza/ui';
+import { Loader2, Printer, X } from 'lucide-react';
+import { agentApi } from '../lib/api.js';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
 import { buildReceiptUrl } from '../lib/receipt-settings.js';
 
@@ -50,9 +55,9 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
 
   const weighment = query.data?.weighment;
 
-  // The print dialog opens by itself once the receipt AND the settings are in —
-  // printing before the settings land would use the wrong page size and
-  // offsets, and the operator would only find out from the paper.
+  // The print dialog opens by itself once the slip AND the settings are in —
+  // printing before the settings land would use the wrong offsets, and the
+  // operator would only find out from the paper.
   useEffect(() => {
     if (!weighment || !isLoaded || printedOnce.current) return;
     if (!settings.auto_print) return;
@@ -61,24 +66,24 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
     return () => window.clearTimeout(timer);
   }, [weighment, isLoaded, settings.auto_print]);
 
-  // The page style has to be in the document itself here, not handed to a
+  // The page rules have to be in the document itself here, not handed to a
   // print library — this tab IS the print document.
   useEffect(() => {
     const style = document.createElement('style');
-    style.textContent = buildPageStyle(settings.print);
+    style.textContent = SLIP_PAGE_CSS;
     document.head.appendChild(style);
     return () => style.remove();
-  }, [settings.print]);
+  }, []);
 
   useEffect(() => {
-    document.title = `${request.slipNumber} — receipt`;
+    document.title = `${request.slipNumber} — slip`;
   }, [request.slipNumber]);
 
   if (query.isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center gap-2 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
-        Loading receipt…
+        Loading slip…
       </div>
     );
   }
@@ -87,7 +92,7 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
     return (
       <div className="flex min-h-screen items-center justify-center p-8">
         <div className="max-w-sm text-center">
-          <h1 className="text-lg font-semibold">Receipt not found</h1>
+          <h1 className="text-lg font-semibold">Slip not found</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             No weighment for slip <span className="font-medium">{request.slipNumber}</span> on this
             weighbridge.
@@ -97,57 +102,52 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
     );
   }
 
-  const net = netWeightAllUnits(weighment.first_weight_kg, weighment.second_weight_kg);
+  const values = slipValues({ weighment });
+
+  const verifyUrl = buildReceiptUrl(settings.receipt_base_url, weighment.slip_number) ?? undefined;
 
   return (
-    <div className="min-h-screen bg-muted/40 py-6">
-      {/* Controls are print-hidden, so they never reach the paper. */}
-      <div className="receipt-soft-only mx-auto mb-4 flex max-w-[150mm] flex-wrap gap-2 px-4">
-        {/* Both in the brand orange the operator screens use for the action
-            that carries you forward. Print is solid because it is what this tab
-            was opened to do; the download is the same colour, outlined. */}
-        <Button variant="brand" onClick={() => window.print()}>
-          <Printer className="h-4 w-4" />
-          Print
-        </Button>
-        <Button
-          variant="outline"
-          className="border-brand text-brand hover:bg-brand/10 hover:text-brand"
-          asChild
-        >
-          <a href={receiptPdfUrl(weighment.slip_number)} download>
-            <Download className="h-4 w-4" />
-            Download PDF
-          </a>
-        </Button>
-        <Button variant="ghost" className="ml-auto" onClick={() => window.close()}>
-          <X className="h-4 w-4" />
-          Close
-        </Button>
+    <>
+      {/*
+       * The screen and the paper are siblings, not nested.
+       *
+       * Everything the operator looks at carries a page background, padding and
+       * a shadow. If the printed sheet sat inside that, the wrapper's grey
+       * would print behind it — the one thing an overprint must never do, since
+       * it would lay a grey rectangle over the pad's own design.
+       */}
+      <div className="min-h-screen bg-muted/40 py-6" data-slip-screen-only>
+        <div className="mx-auto mb-4 flex max-w-[150mm] flex-wrap gap-2 px-4">
+          <Button variant="brand" onClick={() => window.print()}>
+            <Printer className="h-4 w-4" />
+            Print
+          </Button>
+          <Button variant="ghost" className="ml-auto" onClick={() => window.close()}>
+            <X className="h-4 w-4" />
+            Close
+          </Button>
+        </div>
+
+        <div className="mx-auto w-[148mm] bg-white shadow-sm">
+          <SlipA5 view="soft" values={values} verifyUrl={verifyUrl} />
+        </div>
+
+        <p className="mx-auto mt-4 max-w-[150mm] px-4 text-center text-xs text-muted-foreground">
+          Only the values print — the design above is already on your pad. Settings → Print has the
+          alignment offsets if anything lands off its box.
+        </p>
       </div>
 
-      <div className="mx-auto max-w-[150mm] bg-white shadow-sm print:max-w-none print:shadow-none">
-        <Receipt
-          weighment={weighment}
-          net={net}
-          variant={request.variant}
-          company={{
-            name: settings.company_name,
-            address: settings.company_address,
-            phone: settings.company_phone,
-            email: settings.company_email,
-            // The bundled logo is the default; Settings can override it.
-            logoUrl: settings.company_logo_url || '/logo.png',
-          }}
-          receiptUrl={buildReceiptUrl(settings.receipt_base_url, weighment.slip_number)}
+      {/* What actually prints: the values, on bare paper. */}
+      <div data-slip-print-only>
+        <SlipA5
+          view="overprint"
+          values={values}
+          verifyUrl={verifyUrl}
+          offsetXmm={settings.print.offset_left_mm}
+          offsetYmm={settings.print.offset_top_mm}
         />
       </div>
-
-      <p className="receipt-soft-only mx-auto mt-4 max-w-[150mm] px-4 text-center text-xs text-muted-foreground">
-        Only the central block prints — the header and footer above come from your pre-printed pad.
-        Use <span className="font-medium">Download PDF</span> for a full copy with the header and
-        footer included.
-      </p>
-    </div>
+    </>
   );
 }

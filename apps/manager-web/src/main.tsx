@@ -5,6 +5,9 @@ import { Toaster } from '@suarza/ui';
 import { App } from './App.js';
 import { AuthProvider } from './components/auth-provider.js';
 import './index.css';
+/* The slip's four families, self-hosted — a reprint must look like the slip the
+   customer is holding, not like Arial. */
+import '@suarza/ui/slip-fonts.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

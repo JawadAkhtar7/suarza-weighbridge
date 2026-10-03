@@ -44,11 +44,8 @@ const configSchema = z.object({
       typeof v === 'boolean' ? v : ['1', 'true', 'yes', 'on'].includes(v.toLowerCase()),
     ),
 
-  COMPANY_NAME: z.string().default('Suarza International'),
-  COMPANY_ADDRESS: z.string().default('[PLACEHOLDER] Address line, City, Pakistan'),
-  COMPANY_PHONE: z.string().default('[PLACEHOLDER] +92 300 0000000'),
-  COMPANY_EMAIL: z.string().default(''),
-  COMPANY_LOGO_URL: z.string().default('/logo.png'),
+  /* No COMPANY_* here: the company's details are the same on every
+     deployment and live in code — see COMPANY in @suarza/shared. */
 
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 });

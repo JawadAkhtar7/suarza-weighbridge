@@ -16,7 +16,7 @@ const company = {
 const base = (overrides: Partial<Weighment> = {}): Weighment =>
   ({
     id: '11111111-1111-4111-8111-111111111111',
-    slip_number: 'SI-000123',
+    slip_number: '2026123',
     status: 'OPEN',
     station_id: 'A',
     customer_name: 'Ali Raza',
@@ -87,7 +87,7 @@ describe('soft and hard forms', () => {
 
     expect(block).not.toBeNull();
     // The figures the receipt exists for must survive the header being hidden.
-    for (const text of ['SI-000123', 'Ali Raza', '12,000 kg', 'Rs 300']) {
+    for (const text of ['2026123', 'Ali Raza', '12,000 kg', 'Rs 300']) {
       expect(block!.textContent).toContain(text);
     }
   });
@@ -102,7 +102,7 @@ describe('soft and hard forms', () => {
 describe('receipt 1 — after the first weight', () => {
   it('shows the details, the first weight and the slip number', () => {
     renderReceipt(base(), 'FIRST');
-    expect(screen.getByText('SI-000123')).toBeInTheDocument();
+    expect(screen.getByText('2026123')).toBeInTheDocument();
     expect(screen.getByText('8,000 kg')).toBeInTheDocument();
     expect(screen.getByText(/pending second weighing/i)).toBeInTheDocument();
   });
@@ -160,7 +160,7 @@ describe('QR code', () => {
     const { container } = renderReceipt(
       completed(),
       'SECOND',
-      'https://wb.example.com/r/SI-000123',
+      'https://wb.example.com/r/2026123',
     );
     expect(container.querySelector('svg.receipt-qr')).not.toBeNull();
     expect(screen.getByText(/scan to verify/i)).toBeInTheDocument();
@@ -170,7 +170,7 @@ describe('QR code', () => {
     // No QR decoder here, so the proof is by construction: the receipt's QR
     // must be byte-identical to one rendered directly from the same string,
     // and must differ for a different slip.
-    const url = 'https://wb.example.com/r/SI-000123';
+    const url = 'https://wb.example.com/r/2026123';
     // Scoped to the QR: the receipt also renders lucide icons, which are <svg>
     // too, and an icon's path would compare equal between any two receipts.
     const pathOf = (root: HTMLElement) =>
@@ -186,7 +186,7 @@ describe('QR code', () => {
     expect(receiptPath).toBe(pathOf(reference.container));
     reference.unmount();
 
-    const otherSlip = renderReceipt(completed(), 'SECOND', 'https://wb.example.com/r/SI-000999');
+    const otherSlip = renderReceipt(completed(), 'SECOND', 'https://wb.example.com/r/2026999');
     expect(pathOf(otherSlip.container)).not.toBe(receiptPath);
   });
 

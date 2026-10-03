@@ -45,7 +45,7 @@ async function seedRecords() {
   await ingest(
     [
       completedWeighment({
-        slip_number: 'SI-000001',
+        slip_number: '20261',
         customer_name: 'Ali Raza',
         customer_company: 'Raza Traders',
         vehicle_type: 'truck',
@@ -54,7 +54,7 @@ async function seedRecords() {
         first_weight_at: '2026-09-10T06:00:00.000Z',
       }),
       completedWeighment({
-        slip_number: 'SI-000002',
+        slip_number: '20262',
         customer_name: 'Bilal Khan',
         customer_company: 'Khan Brothers',
         vehicle_type: 'container',
@@ -63,7 +63,7 @@ async function seedRecords() {
         first_weight_at: '2026-09-11T06:00:00.000Z',
       }),
       completedWeighment({
-        slip_number: 'SI-000003',
+        slip_number: '20263',
         customer_name: 'Ali Raza',
         customer_company: 'Raza Traders',
         vehicle_type: 'truck',
@@ -72,7 +72,7 @@ async function seedRecords() {
         first_weight_at: '2026-09-12T06:00:00.000Z',
       }),
       weighment({
-        slip_number: 'SI-000004',
+        slip_number: '20264',
         customer_name: 'Open Ticket',
         customer_company: 'Pending Co',
         vehicle_type: 'dumper',
@@ -80,7 +80,7 @@ async function seedRecords() {
         first_weight_at: '2026-09-13T06:00:00.000Z',
       }),
       weighment({
-        slip_number: 'SI-000005',
+        slip_number: '20265',
         status: 'VOID',
         customer_name: 'Abandoned',
         customer_company: 'Gone Co',
@@ -101,7 +101,7 @@ describe('GET /weighments', () => {
   it('returns every record, newest event first', async () => {
     const { body } = await authed('/weighments');
     expect(body.total).toBe(5);
-    expect(body.rows[0].slip_number).toBe('SI-000005');
+    expect(body.rows[0].slip_number).toBe('20265');
   });
 
   it('paginates', async () => {
@@ -125,7 +125,7 @@ describe('GET /weighments', () => {
   it('filters by company', async () => {
     const { body } = await authed('/weighments?customer_company=Khan');
     expect(body.total).toBe(1);
-    expect(body.rows[0].slip_number).toBe('SI-000002');
+    expect(body.rows[0].slip_number).toBe('20262');
   });
 
   it('filters by vehicle type', async () => {
@@ -145,8 +145,8 @@ describe('GET /weighments', () => {
     );
     expect(body.total).toBe(2);
     expect(body.rows.map((r: { slip_number: string }) => r.slip_number).sort()).toEqual([
-      'SI-000002',
-      'SI-000003',
+      '20262',
+      '20263',
     ]);
   });
 
@@ -164,13 +164,13 @@ describe('GET /weighments/:slip', () => {
   beforeEach(seedRecords);
 
   it('returns one record', async () => {
-    const { body } = await authed('/weighments/SI-000002');
+    const { body } = await authed('/weighments/20262');
     expect(body.weighment.customer_name).toBe('Bilal Khan');
     expect(body.weighment.net_weight_kg).toBe(18_000);
   });
 
   it('404s an unknown slip', async () => {
-    const response = await authed('/weighments/SI-999999');
+    const response = await authed('/weighments/2026999999');
     expect(response.status).toBe(404);
     expect(response.body.error.code).toBe('NOT_FOUND');
   });

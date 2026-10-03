@@ -68,7 +68,7 @@ export interface IngestResult extends IngestResponse {
 }
 
 /**
- * Records what the station says its company details are.
+ * Records what the station tells us about itself — these days, its paper size.
  *
  * Guarded on the station's own edit time: batches can arrive out of order after
  * an outage, and an old one must not undo a correction made since.
@@ -78,11 +78,6 @@ async function storeStationProfile(station: StationProfile): Promise<void> {
     { _id: station.station_id, updated_at: { $lte: new Date(station.updated_at) } },
     {
       $set: {
-        company_name: station.company_name,
-        company_address: station.company_address,
-        company_phone: station.company_phone,
-        company_email: station.company_email,
-        company_logo_url: station.company_logo_url,
         paper_size: station.paper_size,
         updated_at: new Date(station.updated_at),
         synced_at: new Date(),
@@ -97,11 +92,6 @@ async function storeStationProfile(station: StationProfile): Promise<void> {
     { _id: station.station_id },
     {
       $setOnInsert: {
-        company_name: station.company_name,
-        company_address: station.company_address,
-        company_phone: station.company_phone,
-        company_email: station.company_email,
-        company_logo_url: station.company_logo_url,
         paper_size: station.paper_size,
         updated_at: new Date(station.updated_at),
         synced_at: new Date(),

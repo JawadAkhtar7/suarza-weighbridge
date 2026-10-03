@@ -78,7 +78,7 @@ export function weighment(overrides: Partial<Weighment> = {}): Weighment {
   const at = overrides.first_weight_at ?? '2026-09-14T09:00:00.000Z';
   return {
     id: newId(),
-    slip_number: 'SI-000001',
+    slip_number: '20261',
     status: 'OPEN',
     station_id: 'A',
     customer_name: 'Ali Raza',

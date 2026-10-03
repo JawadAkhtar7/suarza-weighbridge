@@ -13,21 +13,17 @@ import { WEIGHMENT_STATUSES, USER_ROLES } from '../constants/domain.js';
  * so re-sending a batch after a timeout is safe by construction (brief §7.4).
  */
 /**
- * The company details printed on a receipt, as the station knows them.
+ * What the cloud needs to know about a station.
  *
- * They travel with every ingest because the agent is where an operator edits
- * them (Settings) and the cloud is where the customer reads them (the QR page
- * and the PDF behind it). Configuring the same address in two places is how a
- * printed slip and the page behind its own QR code end up disagreeing.
+ * The company's name, address and phone used to travel here too, because the
+ * operator could edit them on the weighbridge and the customer read them on the
+ * QR page. They are now in code (COMPANY in @suarza/shared), identical on both
+ * ends by construction, so there is nothing left to carry. An older agent that
+ * still sends them is harmless: zod drops what the schema does not name.
  */
 export const stationProfileSchema = z.object({
   station_id: z.string().min(1).max(16),
-  company_name: z.string().max(200),
-  company_address: z.string().max(400),
-  company_phone: z.string().max(100),
-  company_email: z.string().max(200).default(''),
-  company_logo_url: z.string().max(500).default(''),
-  /** What this station prints on, so a downloaded PDF matches its paper. */
+  /** What this station prints on. */
   paper_size: z.enum(['A4', 'A5', 'LETTER']).default('A5'),
   /** When the station last changed them, so a stale batch cannot overwrite. */
   updated_at: z.string().datetime({ offset: true }),

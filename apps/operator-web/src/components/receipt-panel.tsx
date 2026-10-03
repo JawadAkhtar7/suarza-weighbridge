@@ -13,16 +13,17 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Receipt, toast } from '@suarza/ui';
-import type { NetWeight, Weighment } from '@suarza/shared';
-import { Download, Printer } from 'lucide-react';
+import { Button, Card, CardContent, CardHeader, CardTitle, SlipA5, slipValues, toast } from '@suarza/ui';
+import type { Weighment } from '@suarza/shared';
+import { Printer } from 'lucide-react';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
 import { buildReceiptUrl } from '../lib/receipt-settings.js';
-import { printPageUrl, receiptPdfUrl } from '../lib/api.js';
+import { printPageUrl } from '../lib/api.js';
 
 interface ReceiptPanelProps {
   weighment: Weighment;
-  net: NetWeight;
+  /* No `net`: the slip works it out from the two weights, so a caller cannot
+     hand it a net weight that disagrees with the record it is printing. */
   variant: 'FIRST' | 'SECOND';
   /**
    * Overrides the "Receipt 1 / 2" heading. The numbering counts visits, so it
@@ -33,13 +34,7 @@ interface ReceiptPanelProps {
   autoPrint?: boolean;
 }
 
-export function ReceiptPanel({
-  weighment,
-  net,
-  variant,
-  title,
-  autoPrint = false,
-}: ReceiptPanelProps) {
+export function ReceiptPanel({ weighment, variant, title, autoPrint = false }: ReceiptPanelProps) {
   const { settings } = useReceiptSettings();
   const autoOpenedFor = useRef<string | null>(null);
 
@@ -82,40 +77,21 @@ export function ReceiptPanel({
             <Printer />
             Print
           </Button>
-          <Button variant="outline" asChild>
-            {/* A plain link: the browser's own download handling streams the
-                file straight from the agent, so it works with no internet. */}
-            <a href={receiptPdfUrl(weighment.slip_number)} download>
-              <Download />
-              Download PDF
-            </a>
-          </Button>
+
         </div>
       </CardHeader>
 
       <CardContent>
         <div className="overflow-x-auto rounded-md border bg-muted/40 p-4">
-          <Receipt
-            weighment={weighment}
-            net={net}
-            variant={variant}
-            company={{
-              name: settings.company_name,
-              address: settings.company_address,
-              phone: settings.company_phone,
-              email: settings.company_email,
-              // The bundled logo is the default; Settings can override it.
-            logoUrl: settings.company_logo_url || '/logo.png',
-            }}
-            receiptUrl={receiptUrl}
-          />
+          {/* The same slip the print tab renders and the QR page serves, scaled
+              to fit the card. One rendering, so a preview cannot promise
+              something the paper does not deliver. */}
+          <SlipA5 view="soft" values={slipValues({ weighment })} verifyUrl={receiptUrl ?? undefined} />
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground">
-          <span className="font-medium">Print</span> opens the receipt in a new tab and sends only
-          the central block to the printer — the header and footer come from your pre-printed pad.
-          <span className="font-medium"> Download PDF</span> saves the full receipt, header and
-          footer included.
+          <span className="font-medium">Print</span> opens the slip in a new tab and sends only the
+          values to the printer — the design comes from your pre-printed pad.
           {!receiptUrl && ' Set the receipt web address in Settings to print a QR code.'}
         </p>
       </CardContent>

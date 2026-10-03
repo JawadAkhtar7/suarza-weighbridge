@@ -295,48 +295,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             <section className="space-y-3">
               <h3 className="text-sm font-semibold">Receipt details</h3>
               <p className="text-xs text-muted-foreground">
-                These appear on screen, in the PDF, and on the QR code page. Printed slips use your
-                pre-printed pad instead.
+                The company name, address, phone and website are fixed in the software and are the
+                same on every slip, so there is nothing to set here. If they ever change, we push an
+                update and you press <span className="font-medium">Update Weighbridge</span>.
               </p>
-
-              <div className="space-y-2">
-                <Label htmlFor="company-name">Company name</Label>
-                <Input
-                  id="company-name"
-                  value={draft.company_name}
-                  onChange={(event) => setDraft({ ...draft, company_name: event.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="company-address">Address</Label>
-                <Input
-                  id="company-address"
-                  value={draft.company_address}
-                  onChange={(event) => setDraft({ ...draft, company_address: event.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="company-phone">Phone</Label>
-                <Input
-                  id="company-phone"
-                  value={draft.company_phone}
-                  onChange={(event) => setDraft({ ...draft, company_phone: event.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="company-email">
-                  Email <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-                </Label>
-                <Input
-                  id="company-email"
-                  value={draft.company_email}
-                  placeholder="info@suarza.com"
-                  onChange={(event) => setDraft({ ...draft, company_email: event.target.value })}
-                />
-              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="receipt-base">Receipt web address</Label>
@@ -347,7 +309,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   onChange={(event) => setDraft({ ...draft, receipt_base_url: event.target.value })}
                 />
                 <p className="text-xs text-muted-foreground">
-                  The QR code points at <code>{draft.receipt_base_url || '…'}/r/SI-000123</code>.
+                  The QR code points at <code>{draft.receipt_base_url || '…'}/r/2026123</code>.
                   Leave it as it is unless the receipt page is served from a different address than
                   the cloud server — this defaults to the cloud the station already syncs to.
                 </p>

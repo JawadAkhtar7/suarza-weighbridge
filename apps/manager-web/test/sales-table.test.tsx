@@ -27,7 +27,7 @@ function setup(overrides: Partial<Parameters<typeof SalesTable>[0]> = {}) {
 describe('rows', () => {
   it('shows the slip, customer, vehicle, net weight and amount', () => {
     setup();
-    expect(screen.getByText('SI-000001')).toBeInTheDocument();
+    expect(screen.getByText('20261')).toBeInTheDocument();
     expect(screen.getByText('Ali Raza')).toBeInTheDocument();
     expect(screen.getByText('Raza Traders')).toBeInTheDocument();
     expect(screen.getByText('LES-1234')).toBeInTheDocument();
@@ -51,8 +51,8 @@ describe('rows', () => {
 
   it('opens the receipt when a row is clicked', async () => {
     const { onSelect, user } = setup();
-    await user.click(screen.getByText('SI-000001'));
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ slip_number: 'SI-000001' }));
+    await user.click(screen.getByText('20261'));
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ slip_number: '20261' }));
   });
 
   it('says so plainly when nothing matches', () => {
@@ -125,7 +125,7 @@ describe('on a phone', () => {
     setup();
 
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
-    expect(screen.getByText('SI-000001')).toBeInTheDocument();
+    expect(screen.getByText('20261')).toBeInTheDocument();
     expect(screen.getByText('Ali Raza')).toBeInTheDocument();
     expect(screen.getByText('Rs 300')).toBeInTheDocument();
     expect(screen.getByText('COMPLETED')).toBeInTheDocument();
@@ -134,14 +134,14 @@ describe('on a phone', () => {
   it('renders each row exactly once, so a screen reader does not repeat them', () => {
     setViewport(false);
     setup();
-    expect(screen.getAllByText('SI-000001')).toHaveLength(1);
+    expect(screen.getAllByText('20261')).toHaveLength(1);
   });
 
   it('opens the receipt from a card', async () => {
     setViewport(false);
     const { onSelect, user } = setup();
-    await user.click(screen.getByText('SI-000001'));
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ slip_number: 'SI-000001' }));
+    await user.click(screen.getByText('20261'));
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ slip_number: '20261' }));
   });
 
   it('still paginates', () => {

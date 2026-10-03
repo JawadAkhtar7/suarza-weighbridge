@@ -91,7 +91,7 @@ describe('POST /weighments', () => {
     expect(response.statusCode).toBe(201);
 
     const { weighment, warnings } = response.json();
-    expect(weighment.slip_number).toBe('SI-000001');
+    expect(weighment.slip_number).toBe('20261');
     expect(weighment.status).toBe('OPEN');
     expect(weighment.net_weight_kg).toBe(0);
     expect(warnings).toEqual([]);
@@ -105,7 +105,7 @@ describe('POST /weighments', () => {
       status: string;
       first_weight_kg: number;
     };
-    expect(row).toEqual({ slip_number: 'SI-000001', status: 'OPEN', first_weight_kg: 8000 });
+    expect(row).toEqual({ slip_number: '20261', status: 'OPEN', first_weight_kg: 8000 });
   });
 
   it('saves a customer with no company — the column is NOT NULL, so this must land', async () => {
@@ -213,7 +213,7 @@ describe('GET /weighments/:slip', () => {
   it('fetches the record by slip number with net in all three units', async () => {
     await app.inject({ method: 'POST', url: '/weighments', payload: firstWeightBody() });
 
-    const response = await app.inject({ url: '/weighments/SI-000001' });
+    const response = await app.inject({ url: '/weighments/20261' });
     expect(response.statusCode).toBe(200);
 
     const body = response.json();
@@ -229,7 +229,7 @@ describe('GET /weighments/:slip', () => {
   });
 
   it('404s a slip that does not exist', async () => {
-    const response = await app.inject({ url: '/weighments/SI-999999' });
+    const response = await app.inject({ url: '/weighments/2026999999' });
     expect(response.statusCode).toBe(404);
     expect(response.json().error.code).toBe('SLIP_NOT_FOUND');
   });
@@ -241,7 +241,7 @@ describe('two-pass transaction over HTTP', () => {
 
     const response = await app.inject({
       method: 'PATCH',
-      url: '/weighments/SI-000001/complete',
+      url: '/weighments/20261/complete',
       payload: { second_weight_kg: 20_000, second_weight_src: 'SERIAL', amount_charged: 300 },
     });
 
@@ -256,7 +256,7 @@ describe('two-pass transaction over HTTP', () => {
     const complete = () =>
       app.inject({
         method: 'PATCH',
-        url: '/weighments/SI-000001/complete',
+        url: '/weighments/20261/complete',
         payload: { second_weight_kg: 20_000, amount_charged: 300 },
       });
 
@@ -273,7 +273,7 @@ describe('void and reprint', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/weighments/SI-000001/void',
+      url: '/weighments/20261/void',
       payload: { reason: 'Truck never returned' },
     });
 
@@ -285,7 +285,7 @@ describe('void and reprint', () => {
     await app.inject({ method: 'POST', url: '/weighments', payload: firstWeightBody() });
     const response = await app.inject({
       method: 'POST',
-      url: '/weighments/SI-000001/void',
+      url: '/weighments/20261/void',
       payload: { reason: '' },
     });
     expect(response.statusCode).toBe(400);
@@ -295,11 +295,11 @@ describe('void and reprint', () => {
     await app.inject({ method: 'POST', url: '/weighments', payload: firstWeightBody() });
     await app.inject({
       method: 'POST',
-      url: '/weighments/SI-000001/reprint',
+      url: '/weighments/20261/reprint',
       payload: { receipt: 'FIRST' },
     });
 
-    const trail = (await app.inject({ url: '/weighments/SI-000001/audit' })).json();
+    const trail = (await app.inject({ url: '/weighments/20261/audit' })).json();
     expect(trail.entries.map((e: { action: string }) => e.action)).toEqual([
       'CREATED',
       'REPRINTED',
@@ -346,34 +346,21 @@ describe('GET /customers', () => {
 });
 
 describe('GET /weighments/:slip/pdf', () => {
-  it('builds the receipt PDF here on the weighbridge PC', async () => {
-    // Built locally, not proxied to the cloud: the operator has to be able to
-    // hand a customer a PDF with the internet down.
+  it('sends the operator to the print tab, which is the slip', async () => {
+    // It used to build a PDF here with PDFKit. That could never match the paper
+    // slip - PDFKit cannot shape Arabic script, so it dropped every Urdu label
+    // the client's design is built on. The print tab renders the real slip, and
+    // the browser's own "Save as PDF" produces the file at A5.
     await app.inject({ method: 'POST', url: '/weighments', payload: firstWeightBody() });
 
-    const response = await app.inject({ url: '/weighments/SI-000001/pdf' });
+    const response = await app.inject({ url: '/weighments/20261/pdf' });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.headers['content-type']).toContain('application/pdf');
-    expect(response.headers['content-disposition']).toContain('SI-000001-receipt.pdf');
-    expect(response.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
-    expect(response.rawPayload.byteLength).toBeGreaterThan(1000);
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe('/print/20261');
   });
 
-  it('builds one for a completed weighing too', async () => {
-    await app.inject({ method: 'POST', url: '/weighments', payload: firstWeightBody() });
-    await app.inject({
-      method: 'PATCH',
-      url: '/weighments/SI-000001/complete',
-      payload: { second_weight_kg: 20_000, amount_charged: 300 },
-    });
-
-    const response = await app.inject({ url: '/weighments/SI-000001/pdf' });
-    expect(response.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
-  });
-
-  it('404s a slip that does not exist', async () => {
-    const response = await app.inject({ url: '/weighments/SI-999999/pdf' });
+  it('404s a slip that does not exist, rather than redirecting to a dead page', async () => {
+    const response = await app.inject({ url: '/weighments/2026999999/pdf' });
     expect(response.statusCode).toBe(404);
     expect(response.json().error.code).toBe('SLIP_NOT_FOUND');
   });

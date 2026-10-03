@@ -10,7 +10,7 @@ import { newId } from '../src/utils/id.js';
 
 const baseWeighment = () => ({
   id: newId(),
-  slip_number: 'SI-000001',
+  slip_number: '20261',
   status: 'OPEN' as const,
   station_id: 'A',
   customer_name: 'Ali Raza',

@@ -29,7 +29,7 @@ describe('createFirstWeight', () => {
   it('stores an OPEN ticket with a slip number and no net weight yet', () => {
     const { weighment } = service.createFirstWeight(firstWeightInput());
 
-    expect(weighment.slip_number).toBe('SI-000001');
+    expect(weighment.slip_number).toBe('20261');
     expect(weighment.status).toBe('OPEN');
     expect(weighment.second_weight_kg).toBeNull();
     expect(weighment.net_weight_kg).toBe(0);
@@ -48,14 +48,14 @@ describe('createFirstWeight', () => {
     const slips = [1, 2, 3].map(
       () => service.createFirstWeight(firstWeightInput()).weighment.slip_number,
     );
-    expect(slips).toEqual(['SI-000001', 'SI-000002', 'SI-000003']);
+    expect(slips).toEqual(['20261', '20262', '20263']);
   });
 
   it('records a CREATED audit entry', () => {
     const { weighment } = service.createFirstWeight(firstWeightInput());
     const trail = service.auditTrail(weighment.id);
     expect(trail.map((e) => e.action)).toEqual(['CREATED']);
-    expect(trail[0]?.detail).toMatchObject({ slip_number: 'SI-000001', first_weight_kg: 8000 });
+    expect(trail[0]?.detail).toMatchObject({ slip_number: '20261', first_weight_kg: 8000 });
   });
 
   it('flags a hand-typed first weight in its own audit entry', () => {
@@ -73,7 +73,7 @@ describe('createFirstWeight', () => {
     expect(second.weighment.status).toBe('OPEN');
     expect(second.warnings).toHaveLength(1);
     expect(second.warnings[0]?.code).toBe('DUPLICATE_OPEN_PLATE');
-    expect(second.warnings[0]?.details?.['slip_numbers']).toEqual(['SI-000001']);
+    expect(second.warnings[0]?.details?.['slip_numbers']).toEqual(['20261']);
   });
 
   it('does not warn when the earlier ticket for that plate is closed', () => {
@@ -209,12 +209,12 @@ describe('getBySlip', () => {
     const { weighment } = service.createFirstWeight(firstWeightInput());
     expect(service.getBySlip('si-000001').id).toBe(weighment.id);
     expect(service.getBySlip('1').id).toBe(weighment.id);
-    expect(service.getBySlip('  SI-000001 ').id).toBe(weighment.id);
+    expect(service.getBySlip('  20261 ').id).toBe(weighment.id);
   });
 
   it('reports a missing slip clearly', () => {
     try {
-      service.getBySlip('SI-999999');
+      service.getBySlip('2026999999');
       expect.unreachable('an unknown slip must throw');
     } catch (error) {
       expect((error as AppError).code).toBe('SLIP_NOT_FOUND');
@@ -292,7 +292,7 @@ describe('createCompleted — the whole weighing in one visit', () => {
     const { weighment } = service.createCompleted(oneVisit());
 
     expect(weighment.status).toBe('COMPLETED');
-    expect(weighment.slip_number).toBe('SI-000001');
+    expect(weighment.slip_number).toBe('20261');
     expect(weighment.net_weight_kg).toBe(8_000);
     expect(weighment.first_weight_src).toBe('MANUAL');
     expect(weighment.second_weight_src).toBe('SERIAL');

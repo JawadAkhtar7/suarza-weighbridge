@@ -110,7 +110,7 @@ describe('POST /ingest — idempotency', () => {
 
   it('accepts a batch of many records at once', async () => {
     const records = Array.from({ length: 25 }, (_, i) =>
-      weighment({ slip_number: `SI-${String(i + 1).padStart(6, '0')}` }),
+      weighment({ slip_number: `2026${i + 1}` }),
     );
     const response = await post({ station_id: 'A', weighments: records });
 

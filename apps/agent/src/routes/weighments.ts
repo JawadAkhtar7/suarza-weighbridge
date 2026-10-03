@@ -9,7 +9,6 @@ import {
   reprintWeighmentSchema,
   voidWeighmentSchema,
 } from '@suarza/shared';
-import { buildReceiptPdf, pdfFileName } from '@suarza/receipt-pdf';
 import type { AgentDeps } from '../server.js';
 import { parse } from './helpers.js';
 import { toDto } from '../db/weighments.js';
@@ -98,37 +97,23 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
   });
 
   /**
-   * The receipt as a PDF, built here on the weighbridge PC.
+   * The slip as a page, rendered here on the weighbridge PC.
    *
-   * Deliberately not proxied to the cloud: the operator must be able to hand a
-   * customer a PDF with the internet down, which is exactly when the cloud
-   * copy is unreachable.
+   * It was a PDF, drawn a second time by hand with PDFKit. That could never
+   * match the paper slip: PDFKit does not shape Arabic script, so it dropped
+   * every Urdu label the client's design is built on, and any change to the
+   * design had to be made twice. The print tab is now the one rendering, and
+   * "Save as PDF" in the browser produces the file at A5 exactly.
+   *
+   * Still served from the weighbridge and not proxied to the cloud: the
+   * operator must be able to hand a customer a copy with the internet down,
+   * which is exactly when the cloud copy is unreachable.
    */
-  app.get<{ Params: SlipParams }>('/weighments/:slip/pdf', async (request, reply) => {
+  app.get<{ Params: SlipParams }>('/weighments/:slip/pdf', (request, reply) => {
+    // Throws a 404 through the usual path if there is no such slip, so the
+    // redirect can never point at a page that will not load.
     const record = deps.service.getBySlip(request.params.slip);
-    const settings = deps.settings?.get();
-
-    const pdf = await buildReceiptPdf({
-      weighment: toDto(record),
-      company: {
-        name: settings?.company_name ?? 'Suarza International',
-        address: settings?.company_address ?? '',
-        phone: settings?.company_phone ?? '',
-        email: settings?.company_email ?? '',
-      },
-      receiptUrl: settings?.receipt_base_url
-        ? `${settings.receipt_base_url.replace(/\/+$/, '')}/r/${encodeURIComponent(record.slip_number)}`
-        : null,
-      // A custom paper size describes the pre-printed pad, not a sheet the PDF
-      // can be produced on, so it falls back to the size the slip is drawn at.
-      paperSize:
-        settings && settings.print.paper_size !== 'CUSTOM' ? settings.print.paper_size : 'A5',
-    });
-
-    return reply
-      .header('content-type', 'application/pdf')
-      .header('content-disposition', `attachment; filename="${pdfFileName(toDto(record))}"`)
-      .send(pdf);
+    return reply.redirect(`/print/${encodeURIComponent(record.slip_number)}`, 302);
   });
 
   // --- Pass 2 --------------------------------------------------------------

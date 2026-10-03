@@ -36,7 +36,7 @@ export function renderWithQuery(ui: ReactElement) {
 export function weighment(overrides: Record<string, unknown> = {}) {
   return {
     id: '11111111-1111-4111-8111-111111111111',
-    slip_number: 'SI-000001',
+    slip_number: '20261',
     status: 'OPEN',
     station_id: 'A',
     customer_name: 'Ali Raza',

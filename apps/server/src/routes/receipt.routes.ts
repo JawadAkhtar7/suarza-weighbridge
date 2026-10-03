@@ -11,35 +11,26 @@
  */
 
 import { Router, type Response } from 'express';
-import { normalizeSlipNumber } from '@suarza/shared';
+import { COMPANY, normalizeSlipNumber } from '@suarza/shared';
 import type { ServerConfig } from '../config.js';
 import { findBySlip } from '../services/weighment.service.js';
 import { renderNotFoundPage } from '../receipt/render-page.js';
-import { buildReceiptPdf, pdfFileName } from '@suarza/receipt-pdf';
-import { companyForStation, paperForStation } from '../services/station.service.js';
+import { renderSlipPage, slipValues } from '@suarza/ui';
 
 export function receiptRouter(config: ServerConfig): Router {
   const router = Router();
-
-  /** Used until the station that made the slip has told us its own details. */
-  const fallbackCompany = {
-    name: config.COMPANY_NAME,
-    address: config.COMPANY_ADDRESS,
-    phone: config.COMPANY_PHONE,
-    email: config.COMPANY_EMAIL,
-    // The bundled logo is the default; COMPANY_LOGO_URL overrides it.
-    logoUrl: config.COMPANY_LOGO_URL || '/logo.png',
-  };
 
   /**
    * A tighter CSP than the rest of the server runs, for the one page the whole
    * internet can open.
    *
-   * It became possible only when the print button went: the page now has no
-   * JavaScript at all, so it can say so. `script-src 'none'` means that even if
-   * something were ever injected into this markup, there is nothing to execute
-   * it. The allowances that remain are exactly what the page uses — its inline
-   * stylesheet, the logo, and the QR as a data URI.
+   * The page still has no JavaScript at all, so it can say so. `script-src
+   * 'none'` means that even if something were ever injected into this markup,
+   * there is nothing to execute it.
+   *
+   * It needs nothing from the network either: the slip's artwork and its four
+   * font families travel inside the document as data URIs, which is why
+   * `img-src` and `font-src` allow `data:` and nothing else allows anything.
    */
   const lockDown = (res: Response) =>
     res.setHeader(
@@ -47,6 +38,7 @@ export function receiptRouter(config: ServerConfig): Router {
       [
         "default-src 'none'",
         "img-src 'self' data:",
+        "font-src data:",
         "style-src 'unsafe-inline'",
         "base-uri 'none'",
         "form-action 'none'",
@@ -58,11 +50,14 @@ export function receiptRouter(config: ServerConfig): Router {
     `${config.APP_DOMAIN.replace(/\/+$/, '')}/r/${encodeURIComponent(slip)}`;
 
   /**
-   * What a scanned QR code leads to: the PDF itself.
+   * What a scanned QR code leads to: the slip itself, as a page.
    *
-   * A redirect rather than a page with a download button. The driver scanned a
-   * code to get their receipt, and a page in between was a step that only ever
-   * had one thing on it worth pressing.
+   * It used to redirect to a generated PDF. That PDF was drawn a second time by
+   * hand with PDFKit, which cannot shape Arabic script — so it silently dropped
+   * every Urdu label the client's design is built on, and it could never be
+   * made to match the paper slip. This page IS the slip: the same component,
+   * the same coordinates, the same artwork. Anyone who wants a file uses their
+   * browser's "Save as PDF", which at A5 produces it exactly.
    */
   router.get('/r/:slip', async (req, res) => {
     const slip = normalizeSlipNumber(req.params.slip);
@@ -77,44 +72,38 @@ export function receiptRouter(config: ServerConfig): Router {
         .status(404)
         .type('html')
         .set('Cache-Control', 'no-store')
-        .send(renderNotFoundPage(slip || req.params.slip, fallbackCompany.name));
+        .send(renderNotFoundPage(slip || req.params.slip, COMPANY.name));
       return;
     }
 
-    // 302, not 301: a slip corrected in the cloud must not keep being served
-    // from a redirect a phone cached permanently.
-    res
-      .set('Cache-Control', 'no-store')
-      .redirect(302, `/r/${encodeURIComponent(weighment.slip_number)}/pdf`);
-  });
-
-  router.get('/r/:slip/pdf', async (req, res) => {
-    const slip = normalizeSlipNumber(req.params.slip);
-    const weighment = slip ? await findBySlip(slip) : null;
-
-    if (!weighment) {
-      lockDown(res);
-      res
-        .status(404)
-        .type('html')
-        .send(renderNotFoundPage(slip || req.params.slip, fallbackCompany.name));
-      return;
-    }
-
-    const pdf = await buildReceiptPdf({
-      weighment,
-      company: await companyForStation(weighment.station_id, fallbackCompany),
-      receiptUrl: pageUrl(weighment.slip_number),
-      paperSize: await paperForStation(weighment.station_id),
-    });
-
+    lockDown(res);
     res
       .status(200)
-      .type('application/pdf')
-      .set('Content-Disposition', `attachment; filename="${pdfFileName(weighment)}"`)
-      .set('Content-Length', String(pdf.byteLength))
+      .type('html')
+      /* Never cached: a slip can be corrected in the cloud, and a phone holding
+         yesterday's copy of it is the one thing this page must not do. */
       .set('Cache-Control', 'no-store')
-      .send(pdf);
+      .send(
+        renderSlipPage({
+          view: 'soft',
+          title: `${weighment.slip_number} — Weight Bridge Slip`,
+          values: slipValues({ weighment }),
+          verifyUrl: pageUrl(weighment.slip_number),
+        }),
+      );
+  });
+
+  /**
+   * The old PDF address, kept working.
+   *
+   * Every slip printed before today carries a QR that leads to `/r/:slip`, and
+   * some of those were served as a redirect to this path — a phone that cached
+   * it must still land somewhere useful rather than on a 404.
+   */
+  router.get('/r/:slip/pdf', (req, res) => {
+    res
+      .set('Cache-Control', 'no-store')
+      .redirect(302, `/r/${encodeURIComponent(req.params.slip)}`);
   });
 
   return router;

@@ -13,8 +13,8 @@
  * cannot be automated — hence this script, run by hand, printing both records
  * side by side and changing nothing until asked.
  *
- *   pnpm --filter @suarza/server resolve-conflict SI-000001
- *   pnpm --filter @suarza/server resolve-conflict SI-000001 --delete-cloud
+ *   pnpm --filter @suarza/server resolve-conflict 20261
+ *   pnpm --filter @suarza/server resolve-conflict 20261 --delete-cloud
  *
  * The local record always wins, because the brief makes the agent the source of
  * truth: the cloud copy is a replica, and the weighbridge PC holds the one that

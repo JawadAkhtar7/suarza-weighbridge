@@ -16,7 +16,9 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "dev:web": "turbo run dev --filter=@suarza/operator-web --filter=@suarza/manager-web",
-    "dev:api": "turbo run dev --filter=@suarza/agent --filter=@suarza/server"
+    "dev:api": "turbo run dev --filter=@suarza/agent --filter=@suarza/server",
+    "slip:render": "apps/agent/node_modules/.bin/tsx scripts/render-slip.mjs",
+    "slip:art": "node scripts/build-slip-art.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",

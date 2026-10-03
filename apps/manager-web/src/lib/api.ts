@@ -193,11 +193,10 @@ export interface LedgerCustomerPage {
   page_size: number;
 }
 
-/** Where the server streams the on-the-fly PDF from (brief §8). */
-export function receiptPdfUrl(slipNumber: string): string {
-  return `/r/${encodeURIComponent(slipNumber)}/pdf`;
-}
-
+/**
+ * The public slip page. There is no generated PDF any more — the page is the
+ * slip, and a browser's "Save as PDF" produces the file at A5.
+ */
 export function receiptPageUrl(slipNumber: string): string {
   return `/r/${encodeURIComponent(slipNumber)}`;
 }

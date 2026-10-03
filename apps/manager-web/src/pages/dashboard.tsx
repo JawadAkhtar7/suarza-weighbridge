@@ -21,14 +21,6 @@ import { WeighmentDetail } from '../components/weighment-detail.js';
 
 const PAGE_SIZE = 25;
 
-/** `[PLACEHOLDER]` until the client supplies the real details (brief §14). */
-const COMPANY = {
-  name: 'Suarza International',
-  address: '[PLACEHOLDER] Address line, City, Pakistan',
-  phone: '[PLACEHOLDER] +92 300 0000000',
-  logoUrl: '/logo.png',
-};
-
 export function Dashboard() {
   const [filters, setFilters] = useState<DashboardFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
@@ -78,7 +70,6 @@ export function Dashboard() {
       <WeighmentDetail
         weighment={selected}
         onClose={() => setSelected(null)}
-        company={COMPANY}
         receiptBaseUrl={window.location.origin}
       />
     </div>
