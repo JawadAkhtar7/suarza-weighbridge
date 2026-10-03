@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { CLOUD_API_KEY, CLOUD_API_URL, cloudSettings } from '../src/deployment.js';
+import { CLOUD_API_KEY, CLOUD_API_URL, CLOUD_DISABLED, cloudSettings } from '../src/deployment.js';
 
 describe('cloudSettings', () => {
   it('uses the values in the code when the environment says nothing', () => {
@@ -30,6 +30,24 @@ describe('cloudSettings', () => {
     expect(cloudSettings({ CLOUD_API_URL: '   ', CLOUD_API_KEY: '' })).toEqual({
       url: CLOUD_API_URL,
       apiKey: CLOUD_API_KEY,
+    });
+  });
+
+  it('switches sync off only when somebody says so in as many words', () => {
+    /*
+     * The preview droplet runs an operator app for checking slip layouts, and
+     * its practice weighings must not land in the real records. That needs a
+     * value nobody arrives at by accident - hence a word rather than a blank,
+     * which the test above pins to the opposite behaviour.
+     */
+    expect(cloudSettings({ CLOUD_API_URL: CLOUD_DISABLED })).toEqual({ url: '', apiKey: '' });
+    expect(cloudSettings({ CLOUD_API_URL: ' NONE ' })).toEqual({ url: '', apiKey: '' });
+  });
+
+  it('drops the key as well, so nothing can sync with a stale one', () => {
+    expect(cloudSettings({ CLOUD_API_URL: 'none', CLOUD_API_KEY: 'left-over' })).toEqual({
+      url: '',
+      apiKey: '',
     });
   });
 

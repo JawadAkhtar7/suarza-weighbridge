@@ -13,10 +13,10 @@
  */
 
 /** The cloud API. Empty disables sync entirely and records simply queue. */
-export const CLOUD_API_URL = 'https://suarza-weighbridge-api.onrender.com';
+export const CLOUD_API_URL = 'https://manager.147-182-184-238.sslip.io';
 
 /** Must match INGEST_API_KEY on the cloud server, or every sync is rejected. */
-export const CLOUD_API_KEY = 'CHANGE-ME-BEFORE-THE-CLOUD-GOES-LIVE';
+export const CLOUD_API_KEY = '26748deb31e29caa7f93d5a6f981b39f0c387d62310b46c0';
 
 /**
  * Development override.
@@ -26,12 +26,33 @@ export const CLOUD_API_KEY = 'CHANGE-ME-BEFORE-THE-CLOUD-GOES-LIVE';
  * and therefore without localhost being pushed to the weighbridge by accident.
  * The operator PC has no such entries, so the values above are what it uses.
  */
+/**
+ * The value that switches sync off.
+ *
+ * A word, not an empty string, and that is the whole point. Blank entries
+ * must keep falling through to the constants above: a `.env` copied from the
+ * example with its lines emptied out would otherwise disable sync on the
+ * weighbridge PC silently, and nobody would notice until a month of records
+ * had piled up locally. Switching sync off has to be something somebody
+ * typed on purpose.
+ */
+export const CLOUD_DISABLED = 'none';
+
 export function cloudSettings(env: NodeJS.ProcessEnv = process.env): {
   url: string;
   apiKey: string;
 } {
+  const url = env['CLOUD_API_URL']?.trim();
+
+  // The preview droplet runs a second operator app purely to check slip
+  // layouts. Its practice weighings must never reach the real records, so it
+  // sets CLOUD_API_URL=none and syncs nowhere.
+  if (url?.toLowerCase() === CLOUD_DISABLED) {
+    return { url: '', apiKey: '' };
+  }
+
   return {
-    url: env['CLOUD_API_URL']?.trim() || CLOUD_API_URL,
+    url: url || CLOUD_API_URL,
     apiKey: env['CLOUD_API_KEY']?.trim() || CLOUD_API_KEY,
   };
 }
