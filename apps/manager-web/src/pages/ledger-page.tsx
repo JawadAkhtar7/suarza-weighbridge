@@ -22,16 +22,16 @@ import {
   TableRow,
   cn,
 } from '@suarza/ui';
-import { LEDGER_URDU, balanceState, formatPKR, type LedgerQuery } from '@suarza/shared';
+import { balanceState, formatPKR, type LedgerQuery } from '@suarza/shared';
 import { Search } from 'lucide-react';
 import { api } from '../lib/api.js';
-import { CustomerId, Urdu } from '../components/ledger-bits.js';
+import { CustomerId } from '../components/ledger-bits.js';
 
-const STATUS_TABS: { key: LedgerQuery['status']; label: string; urdu: string }[] = [
-  { key: 'all', label: 'All', urdu: LEDGER_URDU.all },
-  { key: 'owing', label: 'Debit', urdu: LEDGER_URDU.owes },
-  { key: 'credit', label: 'Credit', urdu: LEDGER_URDU.inCredit },
-  { key: 'settled', label: 'Settled', urdu: LEDGER_URDU.settled },
+const STATUS_TABS: { key: LedgerQuery['status']; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'owing', label: 'Debit' },
+  { key: 'credit', label: 'Credit' },
+  { key: 'settled', label: 'Settled' },
 ];
 
 /** Rs 1,200 — never a bare negative number, which reads as an error. */
@@ -41,7 +41,6 @@ function BalanceCell({ balance }: { balance: number }) {
     return (
       <span className="text-muted-foreground">
         Settled
-        <Urdu className="block">{LEDGER_URDU.settled}</Urdu>
       </span>
     );
   }
@@ -51,9 +50,6 @@ function BalanceCell({ balance }: { balance: number }) {
       {formatPKR(Math.abs(balance))}
       <span className="block text-xs font-normal text-muted-foreground">
         {state === 'owing' ? 'debit' : 'credit'}
-        <Urdu className="ml-1">
-          {state === 'owing' ? LEDGER_URDU.owes : LEDGER_URDU.inCredit}
-        </Urdu>
       </span>
     </span>
   );
@@ -75,7 +71,6 @@ export function LedgerPage() {
       <div>
         <h1 className="flex items-baseline gap-2 text-xl font-semibold">
           Ledger
-          <Urdu className="text-lg">{LEDGER_URDU.ledger}</Urdu>
         </h1>
         <p className="text-sm text-muted-foreground">
           Each customer&rsquo;s debit and credit.
@@ -90,7 +85,6 @@ export function LedgerPage() {
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">
               Total debit
-              <Urdu className="ml-2">{LEDGER_URDU.totalOwed}</Urdu>
             </p>
             {summary.isLoading ? (
               <Skeleton className="mt-2 h-8 w-32" />
@@ -110,7 +104,6 @@ export function LedgerPage() {
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">
               Total credit
-              <Urdu className="ml-2">{LEDGER_URDU.heldInAdvance}</Urdu>
             </p>
             {summary.isLoading ? (
               <Skeleton className="mt-2 h-8 w-32" />
@@ -155,7 +148,6 @@ export function LedgerPage() {
                   )}
                 >
                   {tab.label}
-                  <Urdu className="ml-1.5">{tab.urdu}</Urdu>
                 </button>
               ))}
             </div>
@@ -174,23 +166,18 @@ export function LedgerPage() {
                   <TableRow>
                     <TableHead>
                       ID
-                      <Urdu className="ml-1.5">{LEDGER_URDU.id}</Urdu>
                     </TableHead>
                     <TableHead>
                       Customer
-                      <Urdu className="ml-1.5">{LEDGER_URDU.customer}</Urdu>
                     </TableHead>
                     <TableHead className="text-right">
                       Charged
-                      <Urdu className="ml-1.5">{LEDGER_URDU.charged}</Urdu>
                     </TableHead>
                     <TableHead className="text-right">
                       Paid
-                      <Urdu className="ml-1.5">{LEDGER_URDU.paid}</Urdu>
                     </TableHead>
                     <TableHead className="text-right">
                       Balance
-                      <Urdu className="ml-1.5">{LEDGER_URDU.balance}</Urdu>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -231,7 +218,6 @@ export function LedgerPage() {
                 {search || status !== 'all'
                   ? 'Nothing matches that search.'
                   : 'Accounts appear as customers are weighed.'}
-                <Urdu className="ml-1">{LEDGER_URDU.nothingYet}</Urdu>
               </p>
             </div>
           )}

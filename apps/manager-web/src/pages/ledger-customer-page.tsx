@@ -38,8 +38,6 @@ import {
 } from '@suarza/ui';
 import {
   LEDGER_KIND_LABELS,
-  LEDGER_KIND_URDU,
-  LEDGER_URDU,
   balanceLabel,
   balanceState,
   formatDateTimePkt,
@@ -49,7 +47,7 @@ import {
 } from '@suarza/shared';
 import { ArrowLeft, Ban, Banknote, Download, SlidersHorizontal } from 'lucide-react';
 import { api, ApiError } from '../lib/api.js';
-import { CustomerId, Urdu } from '../components/ledger-bits.js';
+import { CustomerId } from '../components/ledger-bits.js';
 
 /**
  * The one dialog for both manual entries.
@@ -110,9 +108,6 @@ function EntryDialog({
         <DialogHeader>
           <DialogTitle className="flex items-baseline gap-2">
             {isPayment ? 'Record a payment' : 'Add an adjustment'}
-            <Urdu className="text-sm">
-              {isPayment ? LEDGER_URDU.recordPayment : LEDGER_URDU.adjustment}
-            </Urdu>
           </DialogTitle>
         </DialogHeader>
 
@@ -127,7 +122,6 @@ function EntryDialog({
             <div className="space-y-2">
               <Label className="flex items-baseline gap-2">
                 Which way?
-                <Urdu>{LEDGER_URDU.debit} / {LEDGER_URDU.credit}</Urdu>
               </Label>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -140,7 +134,6 @@ function EntryDialog({
                 >
                   <span className="font-semibold">Debit</span>
                   <span className="block text-xs text-muted-foreground">Adds to their debit</span>
-                  <Urdu className="block">{LEDGER_URDU.customerOwesMore}</Urdu>
                 </button>
                 <button
                   type="button"
@@ -152,7 +145,6 @@ function EntryDialog({
                 >
                   <span className="font-semibold">Credit</span>
                   <span className="block text-xs text-muted-foreground">Reduces their debit</span>
-                  <Urdu className="block">{LEDGER_URDU.customerOwesLess}</Urdu>
                 </button>
               </div>
             </div>
@@ -161,7 +153,6 @@ function EntryDialog({
           <div className="space-y-2">
             <Label htmlFor="entry-amount" className="flex items-baseline gap-2">
               Amount (Rs)
-              <Urdu>{LEDGER_URDU.amount}</Urdu>
             </Label>
             <NumberInput
               id="entry-amount"
@@ -176,7 +167,6 @@ function EntryDialog({
           <div className="space-y-2">
             <Label htmlFor="entry-note" className="flex items-baseline gap-2">
               Note <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-              <Urdu>{LEDGER_URDU.note}</Urdu>
             </Label>
             <Textarea
               id="entry-note"
@@ -233,7 +223,6 @@ function VoidDialog({
         <DialogHeader>
           <DialogTitle className="flex items-baseline gap-2">
             Void this entry
-            <Urdu className="text-sm">{LEDGER_URDU.void}</Urdu>
           </DialogTitle>
         </DialogHeader>
 
@@ -252,7 +241,6 @@ function VoidDialog({
         <div className="space-y-2">
           <Label htmlFor="void-reason" className="flex items-baseline gap-2">
             Reason
-            <Urdu>{LEDGER_URDU.reason}</Urdu>
           </Label>
           <Input
             id="void-reason"
@@ -353,7 +341,7 @@ export function LedgerCustomerPage() {
             </p>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="flex items-baseline gap-1">
-                ID <Urdu>{LEDGER_URDU.id}</Urdu>
+                ID 
                 <CustomerId id={customer.id} className="text-foreground" />
               </span>
             </p>
@@ -362,13 +350,6 @@ export function LedgerCustomerPage() {
           <div className="text-right">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               {balanceLabel(customer.balance_pkr)}
-              <Urdu className="ml-1.5">
-                {state === 'owing'
-                  ? LEDGER_URDU.owes
-                  : state === 'credit'
-                    ? LEDGER_URDU.inCredit
-                    : LEDGER_URDU.settled}
-              </Urdu>
             </p>
             <p
               className={cn(
@@ -385,17 +366,14 @@ export function LedgerCustomerPage() {
             <Button onClick={() => setDialog('payment')}>
               <Banknote className="h-4 w-4" />
               Record payment
-              <Urdu className="text-primary-foreground/80">{LEDGER_URDU.recordPayment}</Urdu>
             </Button>
             <Button variant="outline" onClick={() => setDialog('adjustment')}>
               <SlidersHorizontal className="h-4 w-4" />
               Adjustment
-              <Urdu>{LEDGER_URDU.adjustment}</Urdu>
             </Button>
             <Button variant="outline" onClick={() => downloadReport()}>
               <Download className="h-4 w-4" />
               Download report
-              <Urdu>{LEDGER_URDU.statement}</Urdu>
             </Button>
           </div>
         </CardContent>
@@ -405,7 +383,7 @@ export function LedgerCustomerPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">
-              Debit <Urdu>{LEDGER_URDU.charged}</Urdu>
+              Debit 
             </p>
             <p className="tabular mt-1 text-lg font-semibold">
               {formatPKR(customer.total_charged_pkr)}
@@ -415,7 +393,7 @@ export function LedgerCustomerPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">
-              Credit <Urdu>{LEDGER_URDU.paid}</Urdu>
+              Credit 
             </p>
             <p className="tabular mt-1 text-lg font-semibold">
               {formatPKR(customer.total_paid_pkr)}
@@ -425,7 +403,7 @@ export function LedgerCustomerPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">
-              Entries <Urdu>{LEDGER_URDU.entries}</Urdu>
+              Entries 
             </p>
             <p className="tabular mt-1 text-lg font-semibold">{customer.entry_count}</p>
           </CardContent>
@@ -436,13 +414,12 @@ export function LedgerCustomerPage() {
         <CardContent className="p-5">
           <h2 className="mb-3 flex items-baseline gap-2 text-sm font-semibold">
             Statement
-            <Urdu>{LEDGER_URDU.statement}</Urdu>
           </h2>
 
           {entries.length === 0 ? (
             <div className="py-10 text-center">
               <p className="text-sm font-medium">
-              Nothing on this account yet <Urdu>{LEDGER_URDU.nothingYet}</Urdu>
+              Nothing on this account yet 
             </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Charges appear as weighings are completed.
@@ -454,19 +431,19 @@ export function LedgerCustomerPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>
-                      Date <Urdu>{LEDGER_URDU.date}</Urdu>
+                      Date 
                     </TableHead>
                     <TableHead>
-                      Detail <Urdu>{LEDGER_URDU.detail}</Urdu>
+                      Detail 
                     </TableHead>
                     <TableHead className="text-right">
-                      Debit <Urdu>{LEDGER_URDU.debit}</Urdu>
+                      Debit 
                     </TableHead>
                     <TableHead className="text-right">
-                      Credit <Urdu>{LEDGER_URDU.credit}</Urdu>
+                      Credit 
                     </TableHead>
                     <TableHead className="text-right">
-                      Balance <Urdu>{LEDGER_URDU.balance}</Urdu>
+                      Balance 
                     </TableHead>
                     <TableHead />
                   </TableRow>
@@ -481,7 +458,6 @@ export function LedgerCustomerPage() {
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{LEDGER_KIND_LABELS[entry.kind]}</span>
-                          <Urdu>{LEDGER_KIND_URDU[entry.kind]}</Urdu>
                           {entry.slip_number && (
                             <Badge variant="secondary" className="tabular">
                               {entry.slip_number}
@@ -489,7 +465,7 @@ export function LedgerCustomerPage() {
                           )}
                           {entry.voided && (
                             <Badge variant="destructive">
-                              Voided <Urdu className="text-inherit">{LEDGER_URDU.voided}</Urdu>
+                              Voided 
                             </Badge>
                           )}
                         </div>

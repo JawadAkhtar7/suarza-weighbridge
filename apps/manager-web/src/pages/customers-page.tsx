@@ -33,10 +33,10 @@ import {
   TableRow,
   toast,
 } from '@suarza/ui';
-import { LEDGER_URDU, type CustomerRecord } from '@suarza/shared';
+import { type CustomerRecord } from '@suarza/shared';
 import { Pencil, Search, Trash2, UserPlus } from 'lucide-react';
 import { api, ApiError } from '../lib/api.js';
-import { CustomerId, Urdu } from '../components/ledger-bits.js';
+import { CustomerId } from '../components/ledger-bits.js';
 
 /** One dialog for adding and editing: the same three fields either way. */
 function CustomerDialog({
@@ -80,21 +80,19 @@ function CustomerDialog({
         <DialogHeader>
           <DialogTitle className="flex items-baseline gap-2">
             {editing ? 'Edit customer' : 'Add a customer'}
-            <Urdu className="text-sm">{LEDGER_URDU.customer}</Urdu>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-2">
             <Label htmlFor="c-name" className="flex items-baseline gap-2">
-              Customer name <Urdu>{LEDGER_URDU.customer}</Urdu>
+              Customer name 
             </Label>
             <Input id="c-name" value={name} onChange={(event) => setName(event.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="c-company" className="flex items-baseline gap-2">
               Company <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-              <Urdu>{LEDGER_URDU.company}</Urdu>
             </Label>
             <Input
               id="c-company"
@@ -105,7 +103,6 @@ function CustomerDialog({
           <div className="space-y-2">
             <Label htmlFor="c-phone" className="flex items-baseline gap-2">
               Phone <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-              <Urdu>{LEDGER_URDU.phone}</Urdu>
             </Label>
             <Input id="c-phone" value={phone} onChange={(event) => setPhone(event.target.value)} />
           </div>
@@ -196,7 +193,6 @@ export function CustomersPage() {
         <div className="mr-auto">
           <h1 className="flex items-baseline gap-2 text-xl font-semibold">
             Customers
-            <Urdu className="text-lg">{LEDGER_URDU.customers}</Urdu>
           </h1>
           <p className="text-sm text-muted-foreground">
             Added here or by being weighed — either way, one account each.
@@ -233,13 +229,13 @@ export function CustomersPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>
-                      ID <Urdu>{LEDGER_URDU.id}</Urdu>
+                      ID 
                     </TableHead>
                     <TableHead>
-                      Customer <Urdu>{LEDGER_URDU.customer}</Urdu>
+                      Customer 
                     </TableHead>
                     <TableHead>
-                      Phone <Urdu>{LEDGER_URDU.phone}</Urdu>
+                      Phone 
                     </TableHead>
                     <TableHead className="text-right" />
                   </TableRow>
