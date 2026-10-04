@@ -44,12 +44,23 @@ export class SettingsService {
     const base = parsed.success ? parsed.data : stationSettingsSchema.parse({});
     const settings = { ...base, ...(stored === null ? this.defaults : {}) };
 
-    // A blank receipt address silently drops the QR from every slip the
-    // operator prints, while the manager's copy — built by the cloud from its
-    // own APP_DOMAIN — still has one. The agent already knows the cloud it
-    // syncs to, and the public receipt lives on that same host, so use it
-    // rather than making someone type the same domain into a second field.
-    if (!settings.receipt_base_url.trim() && this.defaults.receipt_base_url) {
+    // The QR address follows the cloud, and the cloud's address lives in
+    // deployment.ts — so this is normalised on read rather than merely
+    // defaulted when blank.
+    //
+    // It used to fill in only an empty field, which is no use to the machine
+    // that matters: the weighbridge PC is carrying an ngrok tunnel somebody
+    // typed into Settings months ago. A stale address is not blank, so the
+    // fallback never fired, and every slip it printed carried a QR pointing
+    // at a tunnel that no longer exists. Nobody can walk up to that PC to
+    // correct the field, which is the whole reason the cloud address lives in
+    // code — so the code's answer wins here too, and moving the cloud needs
+    // no site visit.
+    //
+    // Guarded on the default being set at all: an agent with sync switched
+    // off (CLOUD_API_URL=none, the preview droplet's slip-layout rig) has no
+    // cloud address to offer, and must not wipe a value typed in by hand.
+    if (this.defaults.receipt_base_url) {
       settings.receipt_base_url = this.defaults.receipt_base_url;
     }
 

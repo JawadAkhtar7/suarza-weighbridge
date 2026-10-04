@@ -300,18 +300,28 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 update and you press <span className="font-medium">Update Weighbridge</span>.
               </p>
 
+              {/*
+                * Shown, not edited. The address follows the cloud, and the
+                * cloud's address lives in the software — an operator typing a
+                * tunnel in here once left every slip carrying a QR that led
+                * nowhere, months after the tunnel was gone.
+                */}
               <div className="space-y-2">
-                <Label htmlFor="receipt-base">Receipt web address</Label>
-                <Input
-                  id="receipt-base"
-                  value={draft.receipt_base_url}
-                  placeholder="https://weighbridge.example.com"
-                  onChange={(event) => setDraft({ ...draft, receipt_base_url: event.target.value })}
-                />
+                <Label>Receipt web address</Label>
+                <p className="text-sm">
+                  {draft.receipt_base_url ? (
+                    <code>{draft.receipt_base_url}/r/2026123</code>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      No cloud address — slips print without a QR code.
+                    </span>
+                  )}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  The QR code points at <code>{draft.receipt_base_url || '…'}/r/2026123</code>.
-                  Leave it as it is unless the receipt page is served from a different address than
-                  the cloud server — this defaults to the cloud the station already syncs to.
+                  This is where the QR code on a slip takes the customer. It comes from the
+                  software and follows the cloud the station syncs to, so there is nothing to set
+                  here. If it ever moves, we push an update and you press{' '}
+                  <span className="font-medium">Update Weighbridge</span>.
                 </p>
               </div>
             </section>
@@ -327,15 +337,19 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
               <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
                 <div className="space-y-2">
-                  <Label htmlFor="backup-path">Backup folder</Label>
+                  <Label htmlFor="backup-path" className="sr-only">
+                    Backup folder
+                  </Label>
                   <Input
                     id="backup-path"
                     value={draft.backup_path}
-                    placeholder="e.g. D:\\weighbridge-backups"
+                    placeholder="Backup folder, e.g. D:\\weighbridge-backups"
                     onChange={(event) => setDraft({ ...draft, backup_path: event.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
+                  {/* This one keeps its label. The box always holds a number,
+                      so a placeholder would never be on screen to read. */}
                   <Label htmlFor="backup-hours">Every (hours)</Label>
                   <NumberInput
                     id="backup-hours"

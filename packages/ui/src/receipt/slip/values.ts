@@ -82,6 +82,30 @@ export function slipAmount(amount: number, currency: string): string {
   return `${currency} ${Math.round(amount)}/-`;
 }
 
+/**
+ * What the second weight and the net read on a first-weight slip.
+ *
+ * The driver walks away holding this one, and a pair of empty boxes reads as
+ * a misprint - or worse, as a load that weighed nothing. "Pending" says the
+ * slip is half of a pair and the truck is expected back.
+ */
+export const SLIP_PENDING = 'Pending';
+
+/** How the slip marks a weight somebody typed instead of the scale reporting it. */
+export const MANUAL_MARK = '(MANUAL)';
+
+/**
+ * Is this a first-weight slip, still waiting on the truck?
+ *
+ * Derived from the values rather than passed in as a prop. Every caller
+ * already hands the renderer a `SlipValues`, and a separate flag is a second
+ * source of truth that one of the four call sites would eventually forget to
+ * pass — leaving a slip that says `Pending` under a MANN box.
+ */
+export function isPendingSlip(values: SlipValues): boolean {
+  return values.net_kg === SLIP_PENDING;
+}
+
 export interface SlipValuesOptions {
   weighment: Weighment;
   /** When the slip was printed. Defaults to now, which is what a reprint wants. */
@@ -94,6 +118,9 @@ export interface SlipValuesOptions {
  * A field with nothing in it returns an empty string and the renderer draws
  * nothing — on a pre-printed pad an absent value has to leave the box empty,
  * not print a dash into it.
+ *
+ * The second weight and the net are the exception: before the truck comes
+ * back they read `Pending` rather than blank. See SLIP_PENDING.
  */
 export function slipValues({ weighment, printedAt }: SlipValuesOptions): SlipValues {
   const net = netWeightKg(weighment.first_weight_kg, weighment.second_weight_kg);
@@ -109,21 +136,27 @@ export function slipValues({ weighment, printedAt }: SlipValuesOptions): SlipVal
     driver_phone: weighment.customer_phone ?? '',
     customer: weighment.customer_company,
 
-    vehicle_plate: weighment.vehicle_plate,
+    /* Upper-cased here as well as in the schema: the schema fixes everything
+       written from now on, this fixes what is already stored. */
+    vehicle_plate: weighment.vehicle_plate.toUpperCase(),
     vehicle_type: weighment.vehicle_type_label || weighment.vehicle_type,
-    container_number: weighment.container_number ?? '',
+    container_number: (weighment.container_number ?? '').toUpperCase(),
     product: weighment.product,
     amount: slipAmount(weighment.amount_charged, weighment.currency),
 
     first_at: slipDateTime(weighment.first_weight_at),
     first_kg: slipKg(weighment.first_weight_kg),
     second_at: weighment.second_weight_at ? slipDateTime(weighment.second_weight_at) : '',
-    second_kg: hasSecond ? slipKg(weighment.second_weight_kg as number) : '',
-    /* Only when the figure was typed rather than read off the indicator. The
-       artwork prints it under the second weight, and it is the one thing on the
-       slip that says a human chose the number. */
-    second_manual: weighment.second_weight_src === 'MANUAL' ? '(MANUAL)' : '',
-    net_kg: hasSecond ? slipKg(net) : '',
+    second_kg: hasSecond ? slipKg(weighment.second_weight_kg as number) : SLIP_PENDING,
+    /* Only when the figure was typed rather than read off the indicator — the
+       one thing on the slip that says a human chose the number rather than
+       the scale reporting it.
+       On BOTH weights, not just the second. The one-visit flow types the empty
+       weight in by hand, so a slip whose first figure never came off the
+       indicator has to say so too, or it reads as a measurement it is not. */
+    first_manual: weighment.first_weight_src === 'MANUAL' ? MANUAL_MARK : '',
+    second_manual: hasSecond && weighment.second_weight_src === 'MANUAL' ? MANUAL_MARK : '',
+    net_kg: hasSecond ? slipKg(net) : SLIP_PENDING,
     mann: hasSecond ? slipMann(net) : '',
 
     /* Suarza's own details, from code — see COMPANY. The artwork gives the

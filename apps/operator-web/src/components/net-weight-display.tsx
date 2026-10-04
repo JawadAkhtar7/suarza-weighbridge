@@ -1,13 +1,15 @@
 /**
- * Net weight in all three units (brief §2, §7.2).
+ * Net weight, in kg and Mann (brief §2, §7.2).
  *
  * kg leads because that is what the indicator reports and what the net is
- * computed in; ton and maund are conversions of it. Maund is here because it is
- * how the trade actually talks about a load locally — 1 maund = 40 kg.
+ * computed in. Mann is the conversion the trade actually uses locally —
+ * 1 Mann = 40 kg — and it is the only other unit on the printed slip, so it
+ * is the only other unit here. Ton was shown too and nobody weighs in it; a
+ * third figure to read past is a cost with no reader.
  */
 
 import { Card, CardContent } from '@suarza/ui';
-import { formatKg, formatMaund, formatTon, type NetWeight } from '@suarza/shared';
+import { formatKg, formatMaund, type NetWeight } from '@suarza/shared';
 
 interface NetWeightDisplayProps {
   net: NetWeight;
@@ -28,10 +30,7 @@ export function NetWeightDisplay({ net, pending = false }: NetWeightDisplayProps
         ) : (
           <>
             <p className="tabular text-5xl font-bold leading-none">{formatKg(net.kg)}</p>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-lg">
-              <span className="tabular font-semibold">{formatTon(net.ton)}</span>
-              <span className="tabular font-semibold">{formatMaund(net.maund)}</span>
-            </div>
+            <p className="tabular text-lg font-semibold">{formatMaund(net.maund)}</p>
           </>
         )}
       </CardContent>

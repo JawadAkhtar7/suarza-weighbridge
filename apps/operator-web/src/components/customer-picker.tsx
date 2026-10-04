@@ -13,6 +13,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Search } from 'lucide-react';
 import { Autocomplete, type AutocompleteOption } from '@suarza/ui';
 import { customerLabel, type Customer } from '@suarza/shared';
 import { agentApi } from '../lib/api.js';
@@ -53,7 +54,14 @@ export function CustomerPicker({ onPick }: CustomerPickerProps) {
   );
 
   return (
-    <div>
+    /* `relative` so the icon can sit over the box. The Autocomplete's own
+       root is the only thing contributing height here - its dropdown is
+       absolutely positioned - so inset-y-0 tracks the input exactly. */
+    <div className="relative">
+      <Search
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-3 z-10 my-auto h-4 w-4 text-muted-foreground"
+      />
       <Autocomplete
         id="customer-picker"
         value={query}
@@ -62,8 +70,9 @@ export function CustomerPicker({ onPick }: CustomerPickerProps) {
         isLoading={search.isFetching}
         listLabel="Existing customers"
         emptyMessage="No customer by that name yet — just fill the form in below."
-        placeholder="Search an existing customer or company…"
-        aria-label="Search an existing customer"
+        placeholder="Search Customer"
+        aria-label="Search Customer"
+        className="pl-9"
         onSelect={(option) => {
           if (!option.data) return;
           onPick(option.data);

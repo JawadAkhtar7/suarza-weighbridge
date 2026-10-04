@@ -18,7 +18,6 @@ import type {
   NetWeight,
   SyncOutcome,
   SyncStatus,
-  VoidWeighmentInput,
   Weighment,
 } from '@suarza/shared';
 
@@ -156,12 +155,6 @@ export const agentApi = {
   completeWeighment: (slip: string, input: CompleteWeighmentInput) =>
     request<WeighmentResponse>(`/weighments/${encodeURIComponent(slip)}/complete`, {
       method: 'PATCH',
-      body: JSON.stringify(input),
-    }),
-
-  voidWeighment: (slip: string, input: VoidWeighmentInput) =>
-    request<{ weighment: Weighment }>(`/weighments/${encodeURIComponent(slip)}/void`, {
-      method: 'POST',
       body: JSON.stringify(input),
     }),
 

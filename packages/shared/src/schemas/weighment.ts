@@ -67,6 +67,28 @@ const optionalText = z
   .optional()
   .transform((v) => (v === '' ? undefined : v));
 
+/**
+ * A plate or container number, upper-cased on the way in.
+ *
+ * These are identifiers that get read back off a slip and compared by eye,
+ * and "les-1234" and "LES-1234" are the same truck. Normalising here rather
+ * than in the form means the record, the slip and any later lookup all agree
+ * no matter which tier or which screen the value arrived through — the form
+ * only ever styled it upper-case, which left the stored value as typed.
+ */
+const upperIdentifier = z
+  .string()
+  .trim()
+  .max(32)
+  .transform((v) => v.toUpperCase());
+
+const optionalUpperIdentifier = z
+  .string()
+  .trim()
+  .max(120)
+  .optional()
+  .transform((v) => (v === '' || v === undefined ? undefined : v.toUpperCase()));
+
 export const weighmentSchema = z.object({
   id: z.string().uuid(),
   slip_number: slipNumberSchema,
@@ -97,8 +119,8 @@ export const weighmentSchema = z.object({
    * a receipt can be rendered by a tier that has no catalogue.
    */
   vehicle_type_label: z.string().trim().max(80).default(''),
-  vehicle_plate: z.string().trim().min(1, 'Vehicle plate is required').max(32),
-  container_number: optionalText,
+  vehicle_plate: upperIdentifier.pipe(z.string().min(1, 'Vehicle plate is required')),
+  container_number: optionalUpperIdentifier,
   // Optional, like the company: plenty of loads are weighed without anyone
   // naming what is on the truck, and refusing the weighing over it would only
   // get a placeholder typed in. Empty string rather than undefined, so every
@@ -190,8 +212,8 @@ export const createWeighmentSchema = z.object({
    * a receipt can be rendered by a tier that has no catalogue.
    */
   vehicle_type_label: z.string().trim().max(80).default(''),
-  vehicle_plate: z.string().trim().min(1, 'Vehicle plate is required').max(32),
-  container_number: optionalText,
+  vehicle_plate: upperIdentifier.pipe(z.string().min(1, 'Vehicle plate is required')),
+  container_number: optionalUpperIdentifier,
   // Optional, like the company: plenty of loads are weighed without anyone
   // naming what is on the truck, and refusing the weighing over it would only
   // get a placeholder typed in. Empty string rather than undefined, so every
@@ -215,7 +237,7 @@ export const completeWeighmentSchema = z.object({
   operator_username: z.string().trim().min(1).max(64).default('operator'),
   /** Identity fields stay locked after pass 1; only these may be corrected. */
   product: z.string().trim().min(1).max(120).optional(),
-  container_number: optionalText,
+  container_number: optionalUpperIdentifier,
 });
 
 export type CompleteWeighmentInput = z.infer<typeof completeWeighmentSchema>;

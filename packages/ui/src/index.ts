@@ -23,3 +23,6 @@ export * from './hooks/use-theme.js';
 // Domain component, shared because the operator printout, the manager
 // dashboard reprint and the public QR page must all render the same receipt.
 export * from './receipt/index.js';
+
+// Printable reports: the ledger statement a manager hands a customer.
+export * from './reports/index.js';

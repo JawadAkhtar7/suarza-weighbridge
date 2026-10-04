@@ -1,7 +1,7 @@
 /**
  * Ledger — every customer account, worst first.
  *
- * The question this page answers is "who owes us money", so that is the default
+ * The question this page answers is "who is in debit", so that is the default
  * sort and the first thing on the screen. Everything else is secondary.
  */
 
@@ -29,8 +29,8 @@ import { CustomerId, Urdu } from '../components/ledger-bits.js';
 
 const STATUS_TABS: { key: LedgerQuery['status']; label: string; urdu: string }[] = [
   { key: 'all', label: 'All', urdu: LEDGER_URDU.all },
-  { key: 'owing', label: 'Owing', urdu: LEDGER_URDU.owes },
-  { key: 'credit', label: 'In credit', urdu: LEDGER_URDU.inCredit },
+  { key: 'owing', label: 'Debit', urdu: LEDGER_URDU.owes },
+  { key: 'credit', label: 'Credit', urdu: LEDGER_URDU.inCredit },
   { key: 'settled', label: 'Settled', urdu: LEDGER_URDU.settled },
 ];
 
@@ -50,7 +50,7 @@ function BalanceCell({ balance }: { balance: number }) {
     <span className={cn('font-semibold', state === 'owing' ? 'text-destructive' : 'text-success')}>
       {formatPKR(Math.abs(balance))}
       <span className="block text-xs font-normal text-muted-foreground">
-        {state === 'owing' ? 'owed' : 'in credit'}
+        {state === 'owing' ? 'debit' : 'credit'}
         <Urdu className="ml-1">
           {state === 'owing' ? LEDGER_URDU.owes : LEDGER_URDU.inCredit}
         </Urdu>
@@ -78,7 +78,7 @@ export function LedgerPage() {
           <Urdu className="text-lg">{LEDGER_URDU.ledger}</Urdu>
         </h1>
         <p className="text-sm text-muted-foreground">
-          What each customer owes, and what they have paid.
+          Each customer&rsquo;s debit and credit.
         </p>
         <p className="text-xs text-muted-foreground">
           An account opens by itself the first time a customer is weighed.
@@ -89,7 +89,7 @@ export function LedgerPage() {
         <Card>
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">
-              Total owed to you
+              Total debit
               <Urdu className="ml-2">{LEDGER_URDU.totalOwed}</Urdu>
             </p>
             {summary.isLoading ? (
@@ -100,7 +100,7 @@ export function LedgerPage() {
               </p>
             )}
             <p className="mt-1 text-xs text-muted-foreground">
-              across {summary.data?.customers_owing ?? 0} customer
+              from {summary.data?.customers_owing ?? 0} customer
               {summary.data?.customers_owing === 1 ? '' : 's'}
             </p>
           </CardContent>
@@ -109,7 +109,7 @@ export function LedgerPage() {
         <Card>
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">
-              Held in advance
+              Total credit
               <Urdu className="ml-2">{LEDGER_URDU.heldInAdvance}</Urdu>
             </p>
             {summary.isLoading ? (
@@ -120,7 +120,7 @@ export function LedgerPage() {
               </p>
             )}
             <p className="mt-1 text-xs text-muted-foreground">
-              across {summary.data?.customers_in_credit ?? 0} customer
+              from {summary.data?.customers_in_credit ?? 0} customer
               {summary.data?.customers_in_credit === 1 ? '' : 's'}
             </p>
           </CardContent>

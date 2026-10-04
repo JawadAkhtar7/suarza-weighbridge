@@ -20,7 +20,6 @@ vi.mock('../src/lib/api.js', async () => {
     agentApi: {
       getWeighment: vi.fn(),
       completeWeighment: vi.fn(),
-      voidWeighment: vi.fn(),
       reprintWeighment: vi.fn(),
       getLiveWeight: vi.fn(),
       getSyncStatus: vi.fn(),
@@ -31,22 +30,17 @@ vi.mock('../src/lib/api.js', async () => {
 
 import { agentApi, AgentApiError } from '../src/lib/api.js';
 import { ReturnWeighment } from '../src/components/return-weighment.js';
-import { liveResult, renderWithQuery, weighment } from './utils.js';
+import { renderWithQuery, weighment } from './utils.js';
 
 const mocked = vi.mocked(agentApi);
 
 function renderFlow(captured: { kg: number; source: 'SERIAL' | 'MANUAL' } | null = null) {
-  const onCapture = vi.fn();
+  /* No live reading and no onCapture: the capture control moved out to the
+     left column, beside the live weight, so it is in the same place in every
+     mode. This flow only consumes the captured value. */
   const onClearCapture = vi.fn();
-  renderWithQuery(
-    <ReturnWeighment
-      live={liveResult('STABLE', 20_000)}
-      captured={captured}
-      onCapture={onCapture}
-      onClearCapture={onClearCapture}
-    />,
-  );
-  return { onCapture, onClearCapture, user: userEvent.setup() };
+  renderWithQuery(<ReturnWeighment captured={captured} onClearCapture={onClearCapture} />);
+  return { onClearCapture, user: userEvent.setup() };
 }
 
 async function fetchSlip(user: ReturnType<typeof userEvent.setup>, slip = '1') {
@@ -204,78 +198,6 @@ describe('a slip that is already completed', () => {
 
     await screen.findByText(/this slip is already completed/i);
     expect(screen.queryByRole('button', { name: /void ticket/i })).not.toBeInTheDocument();
-  });
-});
-
-describe('voiding an abandoned ticket', () => {
-  beforeEach(() => {
-    mocked.getWeighment.mockResolvedValue({
-      weighment: weighment(),
-      net: { kg: 0, ton: 0, maund: 0 },
-    });
-  });
-
-  it('demands a reason before the void can be confirmed', async () => {
-    const { user } = renderFlow();
-    await fetchSlip(user);
-    await user.click(await screen.findByRole('button', { name: /void ticket/i }));
-
-    const dialog = within(await screen.findByRole('dialog'));
-    expect(dialog.getByLabelText(/reason/i)).toBeInTheDocument();
-    expect(dialog.getByRole('button', { name: /void ticket/i })).toBeDisabled();
-  });
-
-  it('enables the confirm only once a real reason is typed', async () => {
-    const { user } = renderFlow();
-    await fetchSlip(user);
-    await user.click(await screen.findByRole('button', { name: /void ticket/i }));
-
-    const dialog = within(await screen.findByRole('dialog'));
-    // Whitespace is not a reason, and neither is a single stray character.
-    await user.type(dialog.getByLabelText(/reason/i), '  ');
-    expect(dialog.getByRole('button', { name: /void ticket/i })).toBeDisabled();
-
-    await user.type(dialog.getByLabelText(/reason/i), 'Truck never returned');
-    expect(dialog.getByRole('button', { name: /void ticket/i })).toBeEnabled();
-  });
-
-  it('sends the reason to the agent', async () => {
-    mocked.voidWeighment.mockResolvedValue({ weighment: weighment({ status: 'VOID' }) });
-
-    const { user } = renderFlow();
-    await fetchSlip(user);
-    await user.click(await screen.findByRole('button', { name: /void ticket/i }));
-
-    const dialog = within(await screen.findByRole('dialog'));
-    await user.type(dialog.getByLabelText(/reason/i), 'Truck never returned');
-    await user.click(dialog.getByRole('button', { name: /void ticket/i }));
-
-    await waitFor(() =>
-      expect(mocked.voidWeighment).toHaveBeenCalledWith(
-        '20261',
-        expect.objectContaining({ reason: 'Truck never returned' }),
-      ),
-    );
-  });
-
-  it('never deletes — the record comes back as VOID', async () => {
-    mocked.voidWeighment.mockResolvedValue({ weighment: weighment({ status: 'VOID' }) });
-    mocked.getWeighment
-      .mockResolvedValueOnce({ weighment: weighment(), net: { kg: 0, ton: 0, maund: 0 } })
-      .mockResolvedValueOnce({
-        weighment: weighment({ status: 'VOID', void_reason: 'Truck never returned' }),
-        net: { kg: 0, ton: 0, maund: 0 },
-      });
-
-    const { user } = renderFlow();
-    await fetchSlip(user);
-    await user.click(await screen.findByRole('button', { name: /void ticket/i }));
-
-    const dialog = within(await screen.findByRole('dialog'));
-    await user.type(dialog.getByLabelText(/reason/i), 'Truck never returned');
-    await user.click(dialog.getByRole('button', { name: /void ticket/i }));
-
-    expect(await screen.findByText(/this ticket was voided/i)).toBeInTheDocument();
   });
 });
 

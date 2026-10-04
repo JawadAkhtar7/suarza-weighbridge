@@ -8,8 +8,10 @@ describe('NetWeightDisplay', () => {
     render(<NetWeightDisplay net={netWeightAllUnits(8000, 20_000)} />);
 
     expect(screen.getByText('12,000 kg')).toBeInTheDocument();
-    expect(screen.getByText('12.000 ton')).toBeInTheDocument();
-    expect(screen.getByText('300.000 maund')).toBeInTheDocument();
+    expect(screen.getByText('300.000 Mann')).toBeInTheDocument();
+    // Ton is deliberately absent: nobody at the bridge weighs in it, and a
+    // third figure is one more thing to read past.
+    expect(screen.queryByText(/ton/i)).toBeNull();
   });
 
   it('is identical whichever order the truck was weighed in', () => {

@@ -14,9 +14,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Input,
 } from '@suarza/ui';
 import { currentSlipYear, normalizeSlipNumber } from '@suarza/shared';
@@ -56,16 +53,9 @@ export function SlipSearch({ onSearch, isSearching, error, onErrorCleared }: Sli
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Enter slip number</CardTitle>
-        {/* Says where to find it, because a new operator's first question here
-            is "which number?" and the answer is in the driver's hand. */}
-        <CardDescription>
-          It is printed at the top of the driver&rsquo;s slip. Type only the part after{' '}
-          <span className="tabular font-semibold">{year}</span>.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      {/* No heading and no hint: the field carries its own placeholder and
+          the year is printed beside it, which says more than a paragraph. */}
+      <CardContent className="space-y-4 pt-6">
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -117,15 +107,7 @@ export function SlipSearch({ onSearch, isSearching, error, onErrorCleared }: Sli
           </Button>
         </form>
 
-        {error ? (
-          <p className="text-sm font-medium text-destructive">{error}</p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Type the number from the driver&apos;s slip — just the part after {year}.{' '}
-            <kbd className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">{HOTKEYS.slip}</kbd>{' '}
-            jumps back here at any time.
-          </p>
-        )}
+        {error && <p className="text-sm font-medium text-destructive">{error}</p>}
       </CardContent>
     </Card>
   );

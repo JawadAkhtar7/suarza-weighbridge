@@ -6,9 +6,10 @@
  * use: the manager needs to point at a line and say where the number came from.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useReactToPrint } from 'react-to-print';
 import {
   Badge,
   Button,
@@ -32,6 +33,8 @@ import {
   Textarea,
   cn,
   toast,
+  LedgerReport,
+  LEDGER_REPORT_PAGE_CSS,
 } from '@suarza/ui';
 import {
   LEDGER_KIND_LABELS,
@@ -44,7 +47,7 @@ import {
   type LedgerDirection,
   type LedgerEntryWithBalance,
 } from '@suarza/shared';
-import { ArrowLeft, Ban, Banknote, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Ban, Banknote, Download, SlidersHorizontal } from 'lucide-react';
 import { api, ApiError } from '../lib/api.js';
 import { CustomerId, Urdu } from '../components/ledger-bits.js';
 
@@ -115,8 +118,8 @@ function EntryDialog({
 
         <p className="text-sm text-muted-foreground">
           {isPayment
-            ? 'Money received from the customer. This reduces what they owe.'
-            : 'A correction — a discount, a write-off, or a charge that was missed.'}
+            ? 'Money received from the customer. This reduces their debit.'
+            : 'A correction — a discount, a write-off, or a debit that was missed.'}
         </p>
 
         <div className="space-y-3">
@@ -135,8 +138,8 @@ function EntryDialog({
                     direction === 'DEBIT' ? 'border-destructive bg-destructive/5' : 'border-muted',
                   )}
                 >
-                  <span className="font-semibold">Charge</span>
-                  <span className="block text-xs text-muted-foreground">Customer owes more</span>
+                  <span className="font-semibold">Debit</span>
+                  <span className="block text-xs text-muted-foreground">Adds to their debit</span>
                   <Urdu className="block">{LEDGER_URDU.customerOwesMore}</Urdu>
                 </button>
                 <button
@@ -148,7 +151,7 @@ function EntryDialog({
                   )}
                 >
                   <span className="font-semibold">Credit</span>
-                  <span className="block text-xs text-muted-foreground">Customer owes less</span>
+                  <span className="block text-xs text-muted-foreground">Reduces their debit</span>
                   <Urdu className="block">{LEDGER_URDU.customerOwesLess}</Urdu>
                 </button>
               </div>
@@ -282,6 +285,21 @@ export function LedgerCustomerPage() {
   const [dialog, setDialog] = useState<'payment' | 'adjustment' | null>(null);
   const [voiding, setVoiding] = useState<LedgerEntryWithBalance | null>(null);
 
+  /*
+   * The printable statement.
+   *
+   * Rendered off-screen rather than built on click: react-to-print copies a
+   * real DOM node, so the page it saves is the same React tree the manager is
+   * looking at, with no second renderer to drift from this one.
+   */
+  const reportRef = useRef<HTMLDivElement>(null);
+  const downloadReport = useReactToPrint({
+    contentRef: reportRef,
+    // Becomes the suggested filename in the browser's Save-as-PDF dialog.
+    documentTitle: `Ledger-${customerId ?? 'customer'}-${new Date().toISOString().slice(0, 10)}`,
+    pageStyle: LEDGER_REPORT_PAGE_CSS,
+  });
+
   const account = useQuery({
     queryKey: ['ledger', 'customer', customerId],
     queryFn: () => api.ledgerCustomer(customerId),
@@ -374,6 +392,11 @@ export function LedgerCustomerPage() {
               Adjustment
               <Urdu>{LEDGER_URDU.adjustment}</Urdu>
             </Button>
+            <Button variant="outline" onClick={() => downloadReport()}>
+              <Download className="h-4 w-4" />
+              Download report
+              <Urdu>{LEDGER_URDU.statement}</Urdu>
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -382,7 +405,7 @@ export function LedgerCustomerPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">
-              Charged for weighings <Urdu>{LEDGER_URDU.charged}</Urdu>
+              Debit <Urdu>{LEDGER_URDU.charged}</Urdu>
             </p>
             <p className="tabular mt-1 text-lg font-semibold">
               {formatPKR(customer.total_charged_pkr)}
@@ -392,7 +415,7 @@ export function LedgerCustomerPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">
-              Paid <Urdu>{LEDGER_URDU.paid}</Urdu>
+              Credit <Urdu>{LEDGER_URDU.paid}</Urdu>
             </p>
             <p className="tabular mt-1 text-lg font-semibold">
               {formatPKR(customer.total_paid_pkr)}
@@ -495,7 +518,7 @@ export function LedgerCustomerPage() {
                         {formatPKR(Math.abs(entry.balance_after_pkr))}
                         {entry.balance_after_pkr < 0 && (
                           <span className="ml-1 text-xs font-normal text-muted-foreground">
-                            owed
+                            debit
                           </span>
                         )}
                       </TableCell>
@@ -530,6 +553,24 @@ export function LedgerCustomerPage() {
         onOpenChange={(open) => !open && setDialog(null)}
       />
       <VoidDialog customerId={customerId} entry={voiding} onClose={() => setVoiding(null)} />
+
+      {/*
+        * What "Download report" sends to the printer.
+        *
+        * Kept mounted and parked off-screen rather than rendered on click:
+        * react-to-print copies a live DOM node, so it has to exist before the
+        * button is pressed. Moved with `left`, not `display: none` — a hidden
+        * subtree has no layout, and the printer would be handed a blank page.
+        */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed top-0 h-0 overflow-hidden"
+        style={{ left: '-10000px' }}
+      >
+        <div ref={reportRef}>
+          <LedgerReport customer={customer} entries={entries} />
+        </div>
+      </div>
     </div>
   );
 }

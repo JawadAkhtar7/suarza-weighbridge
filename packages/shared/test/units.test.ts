@@ -91,10 +91,10 @@ describe('formatting', () => {
   it('formats each unit with a thousands separator and label', () => {
     expect(formatKg(12345)).toBe('12,345 kg');
     expect(formatTon(12.345)).toBe('12.345 ton');
-    expect(formatMaund(308.625)).toBe('308.625 maund');
+    expect(formatMaund(308.625)).toBe('308.625 Mann');
   });
 
   it('renders the completion-screen line', () => {
-    expect(formatAllUnits(toAllUnits(12345))).toBe('12,345 kg · 12.345 ton · 308.625 maund');
+    expect(formatAllUnits(toAllUnits(12345))).toBe('12,345 kg · 12.345 ton · 308.625 Mann');
   });
 });

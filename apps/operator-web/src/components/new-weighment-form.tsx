@@ -14,8 +14,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Input,
   Label,
   NumberInput,
@@ -29,7 +27,6 @@ import {
 } from '@suarza/ui';
 import {
   createWeighmentSchema,
-  formatPKR,
   parseAmount,
   type Customer,
   type PaymentStatus,
@@ -113,7 +110,6 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
   }, [configuredDefaultPrice, amountEdited, form]);
 
   const vehicleType = form.watch('vehicle_type') as VehicleType;
-  const tablePrice = vehicleTypes.rateFor(vehicleType);
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
@@ -256,10 +252,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Customer Details</CardTitle>
-      </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <form onSubmit={submit} className="space-y-5" noValidate>
           {/*
             * First on the screen, because it is first in the conversation: the
@@ -272,7 +265,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
             */}
           {isSingleVisit && (
             <div className="space-y-2 rounded-lg border-2 border-brand/40 bg-brand/5 p-4">
-              <Label htmlFor="known-first-weight" className="text-sm font-semibold">
+              <Label htmlFor="known-first-weight" className="sr-only">
                 Empty weight, as given by the driver
               </Label>
               <div className="relative">
@@ -281,7 +274,9 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
                   min={0}
                   step="1"
                   inputMode="numeric"
-                  placeholder="0"
+                  /* Short, because this box renders at text-3xl and the full
+                     label would run past its edge. */
+                  placeholder="Empty weight"
                   value={knownFirstWeight}
                   onChange={(event) => setKnownFirstWeight(event.target.value)}
                   className="tabular h-16 pr-14 text-3xl font-bold"
@@ -290,27 +285,29 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
                   kg
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Recorded as a manual entry and marked as such on the slip.
-              </p>
             </div>
           )}
 
           <CustomerPicker onPick={applyCustomer} />
 
-          <div className="grid gap-4 border-t pt-5 sm:grid-cols-2">
+          {/* Below the search box, not above it. Sitting above, it read as a
+              heading the search field belonged under, so operators typed the
+              customer's name into the search instead of the name field. */}
+          <div className="border-t pt-5">
+            <h3 className="text-lg font-semibold leading-none tracking-tight">Customer Details</h3>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field
               htmlFor="customer_name"
               label="Customer name"
               error={errors.customer_name?.message}
-              optional
-              hint="Needed only if this weighing goes on the customer's account."
             >
               <Input
                 id="customer_name"
                 autoFocus
                 {...form.register('customer_name')}
-                placeholder="Ali Raza"
+                placeholder="Customer name"
               />
             </Field>
 
@@ -318,12 +315,11 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               htmlFor="customer_company"
               label="Company"
               error={errors.customer_company?.message}
-              optional
             >
               <Input
                 id="customer_company"
                 {...form.register('customer_company')}
-                placeholder="Raza Traders"
+                placeholder="Company"
               />
             </Field>
 
@@ -332,6 +328,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               label="Vehicle type"
               error={errors.vehicle_type?.message}
               required
+              markClass="right-8"
             >
               <Select
                 value={vehicleType}
@@ -344,7 +341,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
                 }}
               >
                 <SelectTrigger id="vehicle_type">
-                  <SelectValue placeholder="Select a vehicle type" />
+                  <SelectValue placeholder="Vehicle type" />
                 </SelectTrigger>
                 <SelectContent>
                   {vehicleTypes.types.map((type) => (
@@ -358,32 +355,33 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
             <Field
               htmlFor="vehicle_plate"
-              label="Vehicle plate"
+              label="Number Plate"
               error={errors.vehicle_plate?.message}
               required
             >
               <Input
                 id="vehicle_plate"
                 {...form.register('vehicle_plate')}
-                placeholder="LES-1234"
-                className="uppercase"
+                placeholder="Number Plate"
+                /* pr-8 keeps a long plate from running under the asterisk. */
+                className="uppercase placeholder:normal-case pr-8"
               />
             </Field>
 
-            <Field htmlFor="product" label="Product" error={errors.product?.message} optional>
-              <Input id="product" {...form.register('product')} placeholder="Cement" />
+            <Field htmlFor="product" label="Product" error={errors.product?.message}>
+              <Input id="product" {...form.register('product')} placeholder="Product" />
             </Field>
 
             <Field
               htmlFor="container_number"
               label="Container number"
               error={errors.container_number?.message}
-              optional
             >
               <Input
                 id="container_number"
                 {...form.register('container_number')}
-                placeholder="Optional"
+                placeholder="Container number"
+                className="uppercase placeholder:normal-case"
               />
             </Field>
 
@@ -391,12 +389,11 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               htmlFor="customer_phone"
               label="Phone"
               error={errors.customer_phone?.message}
-              optional
             >
               <Input
                 id="customer_phone"
                 {...form.register('customer_phone')}
-                placeholder="Optional"
+                placeholder="Phone"
                 inputMode="tel"
               />
             </Field>
@@ -405,11 +402,6 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               htmlFor="amount_charged"
               label="Amount charged"
               error={errors.amount_charged?.message}
-              hint={
-                amountEdited
-                  ? `Edited — rate for this vehicle is ${formatPKR(tablePrice)}`
-                  : `Rate for ${vehicleTypes.labelFor(vehicleType)}`
-              }
             >
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -422,6 +414,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
                   })}
                   min={0}
                   step="1"
+                  placeholder="Amount charged"
                   className={cn('pl-9', amountEdited && 'border-primary')}
                 />
               </div>
@@ -519,19 +512,50 @@ interface FieldProps {
   error?: string | undefined;
   hint?: string;
   required?: boolean;
-  optional?: boolean;
+  /**
+   * Where the asterisk sits inside the control. Defaults to the right edge;
+   * a Select needs to clear its own chevron.
+   */
+  markClass?: string;
   children: React.ReactNode;
 }
 
-function Field({ htmlFor, label, error, hint, required, optional, children }: FieldProps) {
+function Field({ htmlFor, label, error, hint, required, markClass, children }: FieldProps) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={htmlFor} className="flex items-center gap-1.5">
+      {/*
+        * Visually hidden, deliberately not deleted.
+        *
+        * The name of each box now lives in its placeholder, which keeps the
+        * form from being half labels. But a placeholder is not a label: it
+        * vanishes the moment the operator types, and a screen reader reading
+        * a box with no label can only say "edit text". This keeps the name
+        * attached to the control, and keeps clicking it focusing the box.
+        */}
+      <Label htmlFor={htmlFor} className="sr-only">
         {label}
-        {required && <span className="text-destructive">*</span>}
-        {optional && <span className="text-xs font-normal text-muted-foreground">(optional)</span>}
+        {required && <span>{' '}(required)</span>}
       </Label>
-      {children}
+      {/*
+        * Required is marked, optional is not. Saying "(optional)" on six of
+        * eight boxes made the exception the rule and put the most words on
+        * the fields that matter least. The asterisk is decorative here — the
+        * hidden label already tells a screen reader which fields are needed.
+        */}
+      <div className="relative">
+        {children}
+        {required && (
+          <span
+            aria-hidden
+            className={cn(
+              'pointer-events-none absolute top-1/2 -translate-y-1/2 text-base font-semibold text-destructive',
+              markClass ?? 'right-3',
+            )}
+          >
+            *
+          </span>
+        )}
+      </div>
       {error ? (
         <p className="text-sm font-medium text-destructive">{error}</p>
       ) : hint ? (

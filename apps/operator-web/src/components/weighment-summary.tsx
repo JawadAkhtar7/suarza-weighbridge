@@ -15,7 +15,6 @@ import {
   type Weighment,
   type WeighmentStatus,
 } from '@suarza/shared';
-import { Lock } from 'lucide-react';
 
 const STATUS_VARIANT: Record<WeighmentStatus, 'secondary' | 'success' | 'destructive'> = {
   OPEN: 'secondary',
@@ -88,12 +87,6 @@ export function WeighmentSummary({ weighment }: { weighment: Weighment }) {
           </p>
         )}
 
-        {weighment.status === 'OPEN' && (
-          <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Lock className="h-3.5 w-3.5" />
-            These details were set at the first weighing and cannot be changed.
-          </p>
-        )}
       </CardContent>
     </Card>
   );

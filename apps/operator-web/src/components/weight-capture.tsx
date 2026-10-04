@@ -167,14 +167,16 @@ export function WeightCapture({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="manual-weight">Weight in kilograms</Label>
+            <Label htmlFor="manual-weight" className="sr-only">
+              Weight in kilograms
+            </Label>
             <NumberInput
               id="manual-weight"
               autoFocus
               value={manualValue}
               min={0}
               step="1"
-              placeholder="0"
+              placeholder="Weight in kilograms"
               onChange={(event) => setManualValue(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {

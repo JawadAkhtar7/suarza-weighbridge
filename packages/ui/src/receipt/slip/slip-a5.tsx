@@ -27,6 +27,7 @@ import {
   type SlipValues,
   type SlipView,
 } from './layout.js';
+import { isPendingSlip } from './values.js';
 import * as ART from './art.js';
 
 /** Design pixels to millimetres, as a CSS length. */
@@ -73,7 +74,14 @@ export function SlipA5({
   className,
 }: SlipA5Props) {
   const layers = LAYERS[view];
-  const items = SLIP.filter((item) => layers.includes(item.layer));
+  /* A first-weight slip loses the furniture that belongs to numbers it does
+     not have yet, and the net drops to line up with the second weight. */
+  const pending = isPendingSlip(values);
+  const items = SLIP.filter(
+    (item) => layers.includes(item.layer) && !(pending && item.omitWhenPending),
+  ).map((item) =>
+    pending && item.topWhenPending !== undefined ? { ...item, top: item.topWhenPending } : item,
+  );
 
   /* The overprint goes onto paper that is already printed, so it draws no
      background of its own — white ink does not exist, and a white rectangle

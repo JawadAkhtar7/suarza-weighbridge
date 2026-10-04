@@ -42,8 +42,8 @@ export const ledgerKindSchema = z.enum(LEDGER_KINDS);
 export type LedgerKind = (typeof LEDGER_KINDS)[number];
 
 export const LEDGER_KIND_LABELS: Record<LedgerKind, string> = {
-  WEIGHING: 'Weighing charge',
-  PAYMENT: 'Payment received',
+  WEIGHING: 'Weighing',
+  PAYMENT: 'Payment',
   ADJUSTMENT: 'Adjustment',
 };
 
@@ -61,6 +61,13 @@ export const LEDGER_KIND_URDU: Record<LedgerKind, string> = {
   ADJUSTMENT: 'ترمیم',
 };
 
+/*
+ * Two words carry the whole ledger: debit and credit.
+ *
+ * The keys below still read `owes`, `charged`, `paid` — they are the states
+ * the data is in, and renaming them would churn every call site for nothing.
+ * What a manager READS is only ever debit or credit, in either language.
+ */
 export const LEDGER_URDU = {
   ledger: 'کھاتہ',
   customers: 'کسٹمرز',
@@ -70,19 +77,19 @@ export const LEDGER_URDU = {
   id: 'شناختی نمبر',
   matchKey: 'ملاپ کی کلید',
   balance: 'بقایا',
-  owes: 'واجب الادا',
-  inCredit: 'جمع شدہ',
+  owes: 'ڈیبٹ',
+  inCredit: 'کریڈٹ',
   settled: 'حساب برابر',
-  totalOwed: 'کل واجب الادا رقم',
-  heldInAdvance: 'پیشگی جمع شدہ رقم',
-  charged: 'کل چارج',
-  paid: 'کل ادائیگی',
+  totalOwed: 'کل ڈیبٹ',
+  heldInAdvance: 'کل کریڈٹ',
+  charged: 'ڈیبٹ',
+  paid: 'کریڈٹ',
   entries: 'اندراجات',
   statement: 'کھاتہ کی تفصیل',
   date: 'تاریخ',
   detail: 'تفصیل',
-  debit: 'ڈیبٹ (چارج)',
-  credit: 'کریڈٹ (ادائیگی)',
+  debit: 'ڈیبٹ',
+  credit: 'کریڈٹ',
   recordPayment: 'ادائیگی درج کریں',
   adjustment: 'ترمیم کریں',
   amount: 'رقم',
@@ -95,8 +102,8 @@ export const LEDGER_URDU = {
   nothingYet: 'ابھی کوئی اندراج نہیں',
   cancel: 'منسوخ',
   save: 'محفوظ کریں',
-  customerOwesMore: 'کسٹمر پر مزید واجب الادا',
-  customerOwesLess: 'کسٹمر پر کم واجب الادا',
+  customerOwesMore: 'ڈیبٹ بڑھے گا',
+  customerOwesLess: 'ڈیبٹ کم ہوگا',
 } as const;
 
 /**
@@ -249,9 +256,9 @@ export function balanceState(balancePkr: number): BalanceState {
 export function balanceLabel(balancePkr: number): string {
   switch (balanceState(balancePkr)) {
     case 'owing':
-      return 'Owes';
+      return 'Debit';
     case 'credit':
-      return 'In credit';
+      return 'Credit';
     case 'settled':
       return 'Settled';
   }

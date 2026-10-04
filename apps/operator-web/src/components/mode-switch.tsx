@@ -31,7 +31,6 @@ interface ModeOption {
   key: WeighingMode;
   step: string;
   title: string;
-  detail: string;
   icon: typeof EmptyTruckIcon;
 }
 
@@ -40,28 +39,18 @@ const OPTIONS: ModeOption[] = [
     key: 'first',
     step: '1',
     title: 'First Weight',
-    detail: 'Empty Truck arrived — weigh it and start a slip.',
     icon: EmptyTruckIcon,
   },
   {
     key: 'second',
     step: '2',
     title: 'Second Weight',
-    detail: 'Truck is back with a slip — weigh again and finish',
     icon: LoadedTruckIcon,
   },
   {
     key: 'third',
     step: '3',
-    /*
-     * The detail line works harder here than on the other two.
-     *
-     * After "First" and "Second", a number three reads as a third trip over
-     * the bridge — which is the opposite of what this is. So the line says
-     * plainly that it replaces both: one visit, no slip to come back with.
-     */
     title: 'Third Weight',
-    detail: 'Instead of 1 and 2 — driver tells you the empty weight',
     icon: TypedWeightTruckIcon,
   },
 ];
@@ -121,9 +110,6 @@ export function ModeSwitch({
                 )}
               >
                 {option.title}
-              </span>
-              <span className="block text-xs leading-tight text-muted-foreground">
-                {option.detail}
               </span>
             </span>
           </button>

@@ -18,6 +18,7 @@
     "dev:web": "turbo run dev --filter=@suarza/operator-web --filter=@suarza/manager-web",
     "dev:api": "turbo run dev --filter=@suarza/agent --filter=@suarza/server",
     "slip:render": "apps/agent/node_modules/.bin/tsx scripts/render-slip.mjs",
+    "ledger:render": "apps/agent/node_modules/.bin/tsx scripts/render-ledger-report.mjs",
     "slip:art": "node scripts/build-slip-art.mjs"
   },
   "devDependencies": {

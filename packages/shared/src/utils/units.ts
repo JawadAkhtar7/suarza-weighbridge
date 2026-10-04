@@ -102,10 +102,10 @@ export function formatTon(ton: number, decimals = DEFAULT_PRECISION.ton): string
 }
 
 export function formatMaund(maund: number, decimals = DEFAULT_PRECISION.maund): string {
-  return `${formatter(decimals).format(round(maund, decimals))} maund`;
+  return `${formatter(decimals).format(round(maund, decimals))} Mann`;
 }
 
-/** "12,340 kg · 12.340 ton · 308.500 maund" — the completion-screen line. */
+/** "12,340 kg · 12.340 ton · 308.500 Mann" — the completion-screen line. */
 export function formatAllUnits(net: NetWeight, precision: WeightPrecision = {}): string {
   const p = { ...DEFAULT_PRECISION, ...precision };
   return [formatKg(net.kg, p.kg), formatTon(net.ton, p.ton), formatMaund(net.maund, p.maund)].join(

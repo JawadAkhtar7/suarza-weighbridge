@@ -10,15 +10,16 @@
  * leaving the inactive one alive would make F9 ambiguous.
  */
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button, ThemeToggle, toast } from '@suarza/ui';
-import type { Weighment } from '@suarza/shared';
+import type { NetWeight, Weighment } from '@suarza/shared';
 import { Settings } from 'lucide-react';
 import { LiveWeightPanel } from './components/live-weight-panel.js';
 import { WeightCapture, type CapturedWeight } from './components/weight-capture.js';
 import { NewWeighmentForm } from './components/new-weighment-form.js';
 import { SavedWeighment } from './components/saved-weighment.js';
 import { ReturnWeighment } from './components/return-weighment.js';
+import { NetWeightDisplay } from './components/net-weight-display.js';
 import { SettingsPanel } from './components/settings-panel.js';
 import { ModeSwitch, type WeighingMode } from './components/mode-switch.js';
 import { useLiveWeight, useSyncStatus } from './hooks/use-live-weight.js';
@@ -32,6 +33,16 @@ export function App() {
   const [captured, setCaptured] = useState<CapturedWeight | null>(null);
   const [saved, setSaved] = useState<Weighment | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /* The pass-two net, reported up by ReturnWeighment so it can be shown in
+     the left column directly under the capture card — the net belongs beside
+     the weight it is computed from, not further down a separate column.
+     Stable identity via useCallback: the flow reports this from an effect,
+     and a new function each render would make that effect fire forever. */
+  const [secondNet, setSecondNet] = useState<{ net: NetWeight; pending: boolean } | null>(null);
+  const reportSecondNet = useCallback(
+    (net: NetWeight | null, pending: boolean) => setSecondNet(net ? { net, pending } : null),
+    [],
+  );
 
   const switchMode = (next: WeighingMode) => {
     if (next === mode) return;
@@ -39,6 +50,7 @@ export function App() {
     // across modes is how a first weight ends up recorded as a second one.
     setCaptured(null);
     setSaved(null);
+    setSecondNet(null);
     setMode(next);
   };
 
@@ -100,29 +112,41 @@ export function App() {
               online={sync.online}
             />
 
-            {/* In second-weight mode the capture control lives inside the
-                flow, next to the record it belongs to, so it isn't duplicated
-                here. The one-visit flow captures the LOADED truck, so the
-                control is labelled for pass two even though the form beside it
-                is the pass-one form. */}
-            {mode !== 'second' && !saved && (
+            {/* One place for this control, in every mode: under the live
+                reading, beside the scale it reads from. It used to sit inside
+                the second-weight flow instead, next to the record it belonged
+                to, which meant the operator's hand went to a different part
+                of the screen depending on which pass they were on.
+
+                It no longer waits for a slip to be found, either. The truck is
+                on the bridge while the operator is still typing the slip
+                number, and the weight is the thing that cannot wait. Saving is
+                still gated on the record, inside the flow.
+
+                The one-visit flow weighs the LOADED truck, so it is labelled
+                for pass two even though the form beside it is the pass-one
+                form. */}
+            {!saved && (
               <WeightCapture
                 live={live}
                 captured={captured}
                 onCapture={setCaptured}
                 onClear={() => setCaptured(null)}
-                pass={mode === 'third' ? 'second' : 'first'}
+                pass={mode === 'first' ? 'first' : 'second'}
               />
+            )}
+
+            {mode === 'second' && secondNet && (
+              <NetWeightDisplay net={secondNet.net} pending={secondNet.pending} />
             )}
           </div>
 
           <div>
             {mode === 'second' ? (
               <ReturnWeighment
-                live={live}
                 captured={captured}
-                onCapture={setCaptured}
                 onClearCapture={() => setCaptured(null)}
+                onNetChange={reportSecondNet}
               />
             ) : saved ? (
               <SavedWeighment

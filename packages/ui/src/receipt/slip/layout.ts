@@ -84,6 +84,23 @@ interface Placed {
   right?: number;
   top: number;
   layer: Layer;
+  /**
+   * Drop this item from a first-weight slip.
+   *
+   * Before the truck comes back the second weight and the net read `Pending`,
+   * and the furniture around a number it does not have yet — the clock icon
+   * waiting for a timestamp, the MANN box waiting for a conversion — reads as
+   * a slip that failed to print rather than one that is honestly half done.
+   */
+  omitWhenPending?: true;
+  /**
+   * Where this item sits on a first-weight slip instead.
+   *
+   * Only the net weight needs it. It normally rides high to leave room for
+   * the MANN box beneath; with that box gone it drops to the second weight's
+   * baseline so the two `Pending`s line up.
+   */
+  topWhenPending?: number;
 }
 
 export interface BoxItem extends Placed {
@@ -135,6 +152,7 @@ export type ValueField =
   | 'amount'
   | 'first_at'
   | 'first_kg'
+  | 'first_manual'
   | 'second_at'
   | 'second_kg'
   | 'second_manual'
@@ -278,12 +296,13 @@ export const SLIP: SlipItem[] = [
   { kind: 'image', layer: 'chrome', art: 'ICON_WEIGH_TIME', left: 45.39, top: 425.31, width: 15.88, height: 15.8, alt: '' },
   { kind: 'text', layer: 'value', left: 67.5, top: 428.67, field: 'first_at', size: 8.75, weight: 500, colour: ink, font: 'display', tracking: 0.28 },
   { kind: 'text', layer: 'value', left: 41.8, top: 452.77, field: 'first_kg', size: 26.67, weight: 900, colour: ink, font: 'display', tracking: -0.44 },
+  { kind: 'text', layer: 'value', left: 78.1, top: 488.54, field: 'first_manual', size: 9.33, weight: 500, colour: ink, font: 'display', tracking: 0.22 },
 
   /* second */
   { kind: 'box', layer: 'chrome', left: 200.31, top: 392.11, width: 158.74, height: 22.68, radius: '4.78px', fill: green },
   { kind: 'text', layer: 'chrome', left: 204.8, top: 398.14, text: 'SECOND WEIGHT', size: 11.33, weight: 700, colour: white, font: 'display', tracking: -0.33 },
   urdu({ right: 205.5 }, 397.36, 'دوسراوزن', 12, 700, white),
-  { kind: 'image', layer: 'chrome', art: 'ICON_WEIGH_TIME', left: 213.49, top: 425.31, width: 15.88, height: 15.8, alt: '' },
+  { kind: 'image', layer: 'chrome', art: 'ICON_WEIGH_TIME', left: 213.49, top: 425.31, width: 15.88, height: 15.8, alt: '', omitWhenPending: true },
   { kind: 'text', layer: 'value', left: 235.6, top: 428.67, field: 'second_at', size: 8.75, weight: 500, colour: ink, font: 'display', tracking: 0.28 },
   { kind: 'text', layer: 'value', left: 209.8, top: 452.77, field: 'second_kg', size: 26.67, weight: 900, colour: ink, font: 'display', tracking: -0.42 },
   { kind: 'text', layer: 'value', left: 246.1, top: 488.54, field: 'second_manual', size: 9.33, weight: 500, colour: ink, font: 'display', tracking: 0.22 },
@@ -292,11 +311,11 @@ export const SLIP: SlipItem[] = [
   { kind: 'box', layer: 'chrome', left: 368.4, top: 392.11, width: 158.74, height: 22.68, radius: '4.78px', fill: green },
   { kind: 'text', layer: 'chrome', left: 381.3, top: 398.14, text: 'NET WEIGHT', size: 11.33, weight: 700, colour: white, font: 'display', tracking: -0.27 },
   urdu({ right: 45.8 }, 397.36, 'صافی وزن', 12, 700, white),
-  { kind: 'text', layer: 'value', left: 377.8, top: 432.77, field: 'net_kg', size: 26.67, weight: 900, colour: ink, font: 'display', tracking: -0.62 },
-  { kind: 'box', layer: 'chrome', left: 372.89, top: 474.64, width: 149.76, height: 31.45, radius: '4.78px', fill: COLOURS.washDark },
-  { kind: 'text', layer: 'value', left: 391.1, top: 480.62, field: 'mann', size: 15.97, weight: 700, colour: ink, font: 'display', tracking: 0.15 },
-  { kind: 'text', layer: 'chrome', left: 477.3, top: 478.21, text: 'MANN', size: 11.33, weight: 700, colour: green, font: 'display', tracking: -0.48 },
-  urdu({ right: 58 }, 489.06, 'من', 12, 700),
+  { kind: 'text', layer: 'value', left: 377.8, top: 432.77, topWhenPending: 452.77, field: 'net_kg', size: 26.67, weight: 900, colour: ink, font: 'display', tracking: -0.62 },
+  { kind: 'box', layer: 'chrome', left: 372.89, top: 474.64, width: 149.76, height: 31.45, radius: '4.78px', fill: COLOURS.washDark, omitWhenPending: true },
+  { kind: 'text', layer: 'value', left: 391.1, top: 480.62, field: 'mann', size: 15.97, weight: 700, colour: ink, font: 'display', tracking: 0.15, omitWhenPending: true },
+  { kind: 'text', layer: 'chrome', left: 477.3, top: 478.21, text: 'MANN', size: 11.33, weight: 700, colour: green, font: 'display', tracking: -0.48, omitWhenPending: true },
+  { ...urdu({ right: 58 }, 489.06, 'من', 12, 700), omitWhenPending: true },
 
   /* ------------------------------------------------------------ the photos */
   { kind: 'box', layer: 'chrome', left: 18.9, top: 524.7, width: 257.01, height: 22.43, radius: '4.78px 4.78px 0 0', fill: green },

@@ -7,7 +7,7 @@
  * resolves to a clear next action rather than a dead end.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
   Badge,
@@ -35,32 +35,30 @@ import { agentApi, AgentApiError, printPageUrl, type WeighmentResponse } from '.
 import { SlipSearch } from './slip-search.js';
 import { RecentWeighments } from './recent-weighments.js';
 import { WeighmentSummary } from './weighment-summary.js';
-import { NetWeightDisplay } from './net-weight-display.js';
-import { VoidDialog } from './void-dialog.js';
-import { WeightCapture, type CapturedWeight } from './weight-capture.js';
+import type { CapturedWeight } from './weight-capture.js';
 import { ReceiptPanel } from './receipt-panel.js';
-import type { LiveWeightResult } from '../hooks/use-live-weight.js';
 import { DEFAULT_OPERATOR_USERNAME, HOTKEYS } from '../lib/constants.js';
 import { useHotkeys } from '../hooks/use-hotkeys.js';
 import { useRefreshSyncStatus } from '../hooks/use-refresh-sync-status.js';
 
 interface ReturnWeighmentProps {
-  live: LiveWeightResult;
   captured: CapturedWeight | null;
-  onCapture: (captured: CapturedWeight) => void;
   onClearCapture: () => void;
+  /**
+   * Reports the net upwards so App can show it in the left column, under the
+   * capture card. Must be stable (useCallback) — it is called from an effect.
+   */
+  onNetChange?: (net: NetWeight | null, pending: boolean) => void;
 }
 
 export function ReturnWeighment({
-  live,
   captured,
-  onCapture,
   onClearCapture,
+  onNetChange,
 }: ReturnWeighmentProps) {
   const [record, setRecord] = useState<WeighmentResponse | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [justCompleted, setJustCompleted] = useState(false);
-  const [voidOpen, setVoidOpen] = useState(false);
   // Bumped on every reprint so the receipt panel remounts and prints again —
   // a driver asking for a third copy must not be silently ignored.
   const refreshSyncStatus = useRefreshSyncStatus();
@@ -74,6 +72,30 @@ export function ReturnWeighment({
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('PAID');
   const [product, setProduct] = useState('');
   const [containerNumber, setContainerNumber] = useState('');
+
+  /*
+   * The net, derived here but DISPLAYED by App in the left column beneath the
+   * capture card.
+   *
+   * Computed above the early returns because the effect that reports it is a
+   * hook, and this component returns early when no slip has been found yet.
+   * While the ticket is open the net is previewed from the captured snapshot,
+   * so the operator sees it before committing rather than discovering it on
+   * the printed receipt; once completed, the server's figure is the one.
+   */
+  const openRecord = record?.weighment.status === 'OPEN' ? record : null;
+  const liveNet: NetWeight | null = record
+    ? openRecord
+      ? netWeightAllUnits(openRecord.weighment.first_weight_kg, captured?.kg ?? null)
+      : record.net
+    : null;
+  const netPending = openRecord !== null && !captured;
+
+  // Primitive dependencies only: `liveNet` is a fresh object every render, and
+  // depending on it directly would report, re-render, and report again.
+  useEffect(() => {
+    onNetChange?.(liveNet, netPending);
+  }, [onNetChange, liveNet?.kg, liveNet?.ton, liveNet?.maund, netPending]);
 
   const loadRecord = (response: WeighmentResponse, options: { completed?: boolean } = {}) => {
     setRecord(response);
@@ -163,29 +185,6 @@ export function ReturnWeighment({
     },
   });
 
-  const voidTicket = useMutation({
-    mutationFn: (reason: string) => {
-      if (!record) throw new Error('Nothing to void');
-      return agentApi.voidWeighment(record.weighment.slip_number, {
-        reason,
-        operator_username: DEFAULT_OPERATOR_USERNAME,
-      });
-    },
-    onSuccess: async (response) => {
-      setVoidOpen(false);
-      refreshSyncStatus();
-      toast.success(`Slip ${response.weighment.slip_number} voided`);
-      const fresh = await agentApi.getWeighment(response.weighment.slip_number).catch(() => null);
-      if (fresh) loadRecord(fresh);
-    },
-    onError: (error) => {
-      setVoidOpen(false);
-      toast.error('Could not void the ticket', {
-        description: error instanceof Error ? error.message : 'Unexpected error.',
-      });
-    },
-  });
-
   const reprint = useMutation({
     mutationFn: (receipt: 'FIRST' | 'SECOND') => {
       if (!record) throw new Error('Nothing to reprint');
@@ -250,12 +249,6 @@ export function ReturnWeighment({
   // No name, no customer account — so nothing can be charged to one.
   const hasCustomerName = weighment.customer_name.trim().length > 0;
 
-  // Previewed live from the captured snapshot, so the operator sees the net
-  // before committing rather than discovering it on the printed receipt.
-  const net: NetWeight = isOpen
-    ? netWeightAllUnits(weighment.first_weight_kg, captured?.kg ?? null)
-    : record.net;
-
   return (
     <div className="space-y-4">
       {justCompleted && <CompletedBanner weighment={weighment} />}
@@ -282,23 +275,17 @@ export function ReturnWeighment({
 
       {isOpen && (
         <>
-          <WeightCapture
-            live={live}
-            captured={captured}
-            onCapture={onCapture}
-            onClear={onClearCapture}
-            pass="second"
-          />
+          {/* Capture control and net weight are both in the left column now,
+              under the live reading, where they are in every other mode. */}
 
-          <NetWeightDisplay net={net} pending={!captured} />
-
+          {/* No heading: the fields below are labelled, and a title saying
+              what they already say is a line the operator reads past. */}
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Confirm the charge</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-6">
               <div className="space-y-2">
-                <Label htmlFor="complete-amount">Amount charged</Label>
+                <Label htmlFor="complete-amount" className="sr-only">
+                  Amount charged
+                </Label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                     Rs
@@ -308,6 +295,7 @@ export function ReturnWeighment({
                     value={amount}
                     min={0}
                     step="1"
+                    placeholder="Amount charged"
                     onChange={(event) => setAmount(event.target.value)}
                     className="h-12 pl-9 text-lg"
                   />
@@ -376,19 +364,25 @@ export function ReturnWeighment({
                 </summary>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="complete-product">Product</Label>
+                    <Label htmlFor="complete-product" className="sr-only">
+                      Product
+                    </Label>
                     <Input
                       id="complete-product"
                       value={product}
+                      placeholder="Product"
                       onChange={(event) => setProduct(event.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="complete-container">Container number</Label>
+                    <Label htmlFor="complete-container" className="sr-only">
+                      Container number
+                    </Label>
                     <Input
                       id="complete-container"
                       value={containerNumber}
-                      placeholder="Optional"
+                      placeholder="Container number"
+                      className="uppercase placeholder:normal-case"
                       onChange={(event) => setContainerNumber(event.target.value)}
                     />
                   </div>
@@ -428,13 +422,6 @@ export function ReturnWeighment({
           Reprint receipt
         </Button>
 
-        {isOpen && (
-          <Button variant="ghost" onClick={() => setVoidOpen(true)}>
-            <Ban />
-            Void ticket
-          </Button>
-        )}
-
         <Button variant="ghost" onClick={reset} className="ml-auto">
           <RotateCcw />
           Another slip
@@ -449,13 +436,6 @@ export function ReturnWeighment({
         <ReceiptPanel weighment={weighment} variant="SECOND" autoPrint />
       )}
 
-      <VoidDialog
-        open={voidOpen}
-        onOpenChange={setVoidOpen}
-        slipNumber={weighment.slip_number}
-        onConfirm={(reason) => voidTicket.mutate(reason)}
-        isPending={voidTicket.isPending}
-      />
     </div>
   );
 }
