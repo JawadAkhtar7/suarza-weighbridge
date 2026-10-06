@@ -37,6 +37,7 @@ import { Loader2, Save } from 'lucide-react';
 import { agentApi, AgentApiError, type AgentWarning } from '../lib/api.js';
 import type { CapturedWeight } from './weight-capture.js';
 import { CustomerPicker } from './customer-picker.js';
+import { SlipSearch } from './slip-search.js';
 import { DEFAULT_OPERATOR_USERNAME, HOTKEYS } from '../lib/constants.js';
 import { useHotkeys } from '../hooks/use-hotkeys.js';
 import { useRefreshSyncStatus } from '../hooks/use-refresh-sync-status.js';
@@ -78,17 +79,41 @@ interface NewWeighmentFormProps {
    * is the LOADED one. There is no open ticket and no second visit, so the
    * amount and whether it was paid are settled here too.
    *
-   * One component rather than two: the customer and vehicle fields are the
-   * same in both, and a near-copy of this form would drift from it within a
-   * release or two — which is exactly how the receipt and the PDF drifted.
+   * `fourth` — a truck that has been weighed here before. The operator types
+   * an earlier slip number, both of its weights and all of its customer
+   * details are fetched, either weight can be corrected, and a fresh slip is
+   * issued. Nothing is weighed: the indicator is not consulted at all, which
+   * is why each weight carries its own "mark as manual" box.
+   *
+   * One component rather than four: the customer and vehicle fields are the
+   * same in all of them, and a near-copy of this form would drift from it
+   * within a release or two — which is exactly how the receipt and the PDF
+   * drifted.
    */
-  flow?: 'first' | 'third';
+  flow?: 'first' | 'third' | 'fourth';
 }
 
 export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeighmentFormProps) {
   const isSingleVisit = flow === 'third';
+  /** Both weights come off an earlier slip rather than off the indicator. */
+  const isRepeat = flow === 'fourth';
   // Typed, not weighed: the figure the driver gives for his empty truck.
   const [knownFirstWeight, setKnownFirstWeight] = useState('');
+  // --- fourth weight: everything fetched from an earlier slip -------------
+  const [repeatSecondWeight, setRepeatSecondWeight] = useState('');
+  /*
+   * Whether each weight prints "(MANUAL)" on the slip.
+   *
+   * The operator decides, rather than the software inferring it. Neither
+   * figure was read off the indicator in this flow, so inferring would mark
+   * both every time — but a weight copied unchanged from a slip that WAS
+   * weighed is not a hand-typed number, and marking it as one would misread
+   * the record. Default off; tick what was actually typed.
+   */
+  const [firstIsManual, setFirstIsManual] = useState(false);
+  const [secondIsManual, setSecondIsManual] = useState(false);
+  const [sourceSlip, setSourceSlip] = useState<string | null>(null);
+  const [slipError, setSlipError] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('PAID');
   const [amountEdited, setAmountEdited] = useState(false);
   const refreshSyncStatus = useRefreshSyncStatus();
@@ -111,9 +136,70 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
   const vehicleType = form.watch('vehicle_type') as VehicleType;
 
+  /*
+   * Fetch an earlier slip and fill the whole form from it.
+   *
+   * Deliberately fills the WEIGHTS as well as the details: the point of this
+   * flow is that the truck's empty and loaded figures are already known, so
+   * re-typing them is both slower and a chance to mistype. They stay editable.
+   */
+  const lookup = useMutation({
+    mutationFn: (slip: string) => agentApi.getWeighment(slip),
+    onSuccess: ({ weighment }) => {
+      setSourceSlip(weighment.slip_number);
+      setSlipError(null);
+
+      form.reset({
+        customer_name: weighment.customer_name,
+        customer_company: weighment.customer_company,
+        customer_phone: weighment.customer_phone ?? '',
+        vehicle_type: weighment.vehicle_type as VehicleType,
+        vehicle_plate: weighment.vehicle_plate,
+        container_number: weighment.container_number ?? '',
+        product: weighment.product,
+        amount_charged: weighment.amount_charged,
+      });
+      // The rate is the one that slip was charged, not today's card, so the
+      // amount must not be overwritten when settings next arrive.
+      setAmountEdited(true);
+
+      setKnownFirstWeight(String(weighment.first_weight_kg));
+      setRepeatSecondWeight(
+        weighment.second_weight_kg === null ? '' : String(weighment.second_weight_kg),
+      );
+      // Carry the earlier slip's own answer forward as the starting point.
+      setFirstIsManual(weighment.first_weight_src === 'MANUAL');
+      setSecondIsManual(weighment.second_weight_src === 'MANUAL');
+
+      if (weighment.status === 'VOID') {
+        // Allowed, but said out loud: the figures on a voided slip were
+        // disowned for a reason, and carrying them forward unnoticed would
+        // put them back into the record under a fresh number.
+        toast.warning(`Slip ${weighment.slip_number} was voided`, {
+          description: 'Its details have been filled in. Check both weights before saving.',
+        });
+      } else if (weighment.second_weight_kg === null) {
+        toast.warning(`Slip ${weighment.slip_number} has no second weight yet`, {
+          description: 'Its first weight has been filled in. Type the second one.',
+        });
+      } else {
+        toast.success(`Filled from slip ${weighment.slip_number}`);
+      }
+    },
+    onError: (error) => {
+      setSourceSlip(null);
+      setSlipError(
+        error instanceof AgentApiError && error.status === 404
+          ? 'No weighment found with that slip number.'
+          : error instanceof Error
+            ? error.message
+            : 'Could not fetch that slip.',
+      );
+    },
+  });
+
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
-      if (!captured) throw new Error('No weight captured');
 
       const details = {
         ...createWeighmentSchema
@@ -122,6 +208,26 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
         vehicle_type_label: vehicleTypes.labelFor(values.vehicle_type),
         operator_username: DEFAULT_OPERATOR_USERNAME,
       };
+
+      if (isRepeat) {
+        /*
+         * Both figures are typed here, so both sources are the operator's
+         * answer rather than anything the software can observe. A box left
+         * unticked says the number came off a scale at some point — on the
+         * earlier slip — and the receipt stays silent about it.
+         */
+        return agentApi.createCompletedWeighment({
+          ...details,
+          first_weight_kg: parseAmount(knownFirstWeight),
+          first_weight_src: firstIsManual ? 'MANUAL' : 'SERIAL',
+          second_weight_kg: parseAmount(repeatSecondWeight),
+          second_weight_src: secondIsManual ? 'MANUAL' : 'SERIAL',
+          payment_status: paymentStatus,
+        });
+      }
+
+      // Everything below weighs something, so from here a capture is required.
+      if (!captured) throw new Error('No weight captured');
 
       if (isSingleVisit) {
         // The captured reading is the LOADED truck here; the empty weight is
@@ -145,6 +251,11 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
     onSuccess: (response) => {
       form.reset(emptyValues());
       setKnownFirstWeight('');
+      setRepeatSecondWeight('');
+      setFirstIsManual(false);
+      setSecondIsManual(false);
+      setSourceSlip(null);
+      setSlipError(null);
       setPaymentStatus('PAID');
       setAmountEdited(false);
       refreshSyncStatus();
@@ -165,7 +276,12 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
   // Typed before anything is weighed, so it is checked before the capture is.
   const knownKg = parseAmount(knownFirstWeight);
-  const knownFirstWeightValid = !isSingleVisit || knownKg > 0;
+  const repeatSecondKg = parseAmount(repeatSecondWeight);
+  const knownFirstWeightValid = (!isSingleVisit && !isRepeat) || knownKg > 0;
+  const repeatWeightsValid = !isRepeat || (knownKg > 0 && repeatSecondKg > 0);
+  /* Nothing is captured in the fourth flow, so the capture gate does not
+     apply to it — the two typed weights are the gate instead. */
+  const captureSatisfied = isRepeat || captured !== null;
 
   // No name, no customer account — the same rule the return screen enforces.
   const canGoOnAccount = String(form.watch('customer_name') ?? '').trim().length > 0;
@@ -175,11 +291,21 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
   const submit = form.handleSubmit(
     (values) => {
+      if (isRepeat && !sourceSlip) {
+        toast.error('Fetch an earlier slip first');
+        return;
+      }
+      if (isRepeat && !repeatWeightsValid) {
+        toast.error('Both weights are needed', {
+          description: 'Fetch a slip that has both, or type the missing one.',
+        });
+        return;
+      }
       if (isSingleVisit && !knownFirstWeightValid) {
         toast.error('Enter the empty weight the driver gave you');
         return;
       }
-      if (!captured) {
+      if (!captureSatisfied) {
         toast.error(
           isSingleVisit ? 'Capture the loaded weight before saving' : 'Capture the first weight before saving',
         );
@@ -197,6 +323,12 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
   const resetForm = () => {
     form.reset(emptyValues());
     setAmountEdited(false);
+    setKnownFirstWeight('');
+    setRepeatSecondWeight('');
+    setFirstIsManual(false);
+    setSecondIsManual(false);
+    setSourceSlip(null);
+    setSlipError(null);
   };
 
   /**
@@ -288,7 +420,58 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
             </div>
           )}
 
-          <CustomerPicker onPick={applyCustomer} />
+          {/* ---------------------------------------------- fourth weight */}
+          {isRepeat && (
+            <>
+              <SlipSearch
+                onSearch={(slip) => lookup.mutate(slip)}
+                isSearching={lookup.isPending}
+                error={slipError}
+                onErrorCleared={() => setSlipError(null)}
+              />
+
+              {sourceSlip && (
+                <p className="text-sm text-muted-foreground">
+                  Filled from slip <span className="tabular font-semibold">{sourceSlip}</span>. Both
+                  weights can be corrected below; saving issues a new slip.
+                </p>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <RepeatWeightField
+                  id="repeat-first-weight"
+                  label="First weight"
+                  value={knownFirstWeight}
+                  onChange={setKnownFirstWeight}
+                  manual={firstIsManual}
+                  onManualChange={setFirstIsManual}
+                />
+                <RepeatWeightField
+                  id="repeat-second-weight"
+                  label="Second weight"
+                  value={repeatSecondWeight}
+                  onChange={setRepeatSecondWeight}
+                  manual={secondIsManual}
+                  onManualChange={setSecondIsManual}
+                />
+              </div>
+
+              {/* The figure the customer is billed on, shown before it is
+                  committed rather than discovered on the printed slip. */}
+              <div className="rounded-lg border-2 border-brand/40 bg-brand/5 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Net weight
+                </p>
+                <p className="tabular mt-1 text-3xl font-bold leading-none">
+                  {repeatWeightsValid
+                    ? `${Math.abs(knownKg - repeatSecondKg).toLocaleString()} kg`
+                    : '—'}
+                </p>
+              </div>
+            </>
+          )}
+
+          {!isRepeat && <CustomerPicker onPick={applyCustomer} />}
 
           {/* Below the search box, not above it. Sitting above, it read as a
               heading the search field belonged under, so operators typed the
@@ -426,7 +609,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
             * The same two choices the return screen offers, and the same rule:
             * an account needs a name to charge it to.
             */}
-          {isSingleVisit && (
+          {(isSingleVisit || isRepeat) && (
             <div className="space-y-2 border-t pt-5">
               <Label>Payment</Label>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -474,10 +657,16 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               type="submit"
               variant="brand"
               size="xl"
-              disabled={!captured || !knownFirstWeightValid || mutation.isPending}
+              disabled={
+                !captureSatisfied ||
+                !knownFirstWeightValid ||
+                !repeatWeightsValid ||
+                (isRepeat && !sourceSlip) ||
+                mutation.isPending
+              }
             >
               {mutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-              {isSingleVisit ? 'Save & print slip' : 'Save first weight'}
+              {isSingleVisit || isRepeat ? 'Save & print slip' : 'Save first weight'}
               <kbd className="ml-1 rounded bg-primary-foreground/20 px-1.5 py-0.5 text-xs font-medium">
                 {HOTKEYS.save}
               </kbd>
@@ -491,11 +680,17 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
             </Button>
           </div>
 
-          {!captured && (
+          {!captureSatisfied && (
             <p className="text-sm text-muted-foreground">
               {isSingleVisit
                 ? 'Capture the loaded weight before saving.'
                 : 'Capture the first weight before saving.'}
+            </p>
+          )}
+
+          {isRepeat && !sourceSlip && (
+            <p className="text-sm text-muted-foreground">
+              Fetch an earlier slip to fill this in.
             </p>
           )}
         </form>
@@ -561,6 +756,67 @@ function Field({ htmlFor, label, error, hint, required, markClass, children }: F
       ) : hint ? (
         <p className="text-xs text-muted-foreground">{hint}</p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * One of the fourth flow's two weights: a figure and whether the slip says a
+ * human chose it.
+ *
+ * The box is big and tabular for the same reason the capture readout is —
+ * this number ends up on a slip and in a net weight, and a mistyped digit is
+ * a wrong invoice.
+ */
+function RepeatWeightField({
+  id,
+  label,
+  value,
+  onChange,
+  manual,
+  onManualChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  manual: boolean;
+  onManualChange: (manual: boolean) => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border p-4">
+      <Label htmlFor={id} className="text-sm font-semibold">
+        {label}
+      </Label>
+
+      <div className="relative">
+        <NumberInput
+          id={id}
+          min={0}
+          step="1"
+          inputMode="numeric"
+          placeholder={label}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="tabular h-14 pr-12 text-2xl font-bold"
+        />
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-muted-foreground">
+          kg
+        </span>
+      </div>
+
+      {/* A plain checkbox rather than the two-button pattern used elsewhere:
+          this is one yes/no about what the slip prints, not a choice between
+          two things the operator is weighing up. */}
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={manual}
+          onChange={(event) => onManualChange(event.target.checked)}
+          className="h-4 w-4 cursor-pointer accent-[hsl(var(--brand-orange))]"
+        />
+        Print &ldquo;MANUAL&rdquo; on the slip
+      </label>
     </div>
   );
 }

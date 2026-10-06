@@ -125,8 +125,13 @@ export function App() {
 
                 The one-visit flow weighs the LOADED truck, so it is labelled
                 for pass two even though the form beside it is the pass-one
-                form. */}
-            {!saved && (
+                form.
+
+                Hidden in the fourth flow: both of its weights come off an
+                earlier slip, nothing is weighed, and a capture button there
+                would be a control with nothing to do. The live reading stays
+                above it, because the operator still wants to see the bridge. */}
+            {!saved && mode !== 'fourth' && (
               <WeightCapture
                 live={live}
                 captured={captured}
@@ -160,7 +165,7 @@ export function App() {
               <NewWeighmentForm
                 captured={captured}
                 onSaved={handleSaved}
-                flow={mode === 'third' ? 'third' : 'first'}
+                flow={mode === 'third' ? 'third' : mode === 'fourth' ? 'fourth' : 'first'}
               />
             )}
           </div>

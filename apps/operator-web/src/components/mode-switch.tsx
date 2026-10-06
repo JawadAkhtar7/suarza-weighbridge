@@ -25,7 +25,7 @@
 import { cn } from '@suarza/ui';
 import { EmptyTruckIcon, LoadedTruckIcon, TypedWeightTruckIcon } from './truck-icons.js';
 
-export type WeighingMode = 'first' | 'second' | 'third';
+export type WeighingMode = 'first' | 'second' | 'third' | 'fourth';
 
 interface ModeOption {
   key: WeighingMode;
@@ -53,6 +53,21 @@ const OPTIONS: ModeOption[] = [
     title: 'Third Weight',
     icon: TypedWeightTruckIcon,
   },
+  {
+    /*
+     * A truck that has been here before. Its empty and loaded weights are
+     * already on an earlier slip, so neither is weighed again — they are
+     * fetched, adjusted if need be, and a fresh slip is issued.
+     *
+     * Same icon as step 3 on purpose: both are weights that did not come off
+     * the indicator just now, and inventing a fourth truck drawing to say
+     * "but differently" would carry less meaning than the step number does.
+     */
+    key: 'fourth',
+    step: '4',
+    title: 'Fourth Weight',
+    icon: TypedWeightTruckIcon,
+  },
 ];
 
 export function ModeSwitch({
@@ -69,7 +84,7 @@ export function ModeSwitch({
       // showing.
       role="radiogroup"
       aria-label="What is happening at the weighbridge"
-      className="grid gap-3 sm:grid-cols-3"
+      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
     >
       {OPTIONS.map((option) => {
         const active = mode === option.key;
