@@ -385,6 +385,32 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
   return (
     <Card>
       <CardContent className="pt-6">
+        {/*
+          * Outside the form below, deliberately.
+          *
+          * SlipSearch carries a form of its own, and a form inside a form is
+          * invalid HTML: pressing Enter in the slip box submitted the OUTER
+          * form, so the browser navigated — the page appeared to reload and
+          * the typed slip number vanished.
+          */}
+        {isRepeat && (
+          <div className="mb-5 space-y-2">
+            <SlipSearch
+              onSearch={(slip) => lookup.mutate(slip)}
+              isSearching={lookup.isPending}
+              error={slipError}
+              onErrorCleared={() => setSlipError(null)}
+            />
+
+            {sourceSlip && (
+              <p className="text-sm text-muted-foreground">
+                Filled from slip <span className="tabular font-semibold">{sourceSlip}</span>. Both
+                weights can be corrected below; saving issues a new slip.
+              </p>
+            )}
+          </div>
+        )}
+
         <form onSubmit={submit} className="space-y-5" noValidate>
           {/*
             * First on the screen, because it is first in the conversation: the
@@ -423,20 +449,6 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
           {/* ---------------------------------------------- fourth weight */}
           {isRepeat && (
             <>
-              <SlipSearch
-                onSearch={(slip) => lookup.mutate(slip)}
-                isSearching={lookup.isPending}
-                error={slipError}
-                onErrorCleared={() => setSlipError(null)}
-              />
-
-              {sourceSlip && (
-                <p className="text-sm text-muted-foreground">
-                  Filled from slip <span className="tabular font-semibold">{sourceSlip}</span>. Both
-                  weights can be corrected below; saving issues a new slip.
-                </p>
-              )}
-
               <div className="grid gap-4 sm:grid-cols-2">
                 <RepeatWeightField
                   id="repeat-first-weight"
