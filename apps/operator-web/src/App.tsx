@@ -120,13 +120,21 @@ export function App() {
           */}
         <div
           className={cn(
-            'grid gap-6 lg:items-start lg:grid-cols-[minmax(300px,24rem)_1fr]',
-            /* Two steps, because the weighbridge PC may be a 1366-wide screen:
-               at xl the camera column takes what it can without squeezing the
-               form into one column of fields, and only on a genuinely wide
-               monitor does it grow. */
+            'grid gap-6 lg:items-start lg:grid-cols-[28rem_minmax(0,1fr)]',
+            /*
+             * Scale, paperwork, cameras — in that order left to right.
+             *
+             * The first column is a fixed 28rem rather than a share of what
+             * is left, because the live readout is set at 4.5rem tabular and
+             * "120,480 kg" needs about 440px to stay on one line. It was
+             * getting 336, which is what made the number look cramped.
+             *
+             * The form takes the slack. The camera column is narrower at xl,
+             * where a 1366-wide screen has none to spare, and grows on a real
+             * monitor.
+             */
             cameras.enabled &&
-              'xl:grid-cols-[minmax(300px,21rem)_minmax(260px,22rem)_1fr] 2xl:grid-cols-[minmax(320px,22rem)_minmax(320px,28rem)_1fr]',
+              'xl:grid-cols-[28rem_minmax(0,1fr)_18rem] 2xl:grid-cols-[30rem_minmax(0,1fr)_24rem]',
           )}
         >
           <div className="space-y-4 lg:sticky lg:top-6">
@@ -172,15 +180,6 @@ export function App() {
 
           </div>
 
-          {/* The middle column: what the cameras see. Sticky like the scale
-              beside it, because the operator looks at both while filling in
-              the form in the third column. */}
-          {cameras.enabled && (
-            <div className="lg:sticky lg:top-6">
-              <CameraPanel />
-            </div>
-          )}
-
           <div>
             {mode === 'second' ? (
               <ReturnWeighment
@@ -204,6 +203,18 @@ export function App() {
               />
             )}
           </div>
+
+          {/* Far right: what the cameras see. Sticky like the scale at the
+              other end, because the operator checks both while working down
+              the form between them.
+
+              Below xl there is no third column to be in, so it spans the full
+              width underneath rather than wedging itself into one. */}
+          {cameras.enabled && (
+            <div className="lg:col-span-2 lg:sticky lg:top-6 xl:col-span-1">
+              <CameraPanel />
+            </div>
+          )}
         </div>
       </main>
 
