@@ -56,6 +56,17 @@ export function CameraPanel() {
      keeps the agent polling a camera three times a second for a picture
      nobody is looking at. */
   const [visible, setVisible] = useState(() => !document.hidden);
+
+  /*
+   * Which views could not be reached.
+   *
+   * A stream that fails leaves the browser's broken-image glyph in the frame,
+   * which reads as a bug rather than as "this camera is not answering". That
+   * is the normal state on a machine off the bridge's network, and it is also
+   * what a dead camera looks like on site — both deserve the same honest
+   * empty box.
+   */
+  const [failed, setFailed] = useState<Record<string, boolean>>({});
   useEffect(() => {
     const onChange = () => setVisible(!document.hidden);
     document.addEventListener('visibilitychange', onChange);
@@ -86,17 +97,19 @@ export function CameraPanel() {
                 and without this the panel reads as empty space rather than
                 as two views waiting for a signal. */}
             <div className="relative overflow-hidden rounded-md border border-border/70 bg-muted">
-              {visible ? (
+              {visible && !failed[view] ? (
                 <img
                   src={cameraLiveUrl(view, nonce)}
                   alt={`${LABELS[view]} of the weighbridge, live`}
+                  onError={() => setFailed((current) => ({ ...current, [view]: true }))}
                   /* 16:9, which is what these cameras send. A fixed box stops
                      the panel jumping about while the first frame arrives. */
                   className="aspect-video w-full object-cover"
                 />
               ) : (
-                <div className="flex aspect-video w-full items-center justify-center text-muted-foreground">
+                <div className="flex aspect-video w-full flex-col items-center justify-center gap-1 text-muted-foreground">
                   <CameraOff className="h-6 w-6" />
+                  {failed[view] && <span className="text-[11px]">No signal</span>}
                 </div>
               )}
             </div>

@@ -22,6 +22,15 @@ const AGENT_ROUTES = [
   // the client then reports as a 404 or as nothing at all.
   '/sync/',
   '/vehicle-types',
+  // Cameras. `/cameras` is the status the panel asks for before it draws
+  // anything; `/camera/` carries the live stream and single snapshots;
+  // `/captures/` serves the stills a slip prints. Missing, the panel asked
+  // Vite instead of the agent, got index.html with a 200, read it as "no
+  // cameras" and drew nothing at all — on a dev machine only, which is
+  // exactly the case this list exists to cover.
+  '/cameras',
+  '/camera/',
+  '/captures/',
 ];
 
 const AGENT_ORIGIN = process.env['AGENT_ORIGIN'] ?? 'http://127.0.0.1:3100';

@@ -22,6 +22,11 @@ const API_PREFIXES = [
   '/simulator',
   '/settings',
   '/customers',
+  '/sync/',
+  '/vehicle-types',
+  '/cameras',
+  '/camera/',
+  '/captures/',
 ];
 
 export function resolveOperatorWebDir(override?: string): string | null {
