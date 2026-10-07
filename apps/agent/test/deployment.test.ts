@@ -7,7 +7,15 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { CLOUD_API_KEY, CLOUD_API_URL, CLOUD_DISABLED, cloudSettings } from '../src/deployment.js';
+import {
+  CAMERA_FRONT_URL,
+  CAMERA_SIDE_URL,
+  CLOUD_API_KEY,
+  CLOUD_API_URL,
+  CLOUD_DISABLED,
+  cameraSettings,
+  cloudSettings,
+} from '../src/deployment.js';
 
 describe('cloudSettings', () => {
   it('uses the values in the code when the environment says nothing', () => {
@@ -54,5 +62,38 @@ describe('cloudSettings', () => {
   it('ships a real address, not the example placeholder', () => {
     expect(CLOUD_API_URL).toMatch(/^https?:\/\//);
     expect(CLOUD_API_URL).not.toContain('example.com');
+  });
+});
+
+describe('cameraSettings', () => {
+  it('uses the values in the code when the environment says nothing', () => {
+    // The weighbridge PC. install.bat writes a .env with the COM port in it
+    // and nothing about the cameras, which is the whole point of them being
+    // here: moving a camera is a push, not a drive.
+    const settings = cameraSettings({});
+    expect(settings.frontUrl).toBe(CAMERA_FRONT_URL);
+    expect(settings.sideUrl).toBe(CAMERA_SIDE_URL);
+  });
+
+  it('lets a developer point at something else without editing the code', () => {
+    const settings = cameraSettings({ CAMERA_FRONT_URL: 'http://127.0.0.1:9000/snap' });
+    expect(settings.frontUrl).toBe('http://127.0.0.1:9000/snap');
+    // Only what was overridden moves; the other camera keeps the real address.
+    expect(settings.sideUrl).toBe(CAMERA_SIDE_URL);
+  });
+
+  it('ignores a blank or nonsense number rather than running with it', () => {
+    // A timeout of zero would make every capture fail instantly, and the
+    // operator would see "no camera" on a bridge whose cameras are fine.
+    expect(cameraSettings({ CAMERA_TIMEOUT_MS: '' }).timeoutMs).toBeGreaterThan(0);
+    expect(cameraSettings({ CAMERA_TIMEOUT_MS: 'soon' }).timeoutMs).toBeGreaterThan(0);
+    expect(cameraSettings({ CAMERA_LIVE_FPS: '0' }).liveFps).toBeGreaterThan(0);
+  });
+
+  it('ships real addresses, not placeholders', () => {
+    for (const url of [CAMERA_FRONT_URL, CAMERA_SIDE_URL]) {
+      expect(url).toMatch(/^https?:\/\//);
+      expect(url).not.toContain('example.com');
+    }
   });
 });

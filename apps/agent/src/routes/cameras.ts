@@ -13,6 +13,7 @@ import { stat } from 'node:fs/promises';
 import { PassThrough } from 'node:stream';
 import type { AgentDeps } from '../server.js';
 import { CAMERA_VIEWS, type CameraView } from '../cameras/camera-client.js';
+import { cameraSettings } from '../deployment.js';
 
 interface CaptureParams {
   id: string;
@@ -33,7 +34,7 @@ export function registerCameraRoutes(app: FastifyInstance, deps: AgentDeps): voi
   app.get('/cameras', () => ({
     enabled: cameras?.enabled ?? false,
     views: cameras?.configuredViews() ?? [],
-    live_fps: deps.config.CAMERA_LIVE_FPS,
+    live_fps: cameraSettings().liveFps,
   }));
 
   /**
@@ -130,7 +131,7 @@ export function registerCameraRoutes(app: FastifyInstance, deps: AgentDeps): voi
     request.raw.on('close', stop);
     request.raw.on('aborted', stop);
 
-    const intervalMs = Math.max(100, Math.round(1000 / deps.config.CAMERA_LIVE_FPS));
+    const intervalMs = Math.max(100, Math.round(1000 / cameraSettings().liveFps));
 
     void (async () => {
       while (!stopped) {

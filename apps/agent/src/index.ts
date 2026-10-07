@@ -8,7 +8,7 @@
  * (brief §3B, §7.3, §7.5, §11).
  */
 
-import { cloudSettings } from './deployment.js';
+import { cameraSettings, cloudSettings } from './deployment.js';
 import { loadConfig } from './config.js';
 import { closeDatabase, openDatabase } from './db/connection.js';
 import { WeighmentRepository } from './db/weighments.js';
@@ -30,6 +30,7 @@ async function main(): Promise<void> {
   /* Where this weighbridge syncs to - in code so it can be changed by pushing
      rather than by visiting the site. See deployment.ts. */
   const cloud = cloudSettings();
+  const cameraConfig = cameraSettings();
 
   const db = openDatabase({ path: config.DATABASE_PATH, verbose: log });
 
@@ -86,19 +87,19 @@ async function main(): Promise<void> {
    * with no cameras runs unchanged — every slip simply prints the placeholder.
    */
   const cameras = new CameraClient({
-    frontUrl: config.CAMERA_FRONT_URL,
-    sideUrl: config.CAMERA_SIDE_URL,
-    username: config.CAMERA_USERNAME,
-    password: config.CAMERA_PASSWORD,
-    timeoutMs: config.CAMERA_TIMEOUT_MS,
+    frontUrl: cameraConfig.frontUrl,
+    sideUrl: cameraConfig.sideUrl,
+    username: cameraConfig.username,
+    password: cameraConfig.password,
+    timeoutMs: cameraConfig.timeoutMs,
     onLog: (level, message) => log(`[camera:${level}] ${message}`),
   });
 
   const capture = new CaptureService({
     db,
     cameras,
-    directory: config.CAPTURE_PATH,
-    keepDays: config.CAPTURE_KEEP_DAYS,
+    directory: cameraConfig.capturePath,
+    keepDays: cameraConfig.keepDays,
     onLog: (level, message) => log(`[camera:${level}] ${message}`),
   });
 
