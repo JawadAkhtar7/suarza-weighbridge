@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useState } from 'react';
-import { Button, ThemeToggle, cn, toast } from '@suarza/ui';
+import { Button, ThemeToggle, toast } from '@suarza/ui';
 import type { NetWeight, Weighment } from '@suarza/shared';
 import { Settings } from 'lucide-react';
 import { LiveWeightPanel } from './components/live-weight-panel.js';
@@ -20,7 +20,7 @@ import { NewWeighmentForm } from './components/new-weighment-form.js';
 import { SavedWeighment } from './components/saved-weighment.js';
 import { ReturnWeighment } from './components/return-weighment.js';
 import { NetWeightDisplay } from './components/net-weight-display.js';
-import { CameraPanel, useCameras } from './components/camera-panel.js';
+import { CameraPanel } from './components/camera-panel.js';
 import { SettingsPanel } from './components/settings-panel.js';
 import { ModeSwitch, type WeighingMode } from './components/mode-switch.js';
 import { useLiveWeight, useSyncStatus } from './hooks/use-live-weight.js';
@@ -34,9 +34,6 @@ export function App() {
   const [captured, setCaptured] = useState<CapturedWeight | null>(null);
   const [saved, setSaved] = useState<Weighment | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  /* Decides whether the middle column exists at all — an empty one would
-     hold its width open and leave a gap on a bridge with no cameras. */
-  const cameras = useCameras();
   /* The pass-two net, reported up by ReturnWeighment so it can be shown in
      the left column directly under the capture card — the net belongs beside
      the weight it is computed from, not further down a separate column.
@@ -101,42 +98,18 @@ export function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[120rem] space-y-6 px-4 py-6 sm:px-6">
-        {/* Above everything: what is happening at the gate decides the rest of
-            the screen, and a returning truck is the moment an operator needs to
-            find this without hunting. */}
-        <ModeSwitch mode={mode} onChange={switchMode} />
-
+      <main className="mx-auto max-w-[120rem] px-4 py-6 sm:px-6">
         {/*
-          * Three columns on a wide screen: the scale, what it sees, and the
-          * paperwork. The cameras used to sit under the live weight, which
-          * squeezed them into half a narrow column and pushed the form down.
-          * In their own column they are big enough to actually check a truck
-          * is squarely on the bridge, and the page uses the width a desktop
-          * PC has instead of leaving it as margin.
+          * Two columns, and the scale starts at the very top.
           *
-          * Two columns below xl, where a third would make all of them too
-          * narrow to read.
+          * The mode tabs used to span the full width above everything, which
+          * pushed the live readout a tab-row down the screen for no reason —
+          * the operator looks at the weight far more often than they switch
+          * pass. The tabs now head the right-hand column instead, so the
+          * readout sits level with the header and the cameras come back
+          * underneath it where the eye already is.
           */}
-        <div
-          className={cn(
-            'grid gap-6 lg:items-start lg:grid-cols-[28rem_minmax(0,1fr)]',
-            /*
-             * Scale, paperwork, cameras — in that order left to right.
-             *
-             * The first column is a fixed 28rem rather than a share of what
-             * is left, because the live readout is set at 4.5rem tabular and
-             * "120,480 kg" needs about 440px to stay on one line. It was
-             * getting 336, which is what made the number look cramped.
-             *
-             * The form takes the slack. The camera column is narrower at xl,
-             * where a 1366-wide screen has none to spare, and grows on a real
-             * monitor.
-             */
-            cameras.enabled &&
-              'xl:grid-cols-[28rem_minmax(0,1fr)_18rem] 2xl:grid-cols-[30rem_minmax(0,1fr)_24rem]',
-          )}
-        >
+        <div className="grid gap-6 lg:items-start lg:grid-cols-[28rem_minmax(0,1fr)] 2xl:grid-cols-[30rem_minmax(0,1fr)]">
           <div className="space-y-4 lg:sticky lg:top-6">
             <LiveWeightPanel
               live={live}
@@ -178,9 +151,20 @@ export function App() {
               <NetWeightDisplay net={secondNet.net} pending={secondNet.pending} />
             )}
 
+            {/* Back under the weights, where the eye already is: the operator
+                glances at the live view to check the truck is squarely on the
+                bridge, and that is the same glance as reading the scale.
+                Draws nothing on a bridge with no cameras, and the column
+                simply closes up. */}
+            <CameraPanel />
           </div>
 
-          <div>
+          <div className="space-y-6">
+            {/* Heading this column rather than the whole page. Switching pass
+                is something an operator does once a truck, not once a glance,
+                so it does not deserve a full-width row above the readout. */}
+            <ModeSwitch mode={mode} onChange={switchMode} />
+
             {mode === 'second' ? (
               <ReturnWeighment
                 captured={captured}
@@ -203,18 +187,6 @@ export function App() {
               />
             )}
           </div>
-
-          {/* Far right: what the cameras see. Sticky like the scale at the
-              other end, because the operator checks both while working down
-              the form between them.
-
-              Below xl there is no third column to be in, so it spans the full
-              width underneath rather than wedging itself into one. */}
-          {cameras.enabled && (
-            <div className="lg:col-span-2 lg:sticky lg:top-6 xl:col-span-1">
-              <CameraPanel />
-            </div>
-          )}
         </div>
       </main>
 

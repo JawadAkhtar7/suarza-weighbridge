@@ -84,7 +84,10 @@ export function ModeSwitch({
       // showing.
       role="radiogroup"
       aria-label="What is happening at the weighbridge"
-      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      /* Four across only from xl. These head the right-hand column now
+         rather than the whole page, so at lg they would get about 130px
+         each — not enough for a step number, an icon and "Second Weight". */
+      className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
     >
       {OPTIONS.map((option) => {
         const active = mode === option.key;
