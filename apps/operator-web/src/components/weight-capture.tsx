@@ -205,10 +205,10 @@ export function WeightCapture({
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Capture {pass} weight</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      {/* No heading. "Capture first weight" sat above a button that already
+          says Capture weight, on a screen where the pass is chosen by a tab
+          two inches away. */}
+      <CardContent className="space-y-3 pt-6">
         <Button
           variant="brand"
           size="xl"

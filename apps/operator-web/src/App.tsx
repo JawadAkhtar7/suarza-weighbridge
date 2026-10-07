@@ -115,7 +115,6 @@ export function App() {
               live={live}
               pendingSyncCount={sync.pendingCount}
               blockedSyncCount={sync.blockedCount}
-              online={sync.online}
             />
 
             {/* One place for this control, in every mode: under the live
