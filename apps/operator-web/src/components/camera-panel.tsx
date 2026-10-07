@@ -80,7 +80,12 @@ export function CameraPanel() {
             <figcaption className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {LABELS[view]}
             </figcaption>
-            <div className="relative overflow-hidden rounded-md bg-muted">
+            {/* A hairline round each frame, so the box is visible even with no
+                picture in it. On a machine that cannot reach the cameras —
+                a laptop off the bridge's network — the stream never loads,
+                and without this the panel reads as empty space rather than
+                as two views waiting for a signal. */}
+            <div className="relative overflow-hidden rounded-md border border-border/70 bg-muted">
               {visible ? (
                 <img
                   src={cameraLiveUrl(view, nonce)}
