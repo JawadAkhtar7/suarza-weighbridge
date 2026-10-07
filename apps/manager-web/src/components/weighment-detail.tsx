@@ -44,6 +44,26 @@ export function WeighmentDetail({ weighment, onClose, receiptBaseUrl }: Weighmen
     pageStyle: SLIP_PAGE_CSS,
   });
 
+  /*
+   * The truck's own pictures. Best-effort: a bridge without cameras, or one
+   * whose images have not synced yet, leaves the placeholder in place.
+   *
+   * ABOVE the early return, and it has to stay there. This component renders
+   * with `weighment` null whenever the dialog is shut, so a hook placed after
+   * that return runs on some renders and not others — which is React's
+   * "rendered more hooks than during the previous render", and it took the
+   * whole dashboard down rather than just this dialog.
+   *
+   * `enabled` is how a hook that always runs still asks nothing when there is
+   * nothing to ask about.
+   */
+  const captures = useQuery({
+    queryKey: ['weighment-captures', weighment?.slip_number],
+    queryFn: () => api.weighmentCaptures(weighment!.slip_number),
+    enabled: Boolean(weighment),
+    retry: false,
+  });
+
   if (!weighment) return null;
 
   const receiptUrl = receiptBaseUrl
@@ -51,14 +71,6 @@ export function WeighmentDetail({ weighment, onClose, receiptBaseUrl }: Weighmen
     : undefined;
 
   const values = slipValues({ weighment });
-
-  /* The truck's own pictures. Best-effort: a bridge without cameras, or one
-     whose images have not synced yet, leaves the placeholder in place. */
-  const captures = useQuery({
-    queryKey: ['weighment-captures', weighment.slip_number],
-    queryFn: () => api.weighmentCaptures(weighment.slip_number),
-    retry: false,
-  });
 
   /* Served publicly, like the QR page that embeds them — the manager app and
      a driver's phone fetch the very same bytes. */
