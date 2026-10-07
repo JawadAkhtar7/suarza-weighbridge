@@ -12,6 +12,7 @@
  */
 
 import { useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useReactToPrint } from 'react-to-print';
 import {
   Button,
@@ -25,7 +26,7 @@ import {
 } from '@suarza/ui';
 import type { Weighment } from '@suarza/shared';
 import { ExternalLink, Printer } from 'lucide-react';
-import { receiptPageUrl } from '../lib/api.js';
+import { api, receiptPageUrl } from '../lib/api.js';
 
 interface WeighmentDetailProps {
   weighment: Weighment | null;
@@ -50,6 +51,19 @@ export function WeighmentDetail({ weighment, onClose, receiptBaseUrl }: Weighmen
     : undefined;
 
   const values = slipValues({ weighment });
+
+  /* The truck's own pictures. Best-effort: a bridge without cameras, or one
+     whose images have not synced yet, leaves the placeholder in place. */
+  const captures = useQuery({
+    queryKey: ['weighment-captures', weighment.slip_number],
+    queryFn: () => api.weighmentCaptures(weighment.slip_number),
+    retry: false,
+  });
+
+  /* Served publicly, like the QR page that embeds them — the manager app and
+     a driver's phone fetch the very same bytes. */
+  const captureUrl = (id: string | null | undefined) =>
+    id ? `${receiptBaseUrl.replace(/\/+$/, '')}/captures/${encodeURIComponent(id)}` : undefined;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -81,7 +95,13 @@ export function WeighmentDetail({ weighment, onClose, receiptBaseUrl }: Weighmen
             the transform lives on the wrapper and not on the sheet. */}
         <div className="overflow-x-auto rounded-md border bg-muted/40 p-3">
           <div ref={contentRef}>
-            <SlipA5 view="soft" values={values} verifyUrl={receiptUrl} />
+            <SlipA5
+              view="soft"
+              values={values}
+              verifyUrl={receiptUrl}
+              frontImageUrl={captureUrl(captures.data?.front)}
+              sideImageUrl={captureUrl(captures.data?.side)}
+            />
           </div>
         </div>
       </DialogContent>

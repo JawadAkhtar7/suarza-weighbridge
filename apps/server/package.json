@@ -9,6 +9,7 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "resolve-conflict": "tsx src/maintenance/resolve-slip-conflict.ts",
+    "prune-captures": "tsx src/maintenance/prune-captures.ts",
     "backfill-ledger": "tsx src/maintenance/backfill-ledger.ts",
     "migrate-ledger-ids": "tsx src/maintenance/migrate-ledger-ids.ts",
     "typecheck": "tsc --noEmit",

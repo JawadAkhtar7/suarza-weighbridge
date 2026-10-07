@@ -12,7 +12,7 @@
  * placeholder rather than making the operator wait at the window.
  */
 
-import { mkdir, writeFile, unlink } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Weighment } from '@suarza/shared';
@@ -106,6 +106,20 @@ export class CaptureService {
 
   repository(): CaptureRepository {
     return this.captures;
+  }
+
+  /**
+   * The bytes of a stored still, or null if the file has gone.
+   *
+   * Null rather than a throw because the sync worker's answer to a missing
+   * file is to give up on that picture and move on, not to stop.
+   */
+  async readFile(row: { path: string }): Promise<Buffer | null> {
+    try {
+      return await readFile(this.absolutePath(row.path));
+    } catch {
+      return null;
+    }
   }
 
   /**

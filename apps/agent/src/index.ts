@@ -50,41 +50,12 @@ async function main(): Promise<void> {
   // --- Sync worker ---------------------------------------------------------
   // Built before the service so every commit can trigger it. With no cloud URL
   // configured the agent runs purely offline, which is a valid way to work.
-  let syncWorker: SyncWorker | null = null;
-
-  if (cloud.url && cloud.apiKey) {
-    syncWorker = new SyncWorker({
-      weighments: new WeighmentRepository(db),
-      audit: new AuditRepository(db),
-      client: createCloudClient({
-        baseUrl: cloud.url,
-        apiKey: cloud.apiKey,
-        stationId: config.STATION_ID,
-        // Read per send, so editing the address in Settings reaches the public
-        // receipt page on the next sync rather than on the next restart.
-        profile: () => settings.profile(),
-      }),
-      periodicMs: settings.get().sync_interval_seconds * 1000,
-      onLog: (level, message) => log(`[sync:${level}] ${message}`),
-    });
-  } else {
-    log('[sync:info] Cloud sync disabled — no cloud address set in deployment.ts');
-  }
-
-  // The manager's lists, pulled on the operator's button. Absent with no cloud
-  // configured, which is a valid way to run a bridge.
-  const catalogueSync =
-    cloud.url && cloud.apiKey
-      ? new CatalogueSync({
-          db,
-          baseUrl: cloud.url,
-          apiKey: cloud.apiKey,
-        })
-      : undefined;
-
   /*
-   * The cameras. Absent unless the .env names them, which is how a bridge
-   * with no cameras runs unchanged — every slip simply prints the placeholder.
+   * The cameras, from deployment.ts. Blank addresses disable them, which is
+   * how a bridge with no cameras runs unchanged — every slip simply prints
+   * the bundled placeholder.
+   *
+   * Built before the sync worker because the worker drains their stills.
    */
   const cameras = new CameraClient({
     frontUrl: cameraConfig.frontUrl,
@@ -108,6 +79,47 @@ async function main(): Promise<void> {
   } else {
     log('[camera:info] No cameras configured — slips print the placeholder');
   }
+
+  let syncWorker: SyncWorker | null = null;
+
+  if (cloud.url && cloud.apiKey) {
+    syncWorker = new SyncWorker({
+      weighments: new WeighmentRepository(db),
+      audit: new AuditRepository(db),
+      client: createCloudClient({
+        baseUrl: cloud.url,
+        apiKey: cloud.apiKey,
+        stationId: config.STATION_ID,
+        // Read per send, so editing the address in Settings reaches the public
+        // receipt page on the next sync rather than on the next restart.
+        profile: () => settings.profile(),
+      }),
+      // Only when this bridge has cameras; otherwise the drain is skipped
+      // rather than querying an empty table on every tick.
+      captures: capture.enabled
+        ? {
+            unsynced: (limit) => capture.repository().unsynced(limit),
+            markSynced: (ids) => capture.repository().markSynced(ids),
+            read: (row) => capture.readFile(row),
+          }
+        : undefined,
+      periodicMs: settings.get().sync_interval_seconds * 1000,
+      onLog: (level, message) => log(`[sync:${level}] ${message}`),
+    });
+  } else {
+    log('[sync:info] Cloud sync disabled — no cloud address set in deployment.ts');
+  }
+
+  // The manager's lists, pulled on the operator's button. Absent with no cloud
+  // configured, which is a valid way to run a bridge.
+  const catalogueSync =
+    cloud.url && cloud.apiKey
+      ? new CatalogueSync({
+          db,
+          baseUrl: cloud.url,
+          apiKey: cloud.apiKey,
+        })
+      : undefined;
 
   const service = new WeighmentService(db, {
     stationId: config.STATION_ID,

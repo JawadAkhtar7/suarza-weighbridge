@@ -36,8 +36,21 @@ export class CloudError extends Error {
   }
 }
 
+/** One camera still on its way up. */
+export interface CaptureUpload {
+  id: string;
+  weighmentId: string;
+  slipNumber: string;
+  pass: 'FIRST' | 'SECOND';
+  view: 'FRONT' | 'SIDE';
+  takenAt: string;
+  body: Buffer;
+}
+
 export interface CloudClient {
   ingest(weighments: Weighment[], auditEntries: AuditEntry[]): Promise<IngestResponse>;
+  /** Resolves when the cloud has the picture; throws CloudError otherwise. */
+  uploadCapture(capture: CaptureUpload): Promise<void>;
   ping(): Promise<boolean>;
 }
 
@@ -89,6 +102,59 @@ export function createCloudClient(options: CloudClientOptions): CloudClient {
       }
 
       return (await response.json()) as IngestResponse;
+    },
+
+    /**
+     * Send one still.
+     *
+     * The JPEG goes up as the raw body with its metadata in the query string,
+     * rather than as multipart/form-data. Multipart would mean a parser on
+     * the server and a form builder here, for a request that carries exactly
+     * one file and six short strings. Raw bytes need neither.
+     *
+     * One picture per request, not a batch: at 23 KB each this is cheap, and
+     * a batch that fails half way would have to be unpicked to know which
+     * pictures actually landed.
+     */
+    async uploadCapture(capture) {
+      const query = new URLSearchParams({
+        weighment_id: capture.weighmentId,
+        slip_number: capture.slipNumber,
+        pass: capture.pass,
+        view: capture.view,
+        taken_at: capture.takenAt,
+      });
+
+      let response: Response;
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          response = await fetch(
+            `${baseUrl}/ingest/captures/${encodeURIComponent(capture.id)}?${query}`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'image/jpeg', 'x-api-key': options.apiKey },
+              body: new Uint8Array(capture.body),
+              signal: controller.signal,
+            },
+          );
+        } finally {
+          clearTimeout(timer);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new CloudError(`Cannot reach the cloud: ${message}`, null, false);
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new CloudError(
+          `Cloud rejected a camera image (${response.status}): ${text.slice(0, 200)}`,
+          response.status,
+          true,
+        );
+      }
     },
 
     async ping() {

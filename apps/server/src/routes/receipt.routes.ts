@@ -16,6 +16,13 @@ import type { ServerConfig } from '../config.js';
 import { findBySlip } from '../services/weighment.service.js';
 import { renderNotFoundPage } from '../receipt/render-page.js';
 import { renderSlipPage, slipValues } from '@suarza/ui';
+import { createReadStream } from 'node:fs';
+import {
+  findCapture,
+  imagesForWeighment,
+  resolveCapturePath,
+  captureFileExists,
+} from '../services/capture.service.js';
 
 export function receiptRouter(config: ServerConfig): Router {
   const router = Router();
@@ -76,6 +83,11 @@ export function receiptRouter(config: ServerConfig): Router {
       return;
     }
 
+    /* The truck's own pictures, if the bridge that weighed it has cameras and
+       has managed to send them up. Absent is the ordinary case for a slip
+       made minutes ago on a bad link, and the placeholder stands in. */
+    const images = await imagesForWeighment(weighment.id);
+
     lockDown(res);
     res
       .status(200)
@@ -89,8 +101,42 @@ export function receiptRouter(config: ServerConfig): Router {
           title: `${weighment.slip_number} — Weight Bridge Slip`,
           values: slipValues({ weighment }),
           verifyUrl: pageUrl(weighment.slip_number),
+          frontImageUrl: images.front ? `/captures/${images.front}` : undefined,
+          sideImageUrl: images.side ? `/captures/${images.side}` : undefined,
         }),
       );
+  });
+
+  /**
+   * A stored still.
+   *
+   * Public, like the slip page that embeds it — a driver scanning the QR on
+   * his own receipt has no login, and the id is a UUID nobody can guess.
+   *
+   * A row whose file has gone — pruned, or a disk restored without it — is a
+   * 404 rather than a 500. A missing picture is an ordinary state and the
+   * slip falls back to the placeholder around it.
+   */
+  router.get('/captures/:id', async (req, res) => {
+    const row = await findCapture(String(req.params['id'] ?? ''));
+    if (!row || !(await captureFileExists(row.path))) {
+      res.status(404).json({ error: { code: 'NOT_FOUND' } });
+      return;
+    }
+
+    const absolute = resolveCapturePath(row.path);
+    if (!absolute) {
+      res.status(404).json({ error: { code: 'NOT_FOUND' } });
+      return;
+    }
+
+    /* Immutable: the id names one picture and that picture never changes, so
+       a phone that has seen it once need never fetch it again. */
+    res
+      .status(200)
+      .type('image/jpeg')
+      .set('Cache-Control', 'public, max-age=31536000, immutable');
+    createReadStream(absolute).pipe(res);
   });
 
   /**

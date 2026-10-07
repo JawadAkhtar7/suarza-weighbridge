@@ -25,13 +25,29 @@ import type { WeighmentRepository } from '../db/weighments.js';
 import { toDto } from '../db/weighments.js';
 import type { AuditRepository } from '../db/audit.js';
 import { CloudError, type CloudClient } from './cloud-client.js';
+import type { CaptureRow } from '../db/captures.js';
 
 /** Bounded so a week of offline records syncs in batches, not one huge POST. */
 export const BATCH_SIZE = 50;
 
+/* Smaller than the record batch: each still is its own request, so this is
+   only how many rows are claimed from the table at a time. */
+const CAPTURE_BATCH = 10;
+
 export interface SyncWorkerOptions {
   weighments: WeighmentRepository;
   audit: AuditRepository;
+  /**
+   * Camera stills, if this bridge has cameras.
+   *
+   * Absent on a bridge with none, and the drain is then skipped entirely
+   * rather than querying an empty table on every tick.
+   */
+  captures?: {
+    unsynced(limit?: number): CaptureRow[];
+    markSynced(ids: string[]): void;
+    read(row: CaptureRow): Promise<Buffer | null>;
+  };
   client: CloudClient;
   /** Backstop interval (brief §11d). */
   periodicMs: number;
@@ -159,7 +175,17 @@ export class SyncWorker {
       const orphans = await this.drainOrphanAudit();
       if (orphans === 'failed') return; // Same: wait for the next tick.
 
-      if (drainedSomething || orphans === 'drained') {
+      /*
+       * Pictures go up AFTER the records they belong to.
+       *
+       * A still names its weighment, and the cloud rejects one for a record
+       * it has never seen. The weighment drain above has just run, so by here
+       * the record is there.
+       */
+      const images = await this.drainCaptures();
+      if (images === 'failed') return;
+
+      if (drainedSomething || orphans === 'drained' || images === 'drained') {
         this.markOnline();
         return;
       }
@@ -180,6 +206,61 @@ export class SyncWorker {
         void this.sync();
       }
     }
+  }
+
+  /**
+   * Sends camera stills one at a time.
+   *
+   * Marked synced individually rather than as a batch: each upload is its own
+   * request, and a run that dies half way should keep the pictures it managed
+   * to send rather than offering them all again.
+   */
+  private async drainCaptures(): Promise<'drained' | 'empty' | 'failed'> {
+    const store = this.options.captures;
+    if (!store) return 'empty';
+
+    let sentAny = false;
+    for (;;) {
+      if (this.stopped) break;
+
+      const pending = store.unsynced(CAPTURE_BATCH);
+      if (pending.length === 0) break;
+
+      for (const row of pending) {
+        const body = await store.read(row);
+        if (!body) {
+          /*
+           * The row is there and the file is not — pruned by hand, or a disk
+           * that filled. Mark it synced anyway: nothing can ever send it, and
+           * leaving it unsynced would make this drain retry it forever and
+           * block every picture behind it.
+           */
+          store.markSynced([row.id]);
+          this.options.onLog?.('warn', `Camera image missing on disk, skipped: ${row.path}`);
+          continue;
+        }
+
+        try {
+          await this.options.client.uploadCapture({
+            id: row.id,
+            weighmentId: row.weighment_id,
+            slipNumber: row.slip_number,
+            pass: row.pass,
+            view: row.view,
+            takenAt: row.taken_at,
+            body,
+          });
+          store.markSynced([row.id]);
+          sentAny = true;
+        } catch (error) {
+          this.fail(error);
+          return 'failed';
+        }
+      }
+    }
+
+    if (sentAny) this.options.onLog?.('info', 'Camera images sent');
+    return sentAny ? 'drained' : 'empty';
   }
 
   /**

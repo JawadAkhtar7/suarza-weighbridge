@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { weighmentQuerySchema } from '@suarza/shared';
 import { z } from 'zod';
 import { requireAuth, requireCapability } from '../middleware/auth.js';
+import { imagesForWeighment } from '../services/capture.service.js';
 import { listWeighments, requireBySlip, suggestValues } from '../services/weighment.service.js';
 import { getAnalytics } from '../services/analytics.service.js';
 import { parse } from './helpers.js';
@@ -26,6 +27,19 @@ export function managerRouter(jwtSecret: string): Router {
 
   router.get<{ slip: string }>('/weighments/:slip', ...guard, async (req, res) => {
     res.json({ weighment: await requireBySlip(req.params.slip) });
+  });
+
+  /**
+   * The camera stills for a weighing, so the manager's copy of the slip shows
+   * the same truck the customer's does.
+   *
+   * Behind the dashboard guard, while the images themselves are served
+   * publicly at /captures/:id — a driver scanning his own slip has no login,
+   * but nobody without one should be able to enumerate what was weighed.
+   */
+  router.get<{ slip: string }>('/weighments/:slip/captures', ...guard, async (req, res) => {
+    const weighment = await requireBySlip(req.params.slip);
+    res.json(await imagesForWeighment(weighment.id));
   });
 
   /** Typeahead for the dashboard's customer and company filters. */
