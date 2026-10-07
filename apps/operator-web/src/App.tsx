@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useState } from 'react';
-import { Button, ThemeToggle, toast } from '@suarza/ui';
+import { Button, ThemeToggle, cn, toast } from '@suarza/ui';
 import type { NetWeight, Weighment } from '@suarza/shared';
 import { Settings } from 'lucide-react';
 import { LiveWeightPanel } from './components/live-weight-panel.js';
@@ -20,7 +20,7 @@ import { NewWeighmentForm } from './components/new-weighment-form.js';
 import { SavedWeighment } from './components/saved-weighment.js';
 import { ReturnWeighment } from './components/return-weighment.js';
 import { NetWeightDisplay } from './components/net-weight-display.js';
-import { CameraPanel } from './components/camera-panel.js';
+import { CameraPanel, useCameras } from './components/camera-panel.js';
 import { SettingsPanel } from './components/settings-panel.js';
 import { ModeSwitch, type WeighingMode } from './components/mode-switch.js';
 import { useLiveWeight, useSyncStatus } from './hooks/use-live-weight.js';
@@ -34,6 +34,9 @@ export function App() {
   const [captured, setCaptured] = useState<CapturedWeight | null>(null);
   const [saved, setSaved] = useState<Weighment | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /* Decides whether the middle column exists at all — an empty one would
+     hold its width open and leave a gap on a bridge with no cameras. */
+  const cameras = useCameras();
   /* The pass-two net, reported up by ReturnWeighment so it can be shown in
      the left column directly under the capture card — the net belongs beside
      the weight it is computed from, not further down a separate column.
@@ -75,7 +78,7 @@ export function App() {
       {/* The orange rule picks up the logo's second brand colour and gives the
           screen an edge of colour without tinting anything that carries data. */}
       <header className="border-b-[3px] border-b-brand bg-background">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2.5 sm:px-6">
+        <div className="mx-auto flex max-w-[120rem] flex-wrap items-center gap-3 px-4 py-2.5 sm:px-6">
           {/* The logo is the whole identity here — `mr-auto` moved onto it now
               that the wording beside it is gone, so the nav still sits right. */}
           <img
@@ -98,13 +101,34 @@ export function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+      <main className="mx-auto max-w-[120rem] space-y-6 px-4 py-6 sm:px-6">
         {/* Above everything: what is happening at the gate decides the rest of
             the screen, and a returning truck is the moment an operator needs to
             find this without hunting. */}
         <ModeSwitch mode={mode} onChange={switchMode} />
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(320px,26rem)_1fr] lg:items-start">
+        {/*
+          * Three columns on a wide screen: the scale, what it sees, and the
+          * paperwork. The cameras used to sit under the live weight, which
+          * squeezed them into half a narrow column and pushed the form down.
+          * In their own column they are big enough to actually check a truck
+          * is squarely on the bridge, and the page uses the width a desktop
+          * PC has instead of leaving it as margin.
+          *
+          * Two columns below xl, where a third would make all of them too
+          * narrow to read.
+          */}
+        <div
+          className={cn(
+            'grid gap-6 lg:items-start lg:grid-cols-[minmax(300px,24rem)_1fr]',
+            /* Two steps, because the weighbridge PC may be a 1366-wide screen:
+               at xl the camera column takes what it can without squeezing the
+               form into one column of fields, and only on a genuinely wide
+               monitor does it grow. */
+            cameras.enabled &&
+              'xl:grid-cols-[minmax(300px,21rem)_minmax(260px,22rem)_1fr] 2xl:grid-cols-[minmax(320px,22rem)_minmax(320px,28rem)_1fr]',
+          )}
+        >
           <div className="space-y-4 lg:sticky lg:top-6">
             <LiveWeightPanel
               live={live}
@@ -146,12 +170,16 @@ export function App() {
               <NetWeightDisplay net={secondNet.net} pending={secondNet.pending} />
             )}
 
-            {/* Under the weights, in every mode: the operator glances at the
-                live view to check the truck is squarely on the bridge before
-                capturing, and that is the same glance in every pass. Draws
-                nothing at all on a bridge with no cameras configured. */}
-            <CameraPanel />
           </div>
+
+          {/* The middle column: what the cameras see. Sticky like the scale
+              beside it, because the operator looks at both while filling in
+              the form in the third column. */}
+          {cameras.enabled && (
+            <div className="lg:sticky lg:top-6">
+              <CameraPanel />
+            </div>
+          )}
 
           <div>
             {mode === 'second' ? (

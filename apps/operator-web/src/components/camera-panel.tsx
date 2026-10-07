@@ -19,15 +19,31 @@ const LABELS: Record<'FRONT' | 'SIDE', string> = {
   SIDE: 'Side view',
 };
 
-export function CameraPanel() {
+/**
+ * Whether this bridge has cameras, and which.
+ *
+ * A hook rather than a prop because two places need the answer: the panel,
+ * to draw itself, and the page, to decide whether to leave a column for it.
+ * React Query dedupes on the key, so it is still one request.
+ */
+export function useCameras() {
   const status = useQuery({
     queryKey: ['cameras'],
     queryFn: () => agentApi.cameraStatus(),
-    // The answer comes from this machine's own .env and cannot change while
-    // the app is open, so there is no reason to ask twice.
+    // The answer comes from this machine's own deployment.ts and cannot change
+    // while the app is open, so there is no reason to ask twice.
     staleTime: Infinity,
     retry: false,
   });
+
+  return {
+    enabled: Boolean(status.data?.enabled) && (status.data?.views.length ?? 0) > 0,
+    views: status.data?.views ?? [],
+  };
+}
+
+export function CameraPanel() {
+  const { enabled, views } = useCameras();
 
   /*
    * A new nonce per mount, so switching tabs or coming back to the screen
@@ -46,23 +62,22 @@ export function CameraPanel() {
     return () => document.removeEventListener('visibilitychange', onChange);
   }, []);
 
-  const views = status.data?.views ?? [];
-  if (!status.data?.enabled || views.length === 0) return null;
+  if (!enabled) return null;
 
   return (
     <Card>
       {/*
-        * Side by side, not stacked.
+        * Stacked, now that these have a column to themselves.
         *
-        * The two views are one glance — is the truck squarely on the bridge —
-        * and stacking them put the second below the fold of a column that
-        * already holds the live weight and the net. Two across keeps both in
-        * the same look.
+        * They were side by side for a while, which fitted them into the
+        * narrow column under the live weight but left each one too small to
+        * judge whether a truck is squarely on the bridge. A column of their
+        * own is worth more than a row: full width beats half width.
         */}
-      <CardContent className="grid grid-cols-2 gap-2 p-3">
+      <CardContent className="space-y-3 p-3">
         {views.map((view) => (
           <figure key={view} className="space-y-1">
-            <figcaption className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <figcaption className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {LABELS[view]}
             </figcaption>
             <div className="relative overflow-hidden rounded-md bg-muted">
