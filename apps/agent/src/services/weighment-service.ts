@@ -54,6 +54,15 @@ export interface WeighmentServiceOptions {
    * a slow or throwing listener must not hold a database write open.
    */
   onChange?: () => void;
+  /**
+   * Called once a weighing is committed, so the cameras can photograph the
+   * truck that is still on the bridge.
+   *
+   * After the transaction and never awaited: a camera takes hundreds of
+   * milliseconds on a good day and times out on a bad one, and neither may
+   * hold a database write open or delay the operator at the window.
+   */
+  onWeighed?: (weighment: Weighment, pass: 'FIRST' | 'SECOND') => void;
 }
 
 export class WeighmentService {
@@ -180,6 +189,7 @@ export class WeighmentService {
     })();
 
     this.notifyChanged();
+    this.notifyWeighed(weighment, 'FIRST');
     return { weighment, warnings };
   }
 
@@ -323,6 +333,7 @@ export class WeighmentService {
     })();
 
     this.notifyChanged();
+    this.notifyWeighed(weighment, 'SECOND');
     return { weighment, warnings };
   }
 
@@ -419,6 +430,7 @@ export class WeighmentService {
     })();
 
     this.notifyChanged();
+    this.notifyWeighed(result, 'SECOND');
     return result;
   }
 
@@ -534,6 +546,15 @@ export class WeighmentService {
     // than waiting for the periodic sweep.
     this.notifyChanged();
     return this.weighments.findById(record.id)!;
+  }
+
+  private notifyWeighed(weighment: Weighment, pass: 'FIRST' | 'SECOND'): void {
+    try {
+      this.options.onWeighed?.(weighment, pass);
+    } catch {
+      // Same rule as notifyChanged: a picture that could not be taken must
+      // never turn a saved weighing into a failed request.
+    }
   }
 
   private notifyChanged(): void {

@@ -20,6 +20,7 @@ import { NewWeighmentForm } from './components/new-weighment-form.js';
 import { SavedWeighment } from './components/saved-weighment.js';
 import { ReturnWeighment } from './components/return-weighment.js';
 import { NetWeightDisplay } from './components/net-weight-display.js';
+import { CameraPanel } from './components/camera-panel.js';
 import { SettingsPanel } from './components/settings-panel.js';
 import { ModeSwitch, type WeighingMode } from './components/mode-switch.js';
 import { useLiveWeight, useSyncStatus } from './hooks/use-live-weight.js';
@@ -144,6 +145,12 @@ export function App() {
             {mode === 'second' && secondNet && (
               <NetWeightDisplay net={secondNet.net} pending={secondNet.pending} />
             )}
+
+            {/* Under the weights, in every mode: the operator glances at the
+                live view to check the truck is squarely on the bridge before
+                capturing, and that is the same glance in every pass. Draws
+                nothing at all on a bridge with no cameras configured. */}
+            <CameraPanel />
           </div>
 
           <div>

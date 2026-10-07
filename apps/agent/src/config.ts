@@ -67,6 +67,33 @@ const configSchema = z.object({
      change can be pushed to a machine nobody can visit. See that file. */
   SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
 
+  // --- Cameras -------------------------------------------------------------
+  /*
+   * The two IP cameras watching the bridge, by full snapshot URL.
+   *
+   * A whole URL rather than an IP and a path the code assembles: these happen
+   * to be Hikvision today, whose stills live at
+   * /ISAPI/Streaming/channels/102/picture, and the next bridge's may not be.
+   * A URL in the .env means a different make needs no code change.
+   *
+   * Here and not in Settings because, like SERIAL_PORT, these describe THAT
+   * machine's local network. Empty disables the camera, and a weighing with
+   * no camera configured simply prints the placeholder.
+   */
+  CAMERA_FRONT_URL: z.string().default(''),
+  CAMERA_SIDE_URL: z.string().default(''),
+  CAMERA_USERNAME: z.string().default(''),
+  CAMERA_PASSWORD: z.string().default(''),
+  /* Short on purpose. A camera that is slow or unplugged must never hold up a
+     truck on the bridge — the weighing is saved either way. */
+  CAMERA_TIMEOUT_MS: z.coerce.number().int().min(250).max(15000).default(2500),
+  /** Frames a second for the operator's live view. */
+  CAMERA_LIVE_FPS: z.coerce.number().min(0.5).max(10).default(3),
+  /** Where stills are kept. Relative paths resolve against the agent folder. */
+  CAPTURE_PATH: z.string().default('./data/captures'),
+  /** Local stills older than this are pruned; the cloud keeps the archive. */
+  CAPTURE_KEEP_DAYS: z.coerce.number().int().min(1).max(3650).default(60),
+
   BACKUP_PATH: z.string().default(''),
   BACKUP_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
 

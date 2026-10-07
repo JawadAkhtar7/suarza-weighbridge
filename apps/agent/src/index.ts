@@ -17,6 +17,8 @@ import { createWeightReader } from './indicator/index.js';
 import { WeighmentService } from './services/weighment-service.js';
 import { createCloudClient, SyncWorker } from './sync/index.js';
 import { CatalogueSync } from './sync/catalogue-sync.js';
+import { CameraClient } from './cameras/camera-client.js';
+import { CaptureService } from './cameras/capture-service.js';
 import { SettingsService } from './services/settings-service.js';
 import { BackupJob } from './backup.js';
 import { buildServer } from './server.js';
@@ -79,9 +81,39 @@ async function main(): Promise<void> {
         })
       : undefined;
 
+  /*
+   * The cameras. Absent unless the .env names them, which is how a bridge
+   * with no cameras runs unchanged — every slip simply prints the placeholder.
+   */
+  const cameras = new CameraClient({
+    frontUrl: config.CAMERA_FRONT_URL,
+    sideUrl: config.CAMERA_SIDE_URL,
+    username: config.CAMERA_USERNAME,
+    password: config.CAMERA_PASSWORD,
+    timeoutMs: config.CAMERA_TIMEOUT_MS,
+    onLog: (level, message) => log(`[camera:${level}] ${message}`),
+  });
+
+  const capture = new CaptureService({
+    db,
+    cameras,
+    directory: config.CAPTURE_PATH,
+    keepDays: config.CAPTURE_KEEP_DAYS,
+    onLog: (level, message) => log(`[camera:${level}] ${message}`),
+  });
+
+  if (capture.enabled) {
+    log(`[camera:info] Watching with ${cameras.configuredViews().join(' and ')}`);
+  } else {
+    log('[camera:info] No cameras configured — slips print the placeholder');
+  }
+
   const service = new WeighmentService(db, {
     stationId: config.STATION_ID,
     onChange: () => syncWorker?.requestSync(),
+    // Not awaited: the operator is at the window and the record is already
+    // safe. The picture catches up on its own.
+    onWeighed: (weighment, pass) => void capture.capture(weighment, pass),
   });
 
   const reader = createWeightReader(config, {
@@ -93,6 +125,8 @@ async function main(): Promise<void> {
     reader,
     service,
     settings,
+    cameras,
+    capture,
     catalogueSync,
     syncStatus: syncWorker ?? undefined,
     serveOperatorWeb: config.SERVE_OPERATOR_WEB,

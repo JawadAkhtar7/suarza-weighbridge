@@ -18,8 +18,11 @@ import { registerLiveWeightRoutes } from './routes/live-weight.js';
 import { registerWeighmentRoutes } from './routes/weighments.js';
 import { registerSimulatorRoutes } from './routes/simulator.js';
 import { registerSettingsRoutes } from './routes/settings.js';
+import { registerCameraRoutes } from './routes/cameras.js';
 import type { SettingsService } from './services/settings-service.js';
 import type { CatalogueSync } from './sync/catalogue-sync.js';
+import type { CameraClient } from './cameras/camera-client.js';
+import type { CaptureService } from './cameras/capture-service.js';
 import { registerOperatorWeb, resolveOperatorWebDir } from './static.js';
 
 /**
@@ -39,6 +42,9 @@ export interface AgentDeps {
   settings?: SettingsService;
   /** Absent when no cloud is configured; the sync routes then say so. */
   catalogueSync?: CatalogueSync;
+  /** Absent when the .env names no cameras; slips then print the placeholder. */
+  cameras?: CameraClient;
+  capture?: CaptureService;
   /** Explicit path to the Operator PWA build; auto-detected when omitted. */
   operatorWebDir?: string | null;
   /** Tests drive the API directly and have no web build to serve. */
@@ -105,6 +111,7 @@ export async function buildServer(deps: AgentDeps): Promise<FastifyInstance> {
   registerLiveWeightRoutes(app, deps);
   registerWeighmentRoutes(app, deps);
   registerSettingsRoutes(app, deps);
+  registerCameraRoutes(app, deps);
 
   if (deps.config.USE_SIMULATOR && deps.reader instanceof SimulatorWeightReader) {
     registerSimulatorRoutes(app, deps.reader);

@@ -158,6 +158,11 @@ export const agentApi = {
       body: JSON.stringify(input),
     }),
 
+  cameraStatus: () => request<CameraStatus>('/cameras'),
+
+  slipCaptures: (slip: string) =>
+    request<SlipCaptures>(`/weighments/${encodeURIComponent(slip)}/captures`),
+
   /** Recent weighments for the quick-pick list. */
   listWeighments: (
     options: { status?: string; q?: string; limit?: number; offset?: number } = {},
@@ -193,6 +198,38 @@ export const agentApi = {
  *
  * Not the cloud's copy: the operator has to be able to hand a customer a PDF
  * with the internet down, which is precisely when the cloud one is unreachable.
+
+/**
+ * The cameras.
+ *
+ * All same-origin: the agent serves this app, so these are plain paths and
+ * the camera password never leaves that machine.
+ */
+export interface CameraStatus {
+  enabled: boolean;
+  views: ('FRONT' | 'SIDE')[];
+  live_fps: number;
+}
+
+export interface SlipCaptures {
+  front: string | null;
+  side: string | null;
+}
+
+/** A stored still. Immutable, so the browser may cache it forever. */
+export function captureImageUrl(id: string): string {
+  return `/captures/${encodeURIComponent(id)}`;
+}
+
+/**
+ * The live MJPEG stream for one camera.
+ *
+ * The cache-buster matters: without it a browser will happily reuse a closed
+ * multipart stream from a previous mount and show a frozen frame forever.
+ */
+export function cameraLiveUrl(view: 'FRONT' | 'SIDE', nonce: string | number): string {
+  return `/camera/${view.toLowerCase()}/live?t=${nonce}`;
+}
 
 /** The standalone printable page, opened in its own tab. */
 export function printPageUrl(slipNumber: string, variant: 'FIRST' | 'SECOND'): string {

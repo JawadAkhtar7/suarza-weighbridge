@@ -21,7 +21,7 @@ import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button, SlipA5, SLIP_PAGE_CSS, slipValues } from '@suarza/ui';
 import { Loader2, Printer, X } from 'lucide-react';
-import { agentApi } from '../lib/api.js';
+import { agentApi, captureImageUrl } from '../lib/api.js';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
 import { buildReceiptUrl } from '../lib/receipt-settings.js';
 
@@ -55,16 +55,41 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
 
   const weighment = query.data?.weighment;
 
-  // The print dialog opens by itself once the slip AND the settings are in —
-  // printing before the settings land would use the wrong offsets, and the
-  // operator would only find out from the paper.
+  /*
+   * The camera stills for this slip, if the bridge has cameras.
+   *
+   * A separate query so a slow or missing answer cannot delay the slip: it
+   * resolves to nulls, SlipA5 falls back to the bundled placeholder, and the
+   * paper still comes out. `retry: false` for the same reason — a bridge with
+   * no cameras must not spend three attempts discovering that.
+   */
+  const captures = useQuery({
+    queryKey: ['captures', request.slipNumber],
+    queryFn: () => agentApi.slipCaptures(request.slipNumber),
+    retry: false,
+  });
+
+  /*
+   * The print dialog opens by itself once the slip, the settings AND the
+   * camera stills have settled.
+   *
+   * Settings, because printing before they land would use the wrong offsets
+   * and the operator would only find out from the paper. Stills, because a
+   * slip that goes to the printer before its pictures have loaded prints two
+   * empty boxes — and nobody re-reads a slip they have already torn off.
+   *
+   * `isFetched` rather than success: a bridge with no cameras, or one whose
+   * camera is unplugged, settles into "asked and answered with nothing" and
+   * must print exactly then rather than waiting for a picture that is not
+   * coming.
+   */
   useEffect(() => {
-    if (!weighment || !isLoaded || printedOnce.current) return;
+    if (!weighment || !isLoaded || !captures.isFetched || printedOnce.current) return;
     if (!settings.auto_print) return;
     printedOnce.current = true;
     const timer = window.setTimeout(() => window.print(), 350);
     return () => window.clearTimeout(timer);
-  }, [weighment, isLoaded, settings.auto_print]);
+  }, [weighment, isLoaded, captures.isFetched, settings.auto_print]);
 
   // The page rules have to be in the document itself here, not handed to a
   // print library — this tab IS the print document.
@@ -105,6 +130,8 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
   const values = slipValues({ weighment });
 
   const verifyUrl = buildReceiptUrl(settings.receipt_base_url, weighment.slip_number) ?? undefined;
+  const frontImageUrl = captures.data?.front ? captureImageUrl(captures.data.front) : undefined;
+  const sideImageUrl = captures.data?.side ? captureImageUrl(captures.data.side) : undefined;
 
   return (
     <>
@@ -129,7 +156,13 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
         </div>
 
         <div className="mx-auto w-[148mm] bg-white shadow-sm">
-          <SlipA5 view="soft" values={values} verifyUrl={verifyUrl} />
+          <SlipA5
+            view="soft"
+            values={values}
+            verifyUrl={verifyUrl}
+            frontImageUrl={frontImageUrl}
+            sideImageUrl={sideImageUrl}
+          />
         </div>
 
         <p className="mx-auto mt-4 max-w-[150mm] px-4 text-center text-xs text-muted-foreground">
@@ -144,6 +177,8 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
           view="overprint"
           values={values}
           verifyUrl={verifyUrl}
+          frontImageUrl={frontImageUrl}
+          sideImageUrl={sideImageUrl}
           offsetXmm={settings.print.offset_left_mm}
           offsetYmm={settings.print.offset_top_mm}
         />

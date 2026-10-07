@@ -177,6 +177,41 @@ MIGRATIONS.push({
   `,
 });
 
+MIGRATIONS.push({
+  version: 6,
+  name: 'camera stills',
+  up: `
+    -- One row per picture, not four columns on the weighment.
+    --
+    -- Pictures are files, and files sync differently from records: the
+    -- weighment travels as JSON in a batch, a JPEG cannot. Its own table with
+    -- its own 'synced' flag lets the image follow its weighment up to the
+    -- cloud on its own schedule, and lets a bridge with no cameras carry no
+    -- empty columns.
+    CREATE TABLE captures (
+      id           TEXT PRIMARY KEY,
+      weighment_id TEXT NOT NULL,
+      -- Denormalised on purpose: the file is named after the slip, and a
+      -- prune walking the table should not have to join to read a filename.
+      slip_number  TEXT NOT NULL,
+      pass         TEXT NOT NULL CHECK (pass IN ('FIRST', 'SECOND')),
+      view         TEXT NOT NULL CHECK (view IN ('FRONT', 'SIDE')),
+      -- Relative to CAPTURE_PATH, so moving the folder does not rewrite rows.
+      path         TEXT NOT NULL,
+      bytes        INTEGER NOT NULL,
+      taken_at     TEXT NOT NULL,
+      synced       INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (weighment_id) REFERENCES weighments (id)
+    );
+
+    -- One picture per weighment, pass and view: a retried capture replaces
+    -- rather than piling up a second copy of the same moment.
+    CREATE UNIQUE INDEX idx_captures_slot ON captures (weighment_id, pass, view);
+    CREATE INDEX idx_captures_weighment ON captures (weighment_id);
+    CREATE INDEX idx_captures_unsynced ON captures (synced) WHERE synced = 0;
+  `,
+});
+
 export function migrate(db: Database): number {
   const current = db.pragma('user_version', { simple: true }) as number;
   const pending = MIGRATIONS.filter((m) => m.version > current).sort(

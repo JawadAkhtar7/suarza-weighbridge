@@ -12,13 +12,14 @@
  * who has no pad.
  */
 
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle, SlipA5, slipValues, toast } from '@suarza/ui';
 import type { Weighment } from '@suarza/shared';
 import { Printer } from 'lucide-react';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
 import { buildReceiptUrl } from '../lib/receipt-settings.js';
-import { printPageUrl } from '../lib/api.js';
+import { agentApi, captureImageUrl, printPageUrl } from '../lib/api.js';
 
 interface ReceiptPanelProps {
   weighment: Weighment;
@@ -64,6 +65,14 @@ export function ReceiptPanel({ weighment, variant, title, autoPrint = false }: R
 
   const receiptUrl = buildReceiptUrl(settings.receipt_base_url, weighment.slip_number);
 
+  /* The stills for the preview. Best-effort: no cameras, or a camera that did
+     not answer, simply leaves the placeholder in place. */
+  const captures = useQuery({
+    queryKey: ['captures', weighment.slip_number],
+    queryFn: () => agentApi.slipCaptures(weighment.slip_number),
+    retry: false,
+  });
+
   return (
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
@@ -86,7 +95,15 @@ export function ReceiptPanel({ weighment, variant, title, autoPrint = false }: R
           {/* The same slip the print tab renders and the QR page serves, scaled
               to fit the card. One rendering, so a preview cannot promise
               something the paper does not deliver. */}
-          <SlipA5 view="soft" values={slipValues({ weighment })} verifyUrl={receiptUrl ?? undefined} />
+          <SlipA5
+            view="soft"
+            values={slipValues({ weighment })}
+            verifyUrl={receiptUrl ?? undefined}
+            frontImageUrl={
+              captures.data?.front ? captureImageUrl(captures.data.front) : undefined
+            }
+            sideImageUrl={captures.data?.side ? captureImageUrl(captures.data.side) : undefined}
+          />
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground">
