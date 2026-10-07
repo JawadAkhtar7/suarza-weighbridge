@@ -12,8 +12,8 @@
  */
 
 import { Card, CardContent, Skeleton, cn } from '@suarza/ui';
-import { formatKg, formatPKR, type Analytics } from '@suarza/shared';
-import { CircleDollarSign, ClipboardList, Scale, Timer, type LucideIcon } from 'lucide-react';
+import { formatPKR, type Analytics } from '@suarza/shared';
+import { CircleDollarSign, ClipboardList, Timer, type LucideIcon } from 'lucide-react';
 
 interface StatTilesProps {
   analytics: Analytics | undefined;
@@ -37,8 +37,8 @@ const TONES = {
   neutral: {
     icon: 'text-muted-foreground',
     chip: 'bg-muted text-muted-foreground',
-    // Visible enough that the four tiles read as one set. Invisible bars made
-    // the coloured one look like a rendering fault rather than a signal.
+    // Visible enough that the tiles read as one set. Invisible bars made the
+    // coloured one look like a rendering fault rather than a signal.
     edge: 'before:bg-muted-foreground/30',
   },
 } as const;
@@ -60,13 +60,6 @@ export function StatTiles({ analytics, isLoading }: StatTilesProps) {
       tone: 'neutral',
     },
     {
-      label: 'Material weighed',
-      value: analytics ? formatKg(analytics.total_net_weight_kg) : '—',
-      note: analytics ? `${(analytics.total_net_weight_kg / 1000).toFixed(1)} ton` : '',
-      icon: Scale,
-      tone: 'neutral',
-    },
-    {
       label: 'Open tickets',
       value: analytics ? analytics.open_weighments.toLocaleString() : '—',
       note: 'Awaiting a second weighing',
@@ -79,7 +72,7 @@ export function StatTiles({ analytics, isLoading }: StatTilesProps) {
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {tiles.map((tile) => {
         const tone = TONES[tile.tone];
         return (
@@ -88,7 +81,7 @@ export function StatTiles({ analytics, isLoading }: StatTilesProps) {
             className={cn(
               'relative overflow-hidden transition-shadow hover:shadow-md',
               // A colour bar down the edge, so the tiles read as a set rather
-              // than four boxes that happen to be next to each other.
+              // than separate boxes that happen to be next to each other.
               'before:absolute before:inset-y-0 before:left-0 before:w-1 before:content-[""]',
               tone.edge,
             )}

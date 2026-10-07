@@ -51,10 +51,18 @@ export function CameraPanel() {
 
   return (
     <Card>
-      <CardContent className="space-y-2 p-3">
+      {/*
+        * Side by side, not stacked.
+        *
+        * The two views are one glance — is the truck squarely on the bridge —
+        * and stacking them put the second below the fold of a column that
+        * already holds the live weight and the net. Two across keeps both in
+        * the same look.
+        */}
+      <CardContent className="grid grid-cols-2 gap-2 p-3">
         {views.map((view) => (
           <figure key={view} className="space-y-1">
-            <figcaption className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <figcaption className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {LABELS[view]}
             </figcaption>
             <div className="relative overflow-hidden rounded-md bg-muted">
