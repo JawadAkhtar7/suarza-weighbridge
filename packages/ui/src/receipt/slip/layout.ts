@@ -130,6 +130,16 @@ export interface ImageItem extends Placed {
   kind: 'image';
   width: number;
   height: number;
+  /** Matches the rounded box behind it, so square corners do not poke out. */
+  radius?: string;
+  /**
+   * Crop in by this factor before drawing.
+   *
+   * These cameras are mounted far back and wide, so the truck is a small part
+   * of the frame. 1 draws what the camera sent; 1.3 shows the middle 77% of
+   * it, bigger. Overflow is clipped by a wrapper, not by the page.
+   */
+  zoom?: number;
   /** A key into the generated art module, or a slot the renderer fills. */
   art?: string;
   slot?: 'front-view' | 'side-view' | 'qr' | 'logo';
@@ -322,13 +332,13 @@ export const SLIP: SlipItem[] = [
   { kind: 'text', layer: 'chrome', left: 53.1, top: 530.71, text: 'FRONT VIEW', size: 12, weight: 700, colour: white, font: 'display', tracking: -0.26 },
   urdu({ right: 306.1 }, 530.49, 'سامنے کا منظر', 12, 700, white),
   { kind: 'box', layer: 'chrome', left: 18.9, top: 547.13, width: 257.01, height: 117.41, radius: '0 0 4.78px 4.78px', fill: white, border: { width: 1.33, colour: green } },
-  { kind: 'image', layer: 'value', slot: 'front-view', left: 42.65, top: 553.22, width: 209.12, height: 106.86, alt: 'Truck on the weighbridge, front view' },
+  { kind: 'image', layer: 'value', slot: 'front-view', left: 22.23, top: 550.46, width: 250.35, height: 110.75, radius: '0 0 3.5px 3.5px', zoom: 1.3, alt: 'Truck on the weighbridge, front view' },
 
   { kind: 'box', layer: 'chrome', left: 283.46, top: 524.7, width: 257.01, height: 22.43, radius: '4.78px 4.78px 0 0', fill: green },
   { kind: 'text', layer: 'chrome', left: 326.5, top: 531.76, text: 'SIDE VIEW', size: 12, weight: 700, colour: white, font: 'display', tracking: -0.34 },
   urdu({ right: 36.5 }, 531.55, 'سائیڈ کا منظر', 12, 700, white),
   { kind: 'box', layer: 'chrome', left: 283.46, top: 547.13, width: 257.01, height: 117.41, radius: '0 0 4.78px 4.78px', fill: white, border: { width: 1.33, colour: green } },
-  { kind: 'image', layer: 'value', slot: 'side-view', left: 301.49, top: 553.22, width: 209.12, height: 106.86, alt: 'Truck on the weighbridge, side view' },
+  { kind: 'image', layer: 'value', slot: 'side-view', left: 286.79, top: 550.46, width: 250.35, height: 110.75, radius: '0 0 3.5px 3.5px', alt: 'Truck on the weighbridge, side view' },
 
   /* ---------------------------------------------------------------- footer */
   { kind: 'image', layer: 'chrome', art: 'FOOTER_THANKS', left: 0, top: 680, width: 560, height: 114, alt: '' },

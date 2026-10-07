@@ -95,6 +95,12 @@ export function receiptRouter(config: ServerConfig): Router {
       /* Never cached: a slip can be corrected in the cloud, and a phone holding
          yesterday's copy of it is the one thing this page must not do. */
       .set('Cache-Control', 'no-store')
+      /* Say it out loud: display this, do not save it.
+         The content type already says text/html, but some scanner apps open
+         their own cut-down webview and hand anything without an explicit
+         disposition to the download manager — which is how a page ends up
+         saved as a file instead of shown. */
+      .set('Content-Disposition', 'inline')
       .send(
         renderSlipPage({
           view: 'soft',

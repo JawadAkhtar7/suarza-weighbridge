@@ -194,18 +194,38 @@ function Item({
     }
 
     if (!src) return null;
-    return (
+
+    const picture = (
       <img
         src={src}
         alt={item.alt}
         style={{
-          ...place,
           display: 'block',
-          width: mm(item.width),
-          height: mm(item.height),
+          width: '100%',
+          height: '100%',
           objectFit: item.slot ? 'cover' : undefined,
+          /* Scaled about the centre, so cropping in keeps the middle of the
+             frame — which is where the truck is. */
+          ...(item.zoom && item.zoom !== 1 ? { transform: `scale(${item.zoom})` } : {}),
         }}
       />
+    );
+
+    /* The wrapper does the clipping. A transform on the image alone would
+       spill over the slip, because nothing above it has overflow hidden. */
+    return (
+      <div
+        style={{
+          ...place,
+          width: mm(item.width),
+          height: mm(item.height),
+          overflow: 'hidden',
+          borderRadius: item.radius,
+          lineHeight: 0,
+        }}
+      >
+        {picture}
+      </div>
     );
   }
 
