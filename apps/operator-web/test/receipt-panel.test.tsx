@@ -40,16 +40,24 @@ describe('the preview', () => {
     expect(screen.getByText(/only the values/i)).toBeInTheDocument();
   });
 
-  it("carries Suarza's own details, which come from code", () => {
-    // Not from Settings and not from the station profile any more: one
-    // constant, so the preview, the paper and the QR page cannot disagree.
+  it("carries Suarza's own details, now as part of the artwork", () => {
+    /*
+     * They used to be text drawn from COMPANY. The 140 x 200 design is one
+     * exact vector of the client's PDF with every letter outlined, so the
+     * phone, website and address are in the artwork and no longer findable
+     * as text — which is why this asserts the artwork is there rather than
+     * the words.
+     *
+     * The consequence is worth stating: changing COMPANY no longer changes
+     * a slip. Only a new export of the design does.
+     */
     renderWithQuery(<ReceiptPanel weighment={weighment()} variant="FIRST" />);
 
-    expect(screen.getByText(`Operator No.: ${COMPANY.phone}`)).toBeInTheDocument();
-    expect(screen.getByText(COMPANY.website)).toBeInTheDocument();
-    for (const line of COMPANY.addressLines) {
-      expect(screen.getByText(line)).toBeInTheDocument();
-    }
+    const template = screen.getByAltText('Suarza International weight bridge slip');
+    expect(template).toBeInTheDocument();
+    expect(template.getAttribute('src')).toMatch(/^data:image\/svg\+xml;base64,/);
+
+    expect(screen.queryByText(`Operator No.: ${COMPANY.phone}`)).toBeNull();
   });
 });
 

@@ -49,14 +49,18 @@ describe('whose company details the page shows', () => {
 
     const { text } = await request(app).get('/r/2026123');
 
-    expect(text).toContain(COMPANY.phone);
-    expect(text).toContain(COMPANY.website);
-    for (const line of COMPANY.addressLines) expect(text).toContain(line);
+    /* Outlined in the artwork now, not text, so the page carries the vector
+       rather than the words. See the slip's TEMPLATE item. */
+    expect(text).toContain('Suarza International weight bridge slip');
+    expect(text).toContain('data:image/svg+xml;base64,');
+    expect(text).not.toContain(COMPANY.phone);
   });
 
   it('shows them for a station that has never synced anything', async () => {
     await store(completedWeighment({ slip_number: '2026123' }));
-    expect((await request(app).get('/r/2026123')).text).toContain(COMPANY.phone);
+    expect((await request(app).get('/r/2026123')).text).toContain(
+      'Suarza International weight bridge slip',
+    );
   });
 
   it('uses the paper the station prints on', async () => {

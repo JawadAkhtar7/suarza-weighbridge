@@ -2,6 +2,7 @@
 
 // Constants
 export * from './constants/company.js';
+export * from './constants/paper.js';
 export * from './constants/domain.js';
 export * from './constants/vehicle-types.js';
 export * from './constants/users.js';

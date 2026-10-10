@@ -13,6 +13,7 @@
 
 import {
   nowUtc,
+  SLIP_PAGE_MM,
   stationSettingsSchema,
   type StationProfile,
   type StationSettings,
@@ -64,13 +65,22 @@ export class SettingsService {
       settings.receipt_base_url = this.defaults.receipt_base_url;
     }
 
-    // Paper size and alignment are no longer operator-editable: every station
-    // prints A5 on pre-printed pads. Normalised on read so a station carrying
-    // an older stored value — a different size, or an offset calibrated months
-    // ago — is not left with settings nothing can now correct.
+    /*
+     * Paper size and alignment are not operator-editable: every station prints
+     * the same pre-printed pads. Normalised on read so a station carrying an
+     * older stored value — the A5 this used to say, or an offset calibrated
+     * months ago — is not left with settings nothing can now correct.
+     *
+     * CUSTOM with the real figures rather than a named size, because 140 x 200
+     * has no name. This is also what the Settings alignment test print uses: a
+     * test sheet on A5 would line up perfectly and tell the operator nothing
+     * about the pad they are actually feeding through.
+     */
     settings.print = {
       ...settings.print,
-      paper_size: 'A5',
+      paper_size: 'CUSTOM',
+      custom_width_mm: SLIP_PAGE_MM.width,
+      custom_height_mm: SLIP_PAGE_MM.height,
       offset_top_mm: 0,
       offset_left_mm: 0,
       scale_percent: 100,

@@ -1,3 +1,4 @@
+import { SLIP_PAGE_MM } from '@suarza/shared';
 /** The settings HTTP surface. */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -43,7 +44,9 @@ describe('GET /settings', () => {
   it('returns the current settings', async () => {
     const response = await app.inject({ url: '/settings' });
     expect(response.statusCode).toBe(200);
-    expect(response.json().print.paper_size).toBe('A5');
+    expect(response.json().print.paper_size).toBe('CUSTOM');
+    expect(response.json().print.custom_width_mm).toBe(SLIP_PAGE_MM.width);
+    expect(response.json().print.custom_height_mm).toBe(SLIP_PAGE_MM.height);
   });
 });
 
@@ -82,6 +85,6 @@ describe('PUT /settings', () => {
       url: '/settings',
       payload: { print: { paper_size: 'FOOLSCAP' } },
     });
-    expect((await app.inject({ url: '/settings' })).json().print.paper_size).toBe('A5');
+    expect((await app.inject({ url: '/settings' })).json().print.paper_size).toBe('CUSTOM');
   });
 });

@@ -33,7 +33,7 @@ const fromUi = (id) => import(pathToFileURL(requireFromUi.resolve(id)).href);
 
 const React = (await fromUi('react')).default;
 const { renderToStaticMarkup } = await fromUi('react-dom/server');
-const { SlipA5, SLIP_PAGE_CSS, slipValues } = await import(
+const { SlipA5, SLIP_PAGE_CSS, slipValues, PAGE_MM } = await import(
   pathToFileURL(resolve(root, 'packages/ui/src/receipt/slip/index.ts')).href
 );
 
@@ -101,7 +101,8 @@ const dir = mkdtempSync(join(tmpdir(), 'slip-'));
 const page = join(dir, 'slip.html');
 writeFileSync(page, html);
 
-/* 148 x 210 mm at 96 dpi, then x4 so the glyph edges are judgeable. */
+/* The page at 96 dpi, then x4 so the glyph edges are judgeable. Taken from
+   PAGE_MM so a change of paper size needs no edit here. */
 const scale = 4;
 execFileSync(
   'google-chrome',
@@ -111,7 +112,7 @@ execFileSync(
     '--no-sandbox',
     '--hide-scrollbars',
     '--force-device-scale-factor=' + scale,
-    `--window-size=${Math.round(148 / 25.4 * 96)},${Math.round(210 / 25.4 * 96)}`,
+    `--window-size=${Math.round(PAGE_MM.width / 25.4 * 96)},${Math.round(PAGE_MM.height / 25.4 * 96)}`,
     '--virtual-time-budget=4000',
     `--screenshot=${outPng}`,
     page,

@@ -174,7 +174,7 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
           </Button>
         </div>
 
-        <div className="mx-auto w-[148mm] bg-white shadow-sm">
+        <div className="mx-auto w-[140mm] bg-white shadow-sm">
           <SlipA5
             view="soft"
             values={values}

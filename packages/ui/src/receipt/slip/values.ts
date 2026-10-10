@@ -12,7 +12,6 @@
  */
 
 import {
-  COMPANY,
   DISPLAY_TIMEZONE,
   KG_PER_MAUND,
   netWeightKg,
@@ -159,12 +158,5 @@ export function slipValues({ weighment, printedAt }: SlipValuesOptions): SlipVal
     net_kg: hasSecond ? slipKg(net) : SLIP_PENDING,
     mann: hasSecond ? slipMann(net) : '',
 
-    /* Suarza's own details, from code — see COMPANY. The artwork gives the
-       address two lines and the constant is written that way, so nothing here
-       has to guess where a long address should break. */
-    company_phone: `Operator No.: ${COMPANY.phone}`,
-    company_web: COMPANY.website,
-    company_address_1: COMPANY.addressLines[0] ?? '',
-    company_address_2: COMPANY.addressLines[1] ?? '',
   };
 }

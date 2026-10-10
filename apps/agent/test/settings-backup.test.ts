@@ -26,7 +26,7 @@ afterEach(() => {
 describe('SettingsService', () => {
   it('starts from the schema defaults', () => {
     const settings = new SettingsService(db).get();
-    expect(settings.print.paper_size).toBe('A5');
+    expect(settings.print.paper_size).toBe('CUSTOM');
     expect(settings.auto_print).toBe(true);
     /* The company's details are deliberately NOT here: they are the same on
        every station and live in code, so there is nothing to default. */
@@ -62,7 +62,7 @@ describe('SettingsService', () => {
     });
 
     const read = new SettingsService(db).get().print;
-    expect(read.paper_size).toBe('A5');
+    expect(read.paper_size).toBe('CUSTOM');
     expect(read.offset_top_mm).toBe(0);
     expect(read.scale_percent).toBe(100);
   });
@@ -77,13 +77,13 @@ describe('SettingsService', () => {
     const service = new SettingsService(db);
     expect(() => service.replace({ print: { paper_size: 'FOOLSCAP' } })).toThrow(AppError);
     // The stored settings are untouched.
-    expect(service.get().print.paper_size).toBe('A5');
+    expect(service.get().print.paper_size).toBe('CUSTOM');
   });
 
   it('falls back to defaults if the stored blob is unreadable', () => {
     // Weighing must keep working; settings can be fixed afterwards.
     db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('station_settings', '{not json');
-    expect(new SettingsService(db).get().print.paper_size).toBe('A5');
+    expect(new SettingsService(db).get().print.paper_size).toBe('CUSTOM');
   });
 
   it('tells listeners so the sync worker can pick up a new cadence', () => {
