@@ -109,19 +109,23 @@ by date. They are small; delete old ones once a year.
 - Open `http://localhost:3100` in Chrome — the operator screen should appear.
 - Open `http://localhost:3100/health` — it should show `{"status":"ok"…}`.
 
-## Silent printing
+## Printing
 
-By default Chrome shows a print dialog for every receipt. To have receipts
-print straight to the default printer, create a desktop shortcut to Chrome with
-these arguments:
+Chrome shows its print dialog for every receipt, and that is deliberate.
 
-```
-chrome.exe --kiosk-printing --app=http://localhost:3100
-```
+`--kiosk-printing` was used here once. It prints silently to the Windows
+default printer using the driver's own defaults — no dialog, no preview, and
+no chance for the operator to notice that anything is wrong. Slips came out in
+landscape on the wrong paper size for a while and nobody saw why, because
+there was nothing to see. Worse, every setting chosen in Chrome's print dialog
+is ignored under that flag, so the usual advice about paper size and scale
+quietly does not apply.
 
-Then install the operator app from that window (Chrome menu → _Cast, save and
-share_ → _Install page as app_). The operator gets a window with no address bar
-that prints without asking.
+If it is ever reinstated, know that the ONLY things that then matter are the
+printer driver's saved defaults and which printer Windows calls the default.
+
+The operator app can still be installed as a window with no address bar:
+Chrome menu → _Cast, save and share_ → _Install page as app_.
 
 ## Day-to-day
 

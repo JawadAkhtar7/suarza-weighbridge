@@ -316,9 +316,11 @@ That is why the PC must be set up with `git clone` rather than a copied folder.
 > project was built on Linux — the install and a reboot still need one
 > run-through on the actual PC. Everything else in this README has been run.
 
-**Silent printing:** Chrome shows a print dialog by default. Launch it with
-`--kiosk-printing --app=http://localhost:3100` for receipts that print without
-asking.
+**Printing:** Chrome shows its print dialog for every receipt, deliberately.
+`--kiosk-printing` was used once and has been removed: it prints silently using
+the driver's defaults, ignores everything set in Chrome's dialog, and gives the
+operator nothing to notice when a slip is about to come out in landscape on the
+wrong paper. See `apps/agent/windows/README.md`.
 
 ## Settings
 

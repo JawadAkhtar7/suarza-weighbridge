@@ -81,14 +81,19 @@ if not defined CHROME if exist "!PF86!\Google\Chrome\Application\chrome.exe" set
 
 if not defined CHROME goto :noChrome
 
-rem --app gives a window with no address bar; --kiosk-printing sends receipts
-rem straight to the default printer instead of showing a print dialog.
-start "" "!CHROME!" --app=%URL% --kiosk-printing
+rem --app gives a window with no address bar.
+rem
+rem Deliberately NO --kiosk-printing. It sent every receipt straight to the
+rem default printer using the driver's own defaults, with no dialog and no
+rem chance for the operator to notice anything wrong — which is how slips came
+rem out in landscape on the wrong paper size for a while, silently. The print
+rem dialog is worth the extra keypress: it is the only place the operator sees
+rem what is about to happen.
+start "" "!CHROME!" --app=%URL%
 exit /b 0
 
 :noChrome
 echo Chrome was not found, opening the default browser instead.
-echo Receipts will ask before printing until Chrome is installed.
 start "" %URL%
 exit /b 0
 
