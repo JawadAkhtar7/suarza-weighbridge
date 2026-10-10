@@ -17,7 +17,7 @@
  * particular weighing says.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button, SlipA5, SLIP_PAGE_CSS, slipValues } from '@suarza/ui';
 import { Loader2, Printer, X } from 'lucide-react';
@@ -46,6 +46,24 @@ export function parsePrintRequest(url: URL): PrintRequest | null {
 export function PrintReceiptPage({ request }: { request: PrintRequest }) {
   const { settings, isLoaded } = useReceiptSettings();
   const printedOnce = useRef(false);
+
+  /*
+   * A deadline on waiting for the camera stills.
+   *
+   * The auto-print gate waits for that query to settle, and nothing in the
+   * agent client sets a request timeout — so a call that hangs rather than
+   * failing would leave the slip on screen with no print dialog, forever,
+   * and the operator with a truck on the bridge and no paper.
+   *
+   * Three seconds: long enough that a local request has always answered,
+   * short enough that nobody stands at the window wondering. The pictures
+   * are worth a short wait and nothing more.
+   */
+  const [stillsDeadlinePassed, setStillsDeadlinePassed] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setStillsDeadlinePassed(true), 3000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const query = useQuery({
     queryKey: ['print-receipt', request.slipNumber],
@@ -84,12 +102,13 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
    * coming.
    */
   useEffect(() => {
-    if (!weighment || !isLoaded || !captures.isFetched || printedOnce.current) return;
+    const stillsSettled = captures.isFetched || stillsDeadlinePassed;
+    if (!weighment || !isLoaded || !stillsSettled || printedOnce.current) return;
     if (!settings.auto_print) return;
     printedOnce.current = true;
     const timer = window.setTimeout(() => window.print(), 350);
     return () => window.clearTimeout(timer);
-  }, [weighment, isLoaded, captures.isFetched, settings.auto_print]);
+  }, [weighment, isLoaded, captures.isFetched, stillsDeadlinePassed, settings.auto_print]);
 
   // The page rules have to be in the document itself here, not handed to a
   // print library — this tab IS the print document.
