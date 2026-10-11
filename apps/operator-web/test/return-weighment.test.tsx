@@ -61,9 +61,12 @@ describe('fetching a slip', () => {
     const { user } = renderFlow();
     await fetchSlip(user);
 
+    /* The sentence that used to say so was removed from the screen; what
+       proves the lock is that the customer arrives as text rather than as a
+       field somebody could retype on the way to the second weighing. */
     expect(await screen.findByText('20261')).toBeInTheDocument();
     expect(screen.getByText('Ali Raza')).toBeInTheDocument();
-    expect(screen.getByText(/cannot be changed/i)).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Ali Raza')).toBeNull();
   });
 
   it('reports a slip that does not exist without blocking anything', async () => {
@@ -92,18 +95,27 @@ describe('completing the second weighing', () => {
     const { user } = renderFlow(null);
     await fetchSlip(user);
 
-    expect(await screen.findByText(/capture the second weight/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /complete weighing/i })).toBeDisabled();
+    // The prompt above the button is gone — the operator is looking at a
+    // live weight, not at instructions — so the disabled button is the whole
+    // of what stops an uncaptured weighing being committed.
+    expect(await screen.findByRole('button', { name: /complete weighing/i })).toBeDisabled();
   });
 
-  it('previews the net weight from the captured snapshot before committing', async () => {
+  it('shows the first weight it will subtract, and opens the way once a weight is captured', async () => {
+    /*
+     * The net figure itself is no longer this panel's to show: the capture
+     * control and the net display moved out to the left column so they sit in
+     * the same place in every mode, and NetWeightDisplay is tested on its own.
+     *
+     * What belongs here is the pair either side of that move — the first
+     * weight this pass is measured against, which came from the fetched slip,
+     * and the fact that a captured weight is what unlocks the commit.
+     */
     const { user } = renderFlow({ kg: 20_000, source: 'SERIAL' });
     await fetchSlip(user);
 
-    // 8,000 first + 20,000 second = 12,000 net, shown before anything is saved.
-    expect(await screen.findByText('12,000 kg')).toBeInTheDocument();
-    expect(screen.getByText('12.000 ton')).toBeInTheDocument();
-    expect(screen.getByText('300.000 maund')).toBeInTheDocument();
+    expect(await screen.findByText('8,000 kg')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /complete weighing/i })).toBeEnabled();
   });
 
   it('sends the captured weight, its source and the confirmed amount', async () => {

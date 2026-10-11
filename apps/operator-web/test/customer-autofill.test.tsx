@@ -59,7 +59,7 @@ const field = (label: RegExp) => screen.getByLabelText(label) as HTMLInputElemen
 const vehicleType = () => screen.getByLabelText(/vehicle type/i).textContent?.trim();
 
 async function pickCustomer(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText(/search an existing customer/i), 'ali');
+  await user.type(screen.getByLabelText(/search customer/i), 'ali');
   await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
   await user.click(screen.getByText(/Ali Raza — Raza Traders/));
 }
@@ -67,7 +67,7 @@ async function pickCustomer(user: ReturnType<typeof userEvent.setup>) {
 describe('picking a customer', () => {
   it('offers matches from the directory', async () => {
     const user = setup();
-    await user.type(screen.getByLabelText(/search an existing customer/i), 'ali');
+    await user.type(screen.getByLabelText(/search customer/i), 'ali');
 
     await waitFor(() => expect(screen.getByText(/Ali Raza — Raza Traders/)).toBeInTheDocument());
     expect(screen.getByText(/weighed 4 times here/i)).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe('picking a customer', () => {
     await pickCustomer(user);
 
     expect(field(/phone/i).value).toBe('0300-1234567');
-    expect(field(/vehicle plate/i).value).toBe('LES-1234');
+    expect(field(/number plate/i).value).toBe('LES-1234');
     expect(field(/product/i).value).toBe('Cement');
   });
 
@@ -95,7 +95,7 @@ describe('picking a customer', () => {
     // customer was selected at all, or which of two similar names it was.
     const user = setup();
     await pickCustomer(user);
-    expect((screen.getByLabelText(/search an existing customer/i) as HTMLInputElement).value).toBe(
+    expect((screen.getByLabelText(/search customer/i) as HTMLInputElement).value).toBe(
       'Ali Raza — Raza Traders',
     );
   });
@@ -104,18 +104,18 @@ describe('picking a customer', () => {
 describe('what the operator already typed wins', () => {
   it('keeps a plate typed before the customer was picked', async () => {
     const user = setup();
-    await user.type(field(/vehicle plate/i), 'LHR-9999');
+    await user.type(field(/number plate/i), 'LHR-9999');
     await pickCustomer(user);
 
     // Today's truck is not last month's truck.
-    expect(field(/vehicle plate/i).value).toBe('LHR-9999');
+    expect(field(/number plate/i).value).toBe('LHR-9999');
   });
 
   it('does not contradict that plate with a stale vehicle type', async () => {
     // The bug this guards: filling the plate and then deciding the vehicle
     // type from a snapshot taken after the fill.
     const user = setup();
-    await user.type(field(/vehicle plate/i), 'LHR-9999');
+    await user.type(field(/number plate/i), 'LHR-9999');
     await pickCustomer(user);
 
     expect(vehicleType()).toBe('Truck');
@@ -125,7 +125,7 @@ describe('what the operator already typed wins', () => {
     const user = setup();
     await pickCustomer(user);
 
-    expect(field(/vehicle plate/i).value).toBe('LES-1234');
+    expect(field(/number plate/i).value).toBe('LES-1234');
     expect(vehicleType()).toBe('Trailer');
   });
 
@@ -158,7 +158,7 @@ describe('a customer with gaps', () => {
 describe('a customer who has never been here', () => {
   it('never blocks typing a new name', async () => {
     const user = setup([]);
-    await user.type(screen.getByLabelText(/search an existing customer/i), 'Brand New');
+    await user.type(screen.getByLabelText(/search customer/i), 'Brand New');
     await waitFor(() =>
       expect(screen.getByText(/no customer by that name yet/i)).toBeInTheDocument(),
     );

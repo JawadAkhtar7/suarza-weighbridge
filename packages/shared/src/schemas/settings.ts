@@ -9,7 +9,7 @@
 
 import { z } from 'zod';
 import { VEHICLE_TYPES } from '../constants/vehicle-types.js';
-import { FRONT_VIEW_ZOOM } from '../constants/paper.js';
+import { FRONT_VIEW_ZOOM, SLIP_PAGE_MM } from '../constants/paper.js';
 
 export const paperSizeSchema = z.enum(['A4', 'A5', 'LETTER', 'CUSTOM']);
 export type PaperSize = z.infer<typeof paperSizeSchema>;
@@ -17,11 +17,13 @@ export type PaperSize = z.infer<typeof paperSizeSchema>;
 export const printSettingsSchema = z.object({
   /* The client's pre-printed pads are 140 x 200, which has no standard name,
      so the size is CUSTOM with SLIP_PAGE_MM's figures. Not an operator
-     choice: the agent normalises it on read. */
-  paper_size: paperSizeSchema.default('A5'),
+     choice: the agent normalises it on read, and the default here says the
+     same thing so that a screen drawn before the agent has answered is not
+     briefly drawn for paper nobody owns. */
+  paper_size: paperSizeSchema.default('CUSTOM'),
   /** Only used when paper_size is CUSTOM. Millimetres. */
-  custom_width_mm: z.number().min(50).max(500).default(148),
-  custom_height_mm: z.number().min(50).max(500).default(210),
+  custom_width_mm: z.number().min(50).max(500).default(SLIP_PAGE_MM.width),
+  custom_height_mm: z.number().min(50).max(500).default(SLIP_PAGE_MM.height),
   /* Whole-sheet nudges. Pinned to zero by the agent and not offered in the
      operator app: moving everything at once to chase one misplaced element
      puts three others out, which is what happened on site. */

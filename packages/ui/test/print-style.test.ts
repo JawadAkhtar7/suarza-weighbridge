@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { printSettingsSchema } from '@suarza/shared';
+import { printSettingsSchema, SLIP_PAGE_MM } from '@suarza/shared';
 import {
   buildPageStyle,
   buildTestPrintStyle,
@@ -22,11 +22,17 @@ describe('buildPageStyle', () => {
     expect(css).toMatch(new RegExp(`\\.${SOFT_ONLY_CLASS}\\s*\\{\\s*display:\\s*none`));
   });
 
-  it('defaults to A5 with no page margin of its own', () => {
-    // A5 is the client's pre-printed pad, and the only size in use since the
-    // control was removed from the operator app.
+  it("defaults to the client's own pads, with no page margin of its own", () => {
+    /*
+     * 140 x 200, which has no standard name — not A5, which it was taken for
+     * until the pads were measured. It is 8 mm narrower and 10 mm shorter, and
+     * printing one onto the other is how a slip lands off its boxes.
+     *
+     * The only size in use since the control was removed from the operator
+     * app, so the default is the answer rather than a starting point.
+     */
     const css = buildPageStyle(settings());
-    expect(css).toContain('size: A5');
+    expect(css).toContain(`size: ${SLIP_PAGE_MM.width}mm ${SLIP_PAGE_MM.height}mm`);
     // Zero, so the operator's offsets are the only thing positioning the block.
     expect(css).toMatch(/@page\s*\{[^}]*margin:\s*0/);
   });

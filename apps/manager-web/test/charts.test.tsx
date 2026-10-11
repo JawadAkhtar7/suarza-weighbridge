@@ -40,9 +40,12 @@ describe('foldTail', () => {
 describe('StatTiles', () => {
   it('shows the headline figures', () => {
     render(<StatTiles analytics={analytics()} isLoading={false} />);
+    // Three tiles, not four: the material-weighed total was dropped at the
+    // client's request, the yard having no use for a tonnage it never bills
+    // against.
     expect(screen.getByText('Rs 1,500')).toBeInTheDocument();
-    expect(screen.getByText('39,000 kg')).toBeInTheDocument();
     expect(screen.getByText('3 completed')).toBeInTheDocument();
+    expect(screen.queryByText(/kg$/)).toBeNull();
   });
 
   it('says out loud that voided tickets are excluded', () => {

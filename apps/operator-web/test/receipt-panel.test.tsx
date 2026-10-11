@@ -34,9 +34,13 @@ describe('the preview', () => {
     renderWithQuery(<ReceiptPanel weighment={weighment()} variant="FIRST" />);
 
     expect(screen.getByText(/receipt 1 — first weight/i)).toBeInTheDocument();
-    // The same slip the printer and the QR page produce, not a second design.
-    expect(screen.getByText('WEIGHT BRIDGE SLIP')).toBeInTheDocument();
-    expect(screen.getByAltText('Suarza International')).toBeInTheDocument();
+    /* The same slip the printer and the QR page produce, not a second design.
+       The heading is no longer text to search for: the 140 x 200 artwork has
+       every letter outlined, so what proves the whole design is here is the
+       template itself. */
+    expect(
+      screen.getByAltText('Suarza International weight bridge slip'),
+    ).toBeInTheDocument();
     expect(screen.getByText(/only the values/i)).toBeInTheDocument();
   });
 
