@@ -31,7 +31,7 @@ describe('defaults', () => {
   it('starts on A5 with no offsets — the one paper the station prints on', () => {
     const settings = defaultReceiptSettings();
     expect(settings.print.paper_size).toBe('CUSTOM');
-    expect(settings.print.offset_top_mm).toBe(0);
+    expect(settings.print.offset_top_mm).toBe(0); // the default, not a pinned value
     expect(settings.print.scale_percent).toBe(100);
   });
 

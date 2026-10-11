@@ -243,6 +243,10 @@ function Item({
            leading. Anything else moves every baseline on the page. */
         lineHeight: 1,
         whiteSpace: 'pre',
+        /* A centred value owns a box; a left-aligned one is just a point. */
+        ...(item.width !== undefined
+          ? { width: mm(item.width), textAlign: item.align ?? 'left' }
+          : {}),
         fontFamily: FONTS[item.font],
         fontSize: mm(item.size),
         fontWeight: item.weight,

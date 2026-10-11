@@ -40,7 +40,7 @@ const { SlipA5, SLIP_PAGE_CSS, slipValues, PAGE_MM } = await import(
 /** The client's own sample, so the render can be compared line for line. */
 const weighment = {
   id: '00000000-0000-4000-8000-000000000000',
-  slip_number: 'SU-0005236',
+  slip_number: '202635',
   status: 'COMPLETED',
   station_id: 'A',
   customer_name: 'Adnan Bhatti',

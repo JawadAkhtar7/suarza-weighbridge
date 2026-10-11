@@ -279,6 +279,54 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 </p>
               </div>
 
+              {/*
+                * Millimetres, and they may be negative.
+                *
+                * The pre-printed pad and this printer disagree about where the
+                * paper begins — different presses, different registration — so
+                * a slip can land a millimetre or two off its boxes with every
+                * other setting correct. Nothing in the driver fixes that; this
+                * does. Nudge, test print, repeat.
+                */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="offset-left">Shift right (mm)</Label>
+                  <NumberInput
+                    id="offset-left"
+                    step="0.5"
+                    min={-50}
+                    max={200}
+                    value={draft.print.offset_left_mm}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        print: { ...draft.print, offset_left_mm: Number(event.target.value) },
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="offset-top">Shift down (mm)</Label>
+                  <NumberInput
+                    id="offset-top"
+                    step="0.5"
+                    min={-50}
+                    max={200}
+                    value={draft.print.offset_top_mm}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        print: { ...draft.print, offset_top_mm: Number(event.target.value) },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Negative values move the slip up and left. If the print lands 2&nbsp;mm low, set
+                Shift down to &minus;2.
+              </p>
+
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"

@@ -129,6 +129,16 @@ export interface BoxItem extends Placed {
 
 export interface TextItem extends Placed {
   kind: 'text';
+  /**
+   * Centre the string in a box this wide, with `left` as the box's left edge.
+   *
+   * The design positions every value by its left edge, which is right for a
+   * field that grows to the right and wrong for one sitting in a box of its
+   * own. "SU-0005236" left-aligned looked centred by luck; a real slip number
+   * is "202635", six characters, and it sat a quarter of the box off centre.
+   */
+  width?: number;
+  align?: 'center';
   /** A key the renderer resolves to a string, or literal text for chrome. */
   text?: string;
   field?: ValueField;
@@ -222,9 +232,12 @@ export const SLIP: SlipItem[] = [
   },
 
   /* ----------------------------------------------------------- the slip row */
-  { kind: 'text', layer: 'value', left: 146.3, top: 181.36, field: 'slip_number', size: 11.35, weight: 700, colour: ink, font: 'display', tracking: 0.28 },
+  /* Centred in the white box, measured off the artwork at 130.53 -> 258.82. */
+  { kind: 'text', layer: 'value', left: 130.53, width: 128.28, align: 'center', top: 181.36, field: 'slip_number', size: 11.35, weight: 700, colour: ink, font: 'display', tracking: 0.28 },
   /* The one value the design sets in Open Sans rather than Montserrat. */
-  { kind: 'text', layer: 'value', left: 383.9, top: 180.33, field: 'printed_at', size: 9.99, weight: 600, colour: ink, font: 'label', tracking: -0.22 },
+  /* Centred in the space to the right of the "Print Date/Time" label, which
+     the artwork ends at 362.84. */
+  { kind: 'text', layer: 'value', left: 368, width: 138, align: 'center', top: 180.33, field: 'printed_at', size: 9.99, weight: 600, colour: ink, font: 'label', tracking: -0.22 },
 
   /* -------------------------------------------------------- details, left */
   { kind: 'text', layer: 'value', left: 147, top: 225.86, field: 'driver_name', size: 11.35, weight: 600, colour: ink, font: 'display', tracking: -0.27 },
@@ -259,13 +272,25 @@ export const SLIP: SlipItem[] = [
   { kind: 'text', layer: 'value', left: 370, top: 465.33, field: 'mann', size: 15.11, weight: 700, colour: ink, font: 'display', tracking: 0.14 },
 
   /* ------------------------------------------------------------ the photos */
-  { kind: 'image', layer: 'value', slot: 'front-view', left: 40.6, top: 537.65, width: 197.8, height: 101.1, radius: '2px', zoom: 1.3, alt: 'Truck on the weighbridge, front view' },
-  { kind: 'image', layer: 'value', slot: 'side-view', left: 290.8, top: 537.65, width: 197.8, height: 101.1, radius: '2px', alt: 'Truck on the weighbridge, side view' },
+  /*
+   * Filling the box, not floating in it.
+   *
+   * The design placed a 197.8 x 101.1 picture inside a box whose printable
+   * interior measures 240.31 x 122.28 — about 21 design px of white down each
+   * side. Measured off the artwork by flood-filling the box, then inset 1.5 px
+   * so a sheet that feeds a fraction out of true still lands inside the
+   * pre-printed border instead of across it.
+   */
+  { kind: 'image', layer: 'value', slot: 'front-view', left: 21, top: 528.63, width: 237.31, height: 119.28, radius: '3px', zoom: 1.3, alt: 'Truck on the weighbridge, front view' },
+  { kind: 'image', layer: 'value', slot: 'side-view', left: 271.32, top: 528.63, width: 237.31, height: 119.28, radius: '3px', alt: 'Truck on the weighbridge, side view' },
 
   /* ---------------------------------------------------------------- the QR */
   /* Moved for this size: it used to sit centred above the footer, and now
      lives in the "SCAN TO VERIFY" box at the bottom right. */
-  { kind: 'image', layer: 'value', slot: 'qr', left: 443.9, top: 670.2, width: 54.8, height: 54.8, alt: 'Scan to verify this slip' },
+  /* Dead centre of the SCAN TO VERIFY box, measured at 438.86 -> 504.13 by
+     667.67 -> 726.68. The box is wider than it is tall, so the square sits
+     centred on both axes rather than filling either. */
+  { kind: 'image', layer: 'value', slot: 'qr', left: 443.99, top: 669.67, width: 55, height: 55, alt: 'Scan to verify this slip' },
 ];
 
 export const LAYERS: Record<SlipView, readonly Layer[]> = {
