@@ -27,6 +27,7 @@ import {
   type SlipValues,
   type SlipView,
 } from './layout.js';
+import { viewFrameTransform, type ViewFrame } from '@suarza/shared';
 import { isPendingSlip } from './values.js';
 import * as ART from './art.js';
 
@@ -44,14 +45,17 @@ export interface SlipA5Props {
   frontImageUrl?: string;
   sideImageUrl?: string;
   /**
-   * How tightly to crop the front view into its box.
+   * How each camera view is zoomed and panned in its box, as the operator
+   * framed it on the live preview.
    *
-   * UNLIKE the calibration below, this applies in every view. A crop is a
+   * UNLIKE the calibration below, these apply in every view. A framing is a
    * statement about what the picture shows, so the paper, the screen, the
    * PDF and the page behind the QR code must all show the same truck framed
-   * the same way. Omitted falls back to the design's own figure.
+   * the same way. Omitted, the front view falls back to the design's own
+   * crop and the side view shows the whole frame.
    */
-  frontViewZoom?: number;
+  frontViewFrame?: ViewFrame;
+  sideViewFrame?: ViewFrame;
   /** Overrides the bundled Suarza mark, for a station with its own. */
   logoUrl?: string;
   /**
@@ -77,7 +81,20 @@ export interface SlipA5Props {
    * never shift: a calibration is a fact about one printer, not about the
    * record, and the two must not drift apart.
    */
-  calibration?: Partial<Record<'details' | 'side-view' | 'qr', { x: number; y: number }>>;
+  calibration?: Partial<
+    Record<
+      'details' | 'weights' | 'weight-times' | 'side-view' | 'qr',
+      { x: number; y: number }
+    >
+  >;
+  /**
+   * How much wider each photo prints, in millimetres added to EACH side.
+   *
+   * Paper only, like `calibration`: it widens the photo past the pad's green
+   * line so no white shows between them, which is a fact about this batch of
+   * pads and not about the record.
+   */
+  paperExtraWidth?: Partial<Record<'front-view' | 'side-view', number>>;
   /** For an on-screen preview; never applied when printing. */
   className?: string;
 }
@@ -90,11 +107,13 @@ export function SlipA5({
   verifyUrl,
   frontImageUrl,
   sideImageUrl,
-  frontViewZoom,
+  frontViewFrame,
+  sideViewFrame,
   logoUrl,
   offsetXmm = 0,
   offsetYmm = 0,
   calibration,
+  paperExtraWidth,
   className,
 }: SlipA5Props) {
   const layers = LAYERS[view];
@@ -102,12 +121,15 @@ export function SlipA5({
      not have yet, and the net drops to line up with the second weight. */
   const pending = isPendingSlip(values);
   /* Paper only. Every other view is the design, unmoved. */
-  const shifts = view === 'overprint' ? calibration : undefined;
+  const onPaper = view === 'overprint';
+  const shifts = onPaper ? calibration : undefined;
   const items = SLIP.filter(
     (item) => layers.includes(item.layer) && !(pending && item.omitWhenPending),
-  ).map((item) =>
-    pending && item.topWhenPending !== undefined ? { ...item, top: item.topWhenPending } : item,
-  );
+  )
+    .map((item) =>
+      pending && item.topWhenPending !== undefined ? { ...item, top: item.topWhenPending } : item,
+    )
+    .map((item) => (onPaper ? onPaperGeometry(item, paperExtraWidth) : item));
 
   /* The overprint goes onto paper that is already printed, so it draws no
      background of its own — white ink does not exist, and a white rectangle
@@ -142,7 +164,8 @@ export function SlipA5({
           verifyUrl={verifyUrl}
           frontImageUrl={frontImageUrl}
           sideImageUrl={sideImageUrl}
-          frontViewZoom={frontViewZoom}
+          frontViewFrame={frontViewFrame}
+          sideViewFrame={sideViewFrame}
           logoUrl={logoUrl}
           /* `none` is a real answer: the front view never moves. */
           shift={item.group === 'none' ? undefined : shifts?.[item.group ?? 'details']}
@@ -152,13 +175,34 @@ export function SlipA5({
   );
 }
 
+/**
+ * A photo's printed box: its `paper` geometry, widened equally on both sides
+ * so it stays centred on the pre-printed box (and the side view's offset
+ * still holds). Everything else is returned as it is.
+ */
+function onPaperGeometry(
+  item: SlipItem,
+  extraWidth: SlipA5Props['paperExtraWidth'],
+): SlipItem {
+  if (item.kind !== 'image' || !item.paper) return item;
+  const slot = item.slot === 'front-view' || item.slot === 'side-view' ? item.slot : undefined;
+  const extra = Math.max(0, (slot && extraWidth?.[slot]) || 0) / UNIT_MM;
+  return {
+    ...item,
+    ...item.paper,
+    left: item.paper.left - extra,
+    width: item.paper.width + extra * 2,
+  };
+}
+
 function Item({
   item,
   values,
   verifyUrl,
   frontImageUrl,
   sideImageUrl,
-  frontViewZoom,
+  frontViewFrame,
+  sideViewFrame,
   logoUrl,
   shift,
 }: {
@@ -167,7 +211,8 @@ function Item({
   verifyUrl?: string;
   frontImageUrl?: string;
   sideImageUrl?: string;
-  frontViewZoom?: number;
+  frontViewFrame?: ViewFrame;
+  sideViewFrame?: ViewFrame;
   logoUrl?: string;
   shift?: { x: number; y: number };
 }) {
@@ -239,9 +284,17 @@ function Item({
 
     if (!src) return null;
 
-    /* The station's figure wins for the front view, and only for it: the
-       side camera looks along the bridge from close in and needs no crop. */
-    const zoom = item.slot === 'front-view' ? (frontViewZoom ?? item.zoom) : item.zoom;
+    /* Both camera views are framed by hand on the live preview — zoom and
+       pan — and drawn here with the same transform the preview uses, so the
+       two cannot disagree. The front view falls back to the design's crop. */
+    const transform =
+      item.slot === 'front-view'
+        ? viewFrameTransform(frontViewFrame ?? { zoom: item.zoom ?? 1, x: 0, y: 0 })
+        : item.slot === 'side-view'
+          ? viewFrameTransform(sideViewFrame)
+          : item.zoom && item.zoom !== 1
+            ? `scale(${item.zoom})`
+            : undefined;
 
     const picture = (
       <img
@@ -254,7 +307,7 @@ function Item({
           objectFit: item.slot ? 'cover' : undefined,
           /* Scaled about the centre, so cropping in keeps the middle of the
              frame — which is where the truck is. */
-          ...(zoom && zoom !== 1 ? { transform: `scale(${zoom})` } : {}),
+          ...(transform ? { transform } : {}),
         }}
       />
     );

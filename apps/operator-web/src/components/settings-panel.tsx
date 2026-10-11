@@ -29,7 +29,6 @@ import {
   toast,
 } from '@suarza/ui';
 import {
-  FRONT_VIEW_ZOOM,
   formatDateTimePkt,
   formatPKR,
   type SyncOutcome,
@@ -167,21 +166,41 @@ interface SettingsPanelProps {
  * operator holding a slip is looking for "the side view picture", not for a
  * layout group. The front view is deliberately absent — it has never needed
  * moving, and a control nobody uses is one more thing to set wrong.
+ *
+ * The weight date/time steps in quarter millimetres: it is centred on a
+ * pre-printed icon only 3.7 mm tall, where half a millimetre is a visible
+ * jump.
  */
 const CALIBRATION_GROUPS = [
   {
     key: 'details',
-    label: 'Slip number, date and all details',
+    label: 'Slip number, date/time and customer details',
     x: 'details_offset_x_mm',
     y: 'details_offset_y_mm',
+    step: 0.5,
+  },
+  {
+    key: 'weights',
+    label: 'First, second and net weight',
+    x: 'weights_offset_x_mm',
+    y: 'weights_offset_y_mm',
+    step: 0.5,
+  },
+  {
+    key: 'weight-times',
+    label: 'Date/time beside the calendar icons',
+    x: 'weight_times_offset_x_mm',
+    y: 'weight_times_offset_y_mm',
+    step: 0.25,
   },
   {
     key: 'side-view',
     label: 'Side view picture',
     x: 'side_view_offset_x_mm',
     y: 'side_view_offset_y_mm',
+    step: 0.5,
   },
-  { key: 'qr', label: 'QR code', x: 'qr_offset_x_mm', y: 'qr_offset_y_mm' },
+  { key: 'qr', label: 'QR code', x: 'qr_offset_x_mm', y: 'qr_offset_y_mm', step: 0.5 },
 ] as const;
 
 export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
@@ -310,7 +329,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </div>
 
               {/*
-                * Calibration, three groups, paper only.
+                * Calibration, five groups, paper only.
                 *
                 * The pads are pre-printed on one press and overprinted on
                 * another, and they disagree about where the sheet starts —
@@ -338,7 +357,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                         </Label>
                         <NumberInput
                           id={`${group.key}-x`}
-                          step="0.5"
+                          step={group.step}
                           min={-20}
                           max={20}
                           value={draft.print[group.x]}
@@ -356,7 +375,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                         </Label>
                         <NumberInput
                           id={`${group.key}-y`}
-                          step="0.5"
+                          step={group.step}
                           min={-20}
                           max={20}
                           value={draft.print[group.y]}
@@ -371,6 +390,43 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     </div>
                   </div>
                 ))}
+
+                {/* Widens, rather than moves: white on BOTH sides of a
+                    picture is a box wider than the photo, not an offset. */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium">Picture width</p>
+                  <p className="text-xs text-muted-foreground">
+                    Extra width added to each side of the picture. Raise it if white shows on both
+                    sides of a picture; lower it if the picture spills past the green line.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        ['front_view_extra_width_mm', 'Front view (mm)'],
+                        ['side_view_extra_width_mm', 'Side view (mm)'],
+                      ] as const
+                    ).map(([field, label]) => (
+                      <div key={field} className="space-y-1">
+                        <Label htmlFor={field} className="text-xs font-normal">
+                          {label}
+                        </Label>
+                        <NumberInput
+                          id={field}
+                          step="0.25"
+                          min={0}
+                          max={5}
+                          value={draft.print[field]}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              print: { ...draft.print, [field]: Number(event.target.value) },
+                            })
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <label className="flex items-center gap-2 text-sm">
@@ -384,43 +440,12 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </label>
             </section>
 
-            <Separator />
-
             {/*
-              * Framing, which is NOT alignment and does not belong above.
-              *
-              * Everything under Print alignment corrects for one printer
-              * putting the paper down crooked, and reaches the paper alone.
-              * This changes what the picture shows, so it applies everywhere
-              * — the preview here, the printed slip, the manager's copy and
-              * the page a customer scans. The figure travels to the cloud
-              * with this station's profile on the next sync.
+              * No camera framing here. Both pictures are framed by hand on
+              * the live previews (CameraFramer) — zoom and drag — which is
+              * where the operator can see what they are choosing. A number
+              * typed here and checked on a slip afterwards was the old way.
               */}
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold">Camera pictures</h3>
-
-              <div className="space-y-1">
-                <Label htmlFor="front-view-zoom" className="text-xs font-normal">
-                  Front view zoom
-                </Label>
-                <NumberInput
-                  id="front-view-zoom"
-                  step="0.05"
-                  min={FRONT_VIEW_ZOOM.min}
-                  max={FRONT_VIEW_ZOOM.max}
-                  value={draft.front_view_zoom}
-                  onChange={(event) =>
-                    setDraft({ ...draft, front_view_zoom: Number(event.target.value) })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  How close the front camera's picture is on the slip. {FRONT_VIEW_ZOOM.min} shows
-                  the whole frame the camera sends; higher crops in on the middle, where the truck
-                  is. Change it, save, then open a slip to see the result — it changes the picture
-                  everywhere, not only on the printed one.
-                </p>
-              </div>
-            </section>
 
             <Separator />
 

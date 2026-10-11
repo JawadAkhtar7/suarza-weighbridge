@@ -110,13 +110,15 @@ interface Placed {
   /**
    * Which calibration group moves this item on the PRINTED sheet.
    *
-   * Left out means `details`, which is almost everything: the slip number,
-   * the date, the customer fields and the weights sit in the same band and go
-   * out of register together. `none` is for an item that must never move,
-   * which the front view is — nothing has asked for it, and a control nobody
-   * needs is one more thing to set wrong.
+   * Left out means `details`: the slip number, the print date/time and the
+   * customer fields. The figures in the three weight boxes are `weights`, so
+   * the details can be moved without moving them out of their boxes, and the
+   * date/time beside each box's calendar icon is `weight-times`, so it can be
+   * centred on that pre-printed icon without moving the figures. `none` is
+   * for an item that must never move, which the front view is — nothing has
+   * asked for it, and a control nobody needs is one more thing to set wrong.
    */
-  group?: 'details' | 'side-view' | 'qr' | 'none';
+  group?: 'details' | 'weights' | 'weight-times' | 'side-view' | 'qr' | 'none';
   omitWhenPending?: true;
   /**
    * Where this item sits on a first-weight slip instead.
@@ -184,6 +186,15 @@ export interface ImageItem extends Placed {
   art?: string;
   slot?: 'front-view' | 'side-view' | 'qr' | 'logo';
   alt: string;
+  /**
+   * Where it goes on the PRINTED sheet instead, if that differs.
+   *
+   * Only the photos have one: the pre-printed boxes run wider than the
+   * artwork, and a photo sized to the artwork leaves white at its edges on
+   * paper. The screen, the PDF and the page behind the QR keep the design's
+   * own box above.
+   */
+  paper?: { left: number; top: number; width: number; height: number; radius?: string };
 }
 
 export type SlipItem = BoxItem | TextItem | ImageItem;
@@ -267,8 +278,18 @@ export const SLIP: SlipItem[] = [
   { kind: 'text', layer: 'value', left: 410.6, top: 327.56, field: 'amount', size: 11.35, weight: 600, colour: ink, font: 'display', tracking: 0.33 },
 
   /* ------------------------------------------------------------- the weights */
-  { kind: 'text', layer: 'value', left: 63.9, top: 416.39, field: 'first_at', size: 8.28, weight: 500, colour: ink, font: 'display', tracking: 0.26 },
-  { kind: 'text', layer: 'value', left: 39.6, top: 439.24, field: 'first_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.42 },
+  /* The figures are the `weights` group: Settings -> Print moves them on
+     their own, not with the slip number and customer fields above. */
+  /*
+   * The date/time beside each calendar icon: `weight-times`.
+   *
+   * Centred on the icon in the design, measured off an 8x render: the icon's
+   * ink spans 413.75-427.63 (centre 420.69), the digits' 417.5-423.5 (centre
+   * 420.5). On paper the icon is the pad's, wherever its press put it, so the
+   * centring there is a calibration, set in Settings -> Print.
+   */
+  { kind: 'text', layer: 'value', group: 'weight-times', left: 63.9, top: 416.39, field: 'first_at', size: 8.28, weight: 500, colour: ink, font: 'display', tracking: 0.26 },
+  { kind: 'text', layer: 'value', group: 'weights', left: 39.6, top: 439.24, field: 'first_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.42 },
   /*
    * The first weight's MANUAL marker.
    *
@@ -277,27 +298,42 @@ export const SLIP: SlipItem[] = [
    * (232.9 - 198.6 = 34.3), on the same baseline, so the pair reads as one
    * decision rather than two placements.
    */
-  { kind: 'text', layer: 'value', left: 73.9, top: 473.02, field: 'first_manual', size: 8.83, weight: 500, colour: ink, font: 'display', tracking: 0.21 },
+  { kind: 'text', layer: 'value', group: 'weights', left: 73.9, top: 473.02, field: 'first_manual', size: 8.83, weight: 500, colour: ink, font: 'display', tracking: 0.21 },
 
-  { kind: 'text', layer: 'value', left: 222.9, top: 416.39, field: 'second_at', size: 8.28, weight: 500, colour: ink, font: 'display', tracking: 0.26 },
-  { kind: 'text', layer: 'value', left: 198.6, top: 439.24, field: 'second_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.4 },
-  { kind: 'text', layer: 'value', left: 232.9, top: 473.02, field: 'second_manual', size: 8.83, weight: 500, colour: ink, font: 'display', tracking: 0.21 },
+  { kind: 'text', layer: 'value', group: 'weight-times', left: 222.9, top: 416.39, field: 'second_at', size: 8.28, weight: 500, colour: ink, font: 'display', tracking: 0.26 },
+  { kind: 'text', layer: 'value', group: 'weights', left: 198.6, top: 439.24, field: 'second_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.4 },
+  { kind: 'text', layer: 'value', group: 'weights', left: 232.9, top: 473.02, field: 'second_manual', size: 8.83, weight: 500, colour: ink, font: 'display', tracking: 0.21 },
 
-  { kind: 'text', layer: 'value', left: 357.4, top: 420.44, field: 'net_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.59 },
-  { kind: 'text', layer: 'value', left: 370, top: 465.33, field: 'mann', size: 15.11, weight: 700, colour: ink, font: 'display', tracking: 0.14 },
+  { kind: 'text', layer: 'value', group: 'weights', left: 357.4, top: 420.44, field: 'net_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.59 },
+  { kind: 'text', layer: 'value', group: 'weights', left: 370, top: 465.33, field: 'mann', size: 15.11, weight: 700, colour: ink, font: 'display', tracking: 0.14 },
 
   /* ------------------------------------------------------------ the photos */
   /*
    * Filling the box, not floating in it.
    *
-   * The design placed a 197.8 x 101.1 picture inside a box whose printable
-   * interior measures 240.31 x 122.28 — about 21 design px of white down each
-   * side. Measured off the artwork by flood-filling the box, then inset 1.5 px
-   * so a sheet that feeds a fraction out of true still lands inside the
-   * pre-printed border instead of across it.
+   * Measured off template.svg rendered at 8x. Each box is a 1.13 px green
+   * line, rounded at the bottom, under a solid label band:
+   *
+   *   front   lines at 18.00-19.13 and 259.75-260.88
+   *   side    lines at 268.25-269.38 and 510.00-511.00
+   *   both    band ends at 526.63, bottom line at 649.13-650.25
+   *
+   * TWO GEOMETRIES. On screen, in the PDF and behind the QR the photo sits
+   * just inside the drawn border (1.2-1.9 px of inset), which is how the
+   * design reads. On paper — `paper` below — any inset shows as a white
+   * sliver, because the pads are printed on another press and their boxes run
+   * wider than the artwork. There the photo covers the green line to its
+   * outer edge on every side, and Settings -> Print widens it further
+   * (`*_extra_width_mm`) by however much this batch of pads needs.
    */
-  { kind: 'image', layer: 'value', slot: 'front-view', group: 'none', left: 21, top: 528.63, width: 237.31, height: 119.28, radius: '3px', zoom: FRONT_VIEW_ZOOM.default, alt: 'Truck on the weighbridge, front view' },
-  { kind: 'image', layer: 'value', slot: 'side-view', group: 'side-view', left: 271.32, top: 528.63, width: 237.31, height: 119.28, radius: '3px', alt: 'Truck on the weighbridge, side view' },
+  {
+    kind: 'image', layer: 'value', slot: 'front-view', group: 'none', left: 21, top: 528.63, width: 237.31, height: 119.28, radius: '3px', zoom: FRONT_VIEW_ZOOM.default, alt: 'Truck on the weighbridge, front view',
+    paper: { left: 18, top: 526.2, width: 242.88, height: 124.05, radius: '0 0 4.3px 4.3px' },
+  },
+  {
+    kind: 'image', layer: 'value', slot: 'side-view', group: 'side-view', left: 271.32, top: 528.63, width: 237.31, height: 119.28, radius: '3px', alt: 'Truck on the weighbridge, side view',
+    paper: { left: 268.25, top: 526.2, width: 242.75, height: 124.05, radius: '0 0 4.3px 4.3px' },
+  },
 
   /* ---------------------------------------------------------------- the QR */
   /* Moved for this size: it used to sit centred above the footer, and now
@@ -307,6 +343,27 @@ export const SLIP: SlipItem[] = [
      centred on both axes rather than filling either. */
   { kind: 'image', layer: 'value', slot: 'qr', group: 'qr', left: 443.99, top: 669.67, width: 55, height: 55, alt: 'Scan to verify this slip' },
 ];
+
+/**
+ * Each camera view's box, width over height (both ~1.99).
+ *
+ * The shape the operator's live preview takes, so framing the picture there
+ * frames exactly what the slip shows: the framing is stored as a fraction of
+ * the box, which only means the same thing in boxes of the same shape. The
+ * printed boxes (`paper`) are within a few per cent of them.
+ */
+function boxAspect(slot: 'front-view' | 'side-view'): number {
+  const box = SLIP.find((item) => item.kind === 'image' && item.slot === slot) as {
+    width: number;
+    height: number;
+  };
+  return box.width / box.height;
+}
+
+export const VIEW_ASPECT = {
+  'front-view': boxAspect('front-view'),
+  'side-view': boxAspect('side-view'),
+} as const;
 
 export const LAYERS: Record<SlipView, readonly Layer[]> = {
   soft: ['chrome', 'value'],

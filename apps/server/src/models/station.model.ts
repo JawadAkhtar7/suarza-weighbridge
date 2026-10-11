@@ -34,6 +34,22 @@ const stationSchema = new Schema(
      * telling two stories.
      */
     front_view_zoom: { type: Number, default: FRONT_VIEW_ZOOM.default },
+    /**
+     * How this station's front and side views are zoomed and panned in their
+     * boxes, as its operator framed them on the live preview. For the front
+     * zoom's reason. A document written before framing has only the zoom,
+     * which then stands for a centred framing.
+     */
+    front_view_frame: {
+      zoom: { type: Number },
+      x: { type: Number },
+      y: { type: Number },
+    },
+    side_view_frame: {
+      zoom: { type: Number, default: 1 },
+      x: { type: Number, default: 0 },
+      y: { type: Number, default: 0 },
+    },
     /** The station's own edit time, used to ignore a stale batch. */
     updated_at: { type: Date, required: true },
     synced_at: { type: Date, required: true, default: () => new Date() },

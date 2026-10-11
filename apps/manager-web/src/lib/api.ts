@@ -18,6 +18,7 @@ import type {
   LedgerSummary,
   LoginResponse,
   PaginatedWeighments,
+  ViewFrame,
   Weighment,
   WeighmentQuery,
 } from '@suarza/shared';
@@ -116,7 +117,14 @@ export const api = {
    * nulls on a bridge without cameras.
    */
   weighmentCaptures: (slip: string) =>
-    request<{ front: string | null; side: string | null; front_view_zoom: number }>(
+    request<{
+      front: string | null;
+      side: string | null;
+      front_view_zoom: number;
+      /* Absent from a server that predates front framing: fall back to the zoom. */
+      front_view_frame?: ViewFrame;
+      side_view_frame?: ViewFrame;
+    }>(
       `/weighments/${encodeURIComponent(slip)}/captures`,
     ),
 

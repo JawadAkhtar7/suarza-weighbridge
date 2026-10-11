@@ -21,6 +21,7 @@ import { SlipA5, SLIP_PAGE_CSS } from './slip-a5.js';
 import type { SlipValues, SlipView } from './layout.js';
 import { SLIP_FONT_CSS } from './fonts-inline.js';
 import { PAGE_MM } from './layout.js';
+import type { ViewFrame } from '@suarza/shared';
 
 export interface SlipPageOptions {
   view: SlipView;
@@ -30,8 +31,10 @@ export interface SlipPageOptions {
   verifyUrl?: string;
   frontImageUrl?: string;
   sideImageUrl?: string;
-  /** The station's crop for the front view; the design's own figure if absent. */
-  frontViewZoom?: number;
+  /** How the station frames its front view; the design's own crop if absent. */
+  frontViewFrame?: ViewFrame;
+  /** How the station frames its side view; the whole frame if absent. */
+  sideViewFrame?: ViewFrame;
   offsetXmm?: number;
   offsetYmm?: number;
   /**
@@ -53,7 +56,8 @@ export function renderSlipPage(options: SlipPageOptions): string {
     verifyUrl,
     frontImageUrl,
     sideImageUrl,
-    frontViewZoom,
+    frontViewFrame,
+    sideViewFrame,
     offsetXmm,
     offsetYmm,
     autoPrint = false,
@@ -66,7 +70,8 @@ export function renderSlipPage(options: SlipPageOptions): string {
       verifyUrl,
       frontImageUrl,
       sideImageUrl,
-      frontViewZoom,
+      frontViewFrame,
+      sideViewFrame,
       offsetXmm,
       offsetYmm,
     }),

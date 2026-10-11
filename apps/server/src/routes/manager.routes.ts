@@ -5,7 +5,7 @@ import { weighmentQuerySchema } from '@suarza/shared';
 import { z } from 'zod';
 import { requireAuth, requireCapability } from '../middleware/auth.js';
 import { imagesForWeighment } from '../services/capture.service.js';
-import { frontViewZoomForStation } from '../services/station.service.js';
+import { cameraFramingForStation } from '../services/station.service.js';
 import { listWeighments, requireBySlip, suggestValues } from '../services/weighment.service.js';
 import { getAnalytics } from '../services/analytics.service.js';
 import { parse } from './helpers.js';
@@ -44,9 +44,13 @@ export function managerRouter(jwtSecret: string): Router {
        endpoint of its own: it is not a fact about the station the manager
        might browse, it is how to draw these two images. Sending them apart
        invites a preview that crops differently from the slip it previews. */
+    const framing = await cameraFramingForStation(weighment.station_id);
     res.json({
       ...(await imagesForWeighment(weighment.id)),
-      front_view_zoom: await frontViewZoomForStation(weighment.station_id),
+      front_view_frame: framing.front,
+      side_view_frame: framing.side,
+      /* For a dashboard build that predates front framing. */
+      front_view_zoom: framing.front.zoom,
     });
   });
 

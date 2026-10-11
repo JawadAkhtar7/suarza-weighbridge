@@ -12,6 +12,7 @@
  */
 
 import {
+  clampViewFrame,
   nowUtc,
   SLIP_PAGE_MM,
   stationSettingsSchema,
@@ -23,6 +24,9 @@ import { MetaStore, META_KEYS } from '../db/meta.js';
 import { AppError } from '../errors.js';
 
 const SETTINGS_KEY = 'station_settings';
+
+/** The most `front_view_zoom` a cloud from before camera framing will accept. */
+const LEGACY_FRONT_VIEW_ZOOM_MAX = 3;
 
 export class SettingsService {
   private readonly meta: MetaStore;
@@ -97,6 +101,50 @@ export class SettingsService {
       scale_percent: 100,
     };
 
+    /*
+     * Groups split off from the one that used to move them start where that
+     * group put them, so a station saved before the split prints exactly as
+     * it did instead of jumping back to zero on the next slip:
+     *
+     *   weights      moved with the details  ("First, second and net weight")
+     *   weight times moved with the weights  ("Date/time beside the calendar
+     *                                          icons")
+     *
+     * In that order, so a station older than both carries the details' figures
+     * through to the times. The first save writes each group's own figures,
+     * and this stops applying.
+     */
+    const storedPrint = (stored as { print?: unknown } | null)?.print;
+    if (typeof storedPrint === 'object' && storedPrint !== null) {
+      if (!('weights_offset_x_mm' in storedPrint)) {
+        settings.print.weights_offset_x_mm = settings.print.details_offset_x_mm;
+        settings.print.weights_offset_y_mm = settings.print.details_offset_y_mm;
+      }
+      if (!('weight_times_offset_x_mm' in storedPrint)) {
+        settings.print.weight_times_offset_x_mm = settings.print.weights_offset_x_mm;
+        settings.print.weight_times_offset_y_mm = settings.print.weights_offset_y_mm;
+      }
+    }
+
+    /*
+     * The front view used to be cropped by a zoom alone (`front_view_zoom`,
+     * typed into Settings). A station saved before it could be panned starts
+     * from that zoom, centred — exactly the picture it was printing. The first
+     * save writes the framing itself, and this stops applying.
+     */
+    if (
+      typeof stored === 'object' &&
+      stored !== null &&
+      !('front_view_frame' in stored) &&
+      typeof (stored as { front_view_zoom?: unknown }).front_view_zoom === 'number'
+    ) {
+      settings.front_view_frame = clampViewFrame({
+        zoom: (stored as { front_view_zoom: number }).front_view_zoom,
+        x: 0,
+        y: 0,
+      });
+    }
+
     return settings;
   }
 
@@ -119,7 +167,7 @@ export class SettingsService {
 
   /**
    * What this station looks like, as the cloud needs it for the page behind
-   * the QR: its paper, and how its front camera is framed.
+   * the QR: its paper, and how its cameras are framed.
    *
    * Sent with every batch so the public receipt matches the printed one; see
    * `stationProfileSchema`.
@@ -129,8 +177,13 @@ export class SettingsService {
     return {
       station_id: settings.station_id,
       paper_size: settings.print.paper_size === 'CUSTOM' ? 'A5' : settings.print.paper_size,
-      /* So the page behind the QR crops the truck exactly as the paper does. */
-      front_view_zoom: settings.front_view_zoom,
+      /* So the page behind the QR frames both views exactly as the paper does. */
+      front_view_frame: settings.front_view_frame,
+      side_view_frame: settings.side_view_frame,
+      /* The front framing's zoom alone, for a cloud that predates framing —
+         held to the 3 that cloud accepts: a higher figure fails its check on
+         the whole batch, and the weighings would stop syncing with it. */
+      front_view_zoom: Math.min(settings.front_view_frame.zoom, LEGACY_FRONT_VIEW_ZOOM_MAX),
       // Epoch until this station's settings have been saved at least once,
       // so a station that has never been touched cannot win against one that
       // has. Saving bumps it, which is what lets a zoom change take.

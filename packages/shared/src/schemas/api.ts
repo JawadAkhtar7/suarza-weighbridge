@@ -5,6 +5,7 @@ import { vehicleTypeSchema, weighmentSchema } from './weighment.js';
 import { auditEntrySchema } from './audit.js';
 import { WEIGHMENT_STATUSES, USER_ROLES } from '../constants/domain.js';
 import { FRONT_VIEW_ZOOM } from '../constants/paper.js';
+import { frontViewFrameSchema, sideViewFrameSchema } from './settings.js';
 
 /**
  * POST /ingest — the agent's outbox payload.
@@ -26,12 +27,23 @@ export const stationProfileSchema = z.object({
   station_id: z.string().min(1).max(16),
   /** What this station prints on. */
   paper_size: z.enum(['A4', 'A5', 'LETTER']).default('A5'),
-  /** How tightly this station's front camera is cropped into its box. */
+  /**
+   * The front view's zoom alone — what an agent sent before the front view
+   * could be panned too. Still sent, as the front framing's zoom, so a cloud
+   * that predates framing keeps cropping the front view the same way.
+   */
   front_view_zoom: z
     .number()
     .min(FRONT_VIEW_ZOOM.min)
     .max(FRONT_VIEW_ZOOM.max)
     .default(FRONT_VIEW_ZOOM.default),
+  /**
+   * How this station's front view is zoomed and panned in its box. Absent
+   * from an agent that predates it; the cloud then centres `front_view_zoom`.
+   */
+  front_view_frame: frontViewFrameSchema.optional(),
+  /** How this station's side view is zoomed and panned in its box. */
+  side_view_frame: sideViewFrameSchema.default({}),
   /** When the station last changed them, so a stale batch cannot overwrite. */
   updated_at: z.string().datetime({ offset: true }),
 });

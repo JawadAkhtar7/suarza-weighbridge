@@ -21,8 +21,9 @@ import { registerSettingsRoutes } from './routes/settings.js';
 import { registerCameraRoutes } from './routes/cameras.js';
 import type { SettingsService } from './services/settings-service.js';
 import type { CatalogueSync } from './sync/catalogue-sync.js';
-import type { CameraClient } from './cameras/camera-client.js';
+import type { CameraClient, CameraView } from './cameras/camera-client.js';
 import type { CaptureService } from './cameras/capture-service.js';
+import type { LiveVideo } from './cameras/live-video.js';
 import { registerOperatorWeb, resolveOperatorWebDir } from './static.js';
 
 /**
@@ -45,6 +46,8 @@ export interface AgentDeps {
   /** Absent when the .env names no cameras; slips then print the placeholder. */
   cameras?: CameraClient;
   capture?: CaptureService;
+  /** The live panel's video, per camera; absent ones fall back to stills. */
+  liveVideo?: Partial<Record<CameraView, LiveVideo>>;
   /** Explicit path to the Operator PWA build; auto-detected when omitted. */
   operatorWebDir?: string | null;
   /** Tests drive the API directly and have no web build to serve. */

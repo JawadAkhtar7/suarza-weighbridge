@@ -49,6 +49,17 @@ export interface SyncWorkerOptions {
     read(row: CaptureRow): Promise<Buffer | null>;
   };
   client: CloudClient;
+  /**
+   * Which version of the station profile (paper, camera framing) is current —
+   * its edit time.
+   *
+   * The profile rides along with every batch, but a batch only goes when a
+   * weighing does. An operator who re-frames a camera between trucks would
+   * otherwise leave the page behind every QR code framed the old way until
+   * the next truck; when this has moved on from what last reached the cloud,
+   * the profile goes up on its own.
+   */
+  profileVersion?: () => string;
   /** Backstop interval (brief §11d). */
   periodicMs: number;
   onLog?: (level: 'info' | 'warn' | 'error', message: string) => void;
@@ -75,6 +86,8 @@ export class SyncWorker {
   private started = false;
   /** Set when a commit lands mid-sync, so the new record isn't left behind. */
   private rerunRequested = false;
+  /** The profile version that last reached the cloud; null sends it once on start. */
+  private sentProfileVersion: string | null = null;
   private periodicTimer: NodeJS.Timeout | null = null;
 
   private online = false;
@@ -185,7 +198,17 @@ export class SyncWorker {
       const images = await this.drainCaptures();
       if (images === 'failed') return;
 
-      if (drainedSomething || orphans === 'drained' || images === 'drained') {
+      /* Last, so a batch above that already carried the newest profile
+         makes this a no-op. */
+      const profile = await this.sendProfileIfChanged();
+      if (profile === 'failed') return;
+
+      if (
+        drainedSomething ||
+        orphans === 'drained' ||
+        images === 'drained' ||
+        profile === 'sent'
+      ) {
         this.markOnline();
         return;
       }
@@ -270,6 +293,31 @@ export class SyncWorker {
    * "the send failed" are opposite situations and conflating them would make
    * an empty outbox look like an outage.
    */
+  /**
+   * Which profile version a send is about to carry.
+   *
+   * Read BEFORE the send and recorded after it succeeds: a change made while
+   * the request is in flight was not in it, and must still count as unsent.
+   */
+  private profileVersionNow(): string | null {
+    return this.options.profileVersion?.() ?? null;
+  }
+
+  /** The profile on its own, when it has changed since it last reached the cloud. */
+  private async sendProfileIfChanged(): Promise<'sent' | 'unchanged' | 'failed'> {
+    const current = this.options.profileVersion?.();
+    if (current === undefined || current === this.sentProfileVersion) return 'unchanged';
+    try {
+      await this.options.client.ingest([], []);
+      this.sentProfileVersion = current;
+      this.options.onLog?.('info', 'Sent this station’s settings to the cloud');
+      return 'sent';
+    } catch (error) {
+      this.fail(error);
+      return 'failed';
+    }
+  }
+
   private async drainOrphanAudit(): Promise<'drained' | 'empty' | 'failed'> {
     let drainedAny = false;
 
@@ -282,7 +330,9 @@ export class SyncWorker {
       try {
         // No weighments in this batch — the server upserts audit entries on
         // their own id, so it needs nothing else.
+        const version = this.profileVersionNow();
         await this.options.client.ingest([], entries);
+        this.sentProfileVersion = version;
         this.options.audit.markSynced(entries.map((entry) => entry.id));
         this.options.onLog?.('info', `Synced ${entries.length} audit entr(ies) to the cloud`);
         drainedAny = true;
@@ -303,7 +353,10 @@ export class SyncWorker {
     this.options.weighments.recordSyncAttempt(ids, nowUtc());
 
     try {
+      const version = this.profileVersionNow();
       const response = await this.options.client.ingest(pending.map(toDto), auditEntries);
+      // The profile rode along with this batch.
+      this.sentProfileVersion = version;
 
       // Only ids the cloud confirms are marked synced. Anything it rejected
       // stays in the outbox and is retried, rather than silently vanishing.

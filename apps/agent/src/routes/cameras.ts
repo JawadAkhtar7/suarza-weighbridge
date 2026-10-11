@@ -74,7 +74,7 @@ export function registerCameraRoutes(app: FastifyInstance, deps: AgentDeps): voi
    * none answers with nulls and the placeholder is drawn.
    */
   app.get<{ Params: { slip: string } }>('/weighments/:slip/captures', (request, reply) => {
-    if (!capture) return { front: null, side: null };
+    if (!capture) return { front: null, side: null, pending: false };
 
     const record = deps.service.getBySlip(request.params.slip);
     if (!record) return reply.code(404).send({ error: { code: 'SLIP_NOT_FOUND' } });
@@ -83,6 +83,9 @@ export function registerCameraRoutes(app: FastifyInstance, deps: AgentDeps): voi
     return {
       front: latest.FRONT?.id ?? null,
       side: latest.SIDE?.id ?? null,
+      // The slip asks again while this is true rather than printing the
+      // placeholder, or the previous pass's picture, a second too early.
+      pending: capture.isPending(record.id),
     };
   });
 
@@ -108,11 +111,13 @@ export function registerCameraRoutes(app: FastifyInstance, deps: AgentDeps): voi
    * Live view, as MJPEG.
    *
    * These cameras only offer H.264/H.265, which a browser cannot play from a
-   * plain <img>, and transcoding on the operator PC would cost real CPU on
-   * the machine that also has to weigh trucks. So the agent polls the
-   * camera's still endpoint a few times a second and republishes the JPEGs as
-   * a multipart stream — which <img src="..."> has understood since the
-   * 1990s. No decoding, no transcoding: bytes in, bytes out.
+   * plain <img>. So the agent republishes JPEGs as a multipart stream, which
+   * <img src="..."> has understood since the 1990s, from one of two sources:
+   *
+   *   video    the main stream's RTSP video, turned into 1920-wide frames by
+   *            ffmpeg (cameras/live-video.ts) — sharp enough to zoom into.
+   *   stills   the 640x360 sub-stream snapshot, polled a few times a second,
+   *            when this PC has no ffmpeg or the video does not come.
    */
   app.get<{ Params: ViewParams }>('/camera/:view/live', async (request, reply) => {
     const view = parseView(request.params.view);
@@ -121,35 +126,46 @@ export function registerCameraRoutes(app: FastifyInstance, deps: AgentDeps): voi
     const boundary = 'suarzaframe';
     const stream = new PassThrough();
     let stopped = false;
+    let unsubscribe: (() => void) | null = null;
+    let watchdog: NodeJS.Timeout | null = null;
 
     const stop = () => {
+      if (stopped) return;
       stopped = true;
+      unsubscribe?.();
+      unsubscribe = null;
+      if (watchdog) clearInterval(watchdog);
       stream.end();
     };
-    // Whichever end gives up first, the polling loop has to stop. Without
-    // this it would keep hitting the camera for a tab that was closed.
+    // Whichever end gives up first, the source has to stop. Without this it
+    // would keep pulling from the camera for a tab that was closed. The
+    // RESPONSE is what reports a browser going away on a reply that never
+    // ends; the request alone did not, and a closed tab kept its source.
     request.raw.on('close', stop);
     request.raw.on('aborted', stop);
+    reply.raw.on('close', stop);
 
-    const intervalMs = Math.max(100, Math.round(1000 / cameraSettings().liveFps));
+    const writeFrame = (body: Buffer) => {
+      if (stopped) return;
+      // A browser that has fallen behind gets the next frame, not a backlog:
+      // a live view showing the past is worse than one that skips.
+      if (stream.writableLength > 4 * 1024 * 1024) return;
+      stream.write(
+        `--${boundary}\r\nContent-Type: image/jpeg\r\nContent-Length: ${body.byteLength}\r\n\r\n`,
+      );
+      stream.write(body);
+      stream.write('\r\n');
+    };
 
-    void (async () => {
+    const pollStills = async () => {
+      const intervalMs = Math.max(100, Math.round(1000 / cameraSettings().liveFps));
       while (!stopped) {
         const started = Date.now();
-        // The sub-stream: this runs several times a second for as long as the
-        // operator's screen is open, and the main stream's 4 MP frames would
-        // flood the bridge's switch for a picture nobody keeps.
+        // The sub-stream: small and quick, so polling it several times a
+        // second neither floods the switch nor holds up the slip's picture.
         const shot = await cameras.snapshot(view, 'live');
-
         if (stopped) break;
-        if (shot) {
-          stream.write(
-            `--${boundary}\r\nContent-Type: image/jpeg\r\n` +
-              `Content-Length: ${shot.body.byteLength}\r\n\r\n`,
-          );
-          stream.write(shot.body);
-          stream.write('\r\n');
-        }
+        if (shot) writeFrame(shot.body);
 
         // Pace from the START of the request, not the end, so a camera that
         // takes 300 ms still yields the asked-for rate rather than drifting.
@@ -158,7 +174,36 @@ export function registerCameraRoutes(app: FastifyInstance, deps: AgentDeps): voi
           await new Promise((done) => setTimeout(done, intervalMs - elapsed));
         }
       }
-    })();
+    };
+
+    const video = deps.liveVideo?.[view];
+    if (video?.available) {
+      /* The newest frame first, if it is recent: a viewer arriving while the
+         video already runs should not wait for the next one to see anything. */
+      if (video.latestFrame && Date.now() - video.latestFrameAt < 2000) {
+        writeFrame(video.latestFrame);
+      }
+      let lastFrameAt = Date.now();
+      unsubscribe = video.subscribe((frame) => {
+        lastFrameAt = Date.now();
+        writeFrame(frame);
+      });
+      /* No frame for ten seconds — ffmpeg will not start, or the camera's
+         video has gone — and this viewer falls back to the stills rather
+         than staring at a frozen picture. The video keeps retrying for
+         anyone who opens the screen later. */
+      watchdog = setInterval(() => {
+        if (stopped || Date.now() - lastFrameAt < 10_000) return;
+        clearInterval(watchdog!);
+        watchdog = null;
+        unsubscribe?.();
+        unsubscribe = null;
+        request.log.warn({ view }, 'No live video; falling back to stills');
+        void pollStills();
+      }, 2000);
+    } else {
+      void pollStills();
+    }
 
     return reply
       .header('content-type', `multipart/x-mixed-replace; boundary=${boundary}`)

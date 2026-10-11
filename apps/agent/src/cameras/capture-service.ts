@@ -33,6 +33,15 @@ export interface CaptureServiceOptions {
 export class CaptureService {
   private readonly captures: CaptureRepository;
   private readonly root: string;
+  /**
+   * Weighments whose pictures are still being taken.
+   *
+   * The print tab opens the moment a weighing is saved, about a second before
+   * a main-stream still has arrived. Without this it cannot tell "not taken
+   * yet" from "no cameras" — or, on a second pass, from the first pass's
+   * pictures — and prints the placeholder.
+   */
+  private readonly inFlight = new Map<string, number>();
 
   constructor(private readonly options: CaptureServiceOptions) {
     this.captures = new CaptureRepository(options.db);
@@ -63,6 +72,10 @@ export class CaptureService {
    */
   async capture(weighment: Weighment, pass: CapturePass): Promise<void> {
     if (!this.enabled) return;
+
+    // Marked before the first await, so it is already set by the time the
+    // save's HTTP response reaches the browser and the print tab asks.
+    this.inFlight.set(weighment.id, (this.inFlight.get(weighment.id) ?? 0) + 1);
 
     try {
       const shots = await this.options.cameras.snapshotAll();
@@ -96,7 +109,16 @@ export class CaptureService {
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'unknown error';
       this.options.onLog?.('warn', `Could not store images for ${weighment.slip_number}: ${reason}`);
+    } finally {
+      const remaining = (this.inFlight.get(weighment.id) ?? 1) - 1;
+      if (remaining > 0) this.inFlight.set(weighment.id, remaining);
+      else this.inFlight.delete(weighment.id);
     }
+  }
+
+  /** True while this weighment's pictures are still being taken. */
+  isPending(weighmentId: string): boolean {
+    return this.inFlight.has(weighmentId);
   }
 
   /** Absolute path of a stored still, for serving it. */

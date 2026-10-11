@@ -27,10 +27,11 @@ export function ReceiptSettingsProvider({ children }: { children: ReactNode }) {
   });
 
   const mutation = useMutation({
-    mutationFn: agentApi.saveSettings,
-    onSuccess: (saved) => {
+    mutationFn: ({ settings }: { settings: ReceiptSettings; quiet: boolean }) =>
+      agentApi.saveSettings(settings),
+    onSuccess: (saved, { quiet }) => {
       queryClient.setQueryData(SETTINGS_KEY, saved);
-      toast.success('Settings saved');
+      if (!quiet) toast.success('Settings saved');
     },
     onError: (error) =>
       toast.error('Could not save settings', {
@@ -39,8 +40,8 @@ export function ReceiptSettingsProvider({ children }: { children: ReactNode }) {
   });
 
   const update = useCallback(
-    (next: ReceiptSettings) => {
-      mutation.mutate(next);
+    (next: ReceiptSettings, options?: { quiet?: boolean }) => {
+      mutation.mutate({ settings: next, quiet: options?.quiet ?? false });
     },
     [mutation],
   );

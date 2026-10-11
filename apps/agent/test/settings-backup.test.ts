@@ -83,6 +83,85 @@ describe('SettingsService', () => {
     expect(service.get().print.paper_size).toBe('CUSTOM');
   });
 
+  it('keeps the weights where the details offset put them, on settings saved before they had their own', () => {
+    // As the weighbridge PC stores it today: details calibrated, no weights
+    // fields yet. Until now the weights moved with the details offset.
+    db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
+      'station_settings',
+      JSON.stringify({ print: { details_offset_x_mm: 0.5, details_offset_y_mm: -2 } }),
+    );
+
+    const read = new SettingsService(db).get().print;
+    expect(read.weights_offset_x_mm).toBe(0.5);
+    expect(read.weights_offset_y_mm).toBe(-2);
+    // ...and through them to the date/time, which moved with them too.
+    expect(read.weight_times_offset_x_mm).toBe(0.5);
+    expect(read.weight_times_offset_y_mm).toBe(-2);
+  });
+
+  it('starts the date/time beside the calendar icons where the weights put it', () => {
+    // As the weighbridge PC stores it now: weights saved on their own, no
+    // date/time fields yet.
+    db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
+      'station_settings',
+      JSON.stringify({
+        print: {
+          details_offset_x_mm: 0,
+          details_offset_y_mm: -2,
+          weights_offset_x_mm: 0,
+          weights_offset_y_mm: 0,
+        },
+      }),
+    );
+
+    const read = new SettingsService(db).get().print;
+    expect(read.weight_times_offset_x_mm).toBe(0);
+    expect(read.weight_times_offset_y_mm).toBe(0);
+  });
+
+  it('moves the details and the weights independently once both are saved', () => {
+    const service = new SettingsService(db);
+    const current = service.get();
+    service.replace({
+      ...current,
+      print: { ...current.print, details_offset_y_mm: -3, weights_offset_y_mm: 0 },
+    });
+
+    const read = new SettingsService(db).get().print;
+    expect(read.details_offset_y_mm).toBe(-3);
+    // Saved as 0, and stays 0: the carry-over is only for older blobs.
+    expect(read.weights_offset_y_mm).toBe(0);
+  });
+
+  it('starts the front framing from the zoom saved before the front view could be panned', () => {
+    db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
+      'station_settings',
+      JSON.stringify({ front_view_zoom: 1.6 }),
+    );
+
+    const service = new SettingsService(db);
+    expect(service.get().front_view_frame).toEqual({ zoom: 1.6, x: 0, y: 0 });
+    // ...and keeps telling a cloud that predates framing the same zoom.
+    expect(service.profile().front_view_zoom).toBe(1.6);
+  });
+
+  it('never sends a cloud from before framing a front zoom it would reject', () => {
+    const service = new SettingsService(db);
+    service.replace({ ...service.get(), front_view_frame: { zoom: 8, x: 0, y: 0 } });
+    const profile = new SettingsService(db).profile();
+    expect(profile.front_view_frame?.zoom).toBe(8);
+    expect(profile.front_view_zoom).toBe(3);
+  });
+
+  it('keeps a front framing once it has been saved', () => {
+    const service = new SettingsService(db);
+    service.replace({ ...service.get(), front_view_frame: { zoom: 2, x: 0.2, y: -0.1 } });
+
+    const read = new SettingsService(db);
+    expect(read.get().front_view_frame).toEqual({ zoom: 2, x: 0.2, y: -0.1 });
+    expect(read.profile().front_view_frame).toEqual({ zoom: 2, x: 0.2, y: -0.1 });
+  });
+
   it('falls back to defaults if the stored blob is unreadable', () => {
     // Weighing must keep working; settings can be fixed afterwards.
     db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('station_settings', '{not json');

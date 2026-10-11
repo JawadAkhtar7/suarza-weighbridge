@@ -17,7 +17,9 @@ import { createWeightReader } from './indicator/index.js';
 import { WeighmentService } from './services/weighment-service.js';
 import { createCloudClient, SyncWorker } from './sync/index.js';
 import { CatalogueSync } from './sync/catalogue-sync.js';
-import { CameraClient } from './cameras/camera-client.js';
+import { createRequire } from 'node:module';
+import { CameraClient, type CameraView } from './cameras/camera-client.js';
+import { LiveVideo } from './cameras/live-video.js';
 import { CaptureService } from './cameras/capture-service.js';
 import { SettingsService } from './services/settings-service.js';
 import { BackupJob } from './backup.js';
@@ -82,6 +84,33 @@ async function main(): Promise<void> {
     log('[camera:info] No cameras configured — slips print the placeholder');
   }
 
+  /* The live panel's video, one per camera that has a video URL. Nothing runs
+     until somebody opens the weighing screen. ffmpeg-static is CommonJS and
+     exports the binary's path, or null on a platform it has no build for. */
+  const ffmpegPath = createRequire(import.meta.url)('ffmpeg-static') as string | null;
+  const liveVideo: Partial<Record<CameraView, LiveVideo>> = {};
+  for (const [view, url] of [
+    ['FRONT', cameraConfig.frontVideoUrl],
+    ['SIDE', cameraConfig.sideVideoUrl],
+  ] as const) {
+    if (!url) continue;
+    liveVideo[view] = new LiveVideo({
+      url,
+      username: cameraConfig.username,
+      password: cameraConfig.password,
+      fps: cameraConfig.videoFps,
+      width: cameraConfig.videoWidth,
+      ffmpegPath: process.env['FFMPEG_PATH']?.trim() || ffmpegPath,
+      onLog: (level, message) => log(`[camera:${level}] ${view}: ${message}`),
+    });
+  }
+  const videoViews = Object.entries(liveVideo).filter(([, video]) => video.available);
+  log(
+    videoViews.length > 0
+      ? `[camera:info] Live view from video: ${videoViews.map(([view]) => view).join(' and ')}`
+      : '[camera:info] Live view from stills (no ffmpeg or no video URL)',
+  );
+
   let syncWorker: SyncWorker | null = null;
 
   if (cloud.url && cloud.apiKey) {
@@ -106,8 +135,12 @@ async function main(): Promise<void> {
           }
         : undefined,
       periodicMs: settings.get().sync_interval_seconds * 1000,
+      profileVersion: () => settings.profile().updated_at,
       onLog: (level, message) => log(`[sync:${level}] ${message}`),
     });
+    // A change to the station's settings — re-framing a camera, above all —
+    // reaches the page behind the QR now, not with the next truck.
+    settings.onChange(() => syncWorker?.requestSync());
   } else {
     log('[sync:info] Cloud sync disabled — no cloud address set in deployment.ts');
   }
@@ -142,6 +175,7 @@ async function main(): Promise<void> {
     settings,
     cameras,
     capture,
+    liveVideo,
     catalogueSync,
     syncStatus: syncWorker ?? undefined,
     serveOperatorWeb: config.SERVE_OPERATOR_WEB,
@@ -185,6 +219,9 @@ async function main(): Promise<void> {
     app.log.info({ signal }, 'Shutting down');
     syncWorker?.stop();
     backup.stop();
+    // ffmpeg would also end when its pipe closes, but not before it had
+    // reconnected to the camera once more for nobody.
+    for (const video of Object.values(liveVideo)) video.stop();
     await app.close();
     await reader.stop();
     // Last, so nothing can still be mid-write when the file is checkpointed.

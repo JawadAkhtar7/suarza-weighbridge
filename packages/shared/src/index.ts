@@ -13,6 +13,7 @@ export * from './utils/currency.js';
 export * from './utils/slip.js';
 export * from './utils/datetime.js';
 export * from './utils/id.js';
+export * from './utils/framing.js';
 
 // Schemas & DTOs
 export * from './schemas/weighment.js';

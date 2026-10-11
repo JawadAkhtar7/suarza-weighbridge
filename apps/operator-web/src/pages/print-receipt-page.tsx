@@ -55,13 +55,15 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
    * failing would leave the slip on screen with no print dialog, forever,
    * and the operator with a truck on the bridge and no paper.
    *
-   * Three seconds: long enough that a local request has always answered,
-   * short enough that nobody stands at the window wondering. The pictures
+   * Six seconds. The tab opens about a second before a main-stream still has
+   * landed, and a camera that has died costs two digest requests at 2.5 s
+   * each before the agent gives up on it — this covers that, and the agent's
+   * `pending` flag ends the wait as soon as the pictures are in. The pictures
    * are worth a short wait and nothing more.
    */
   const [stillsDeadlinePassed, setStillsDeadlinePassed] = useState(false);
   useEffect(() => {
-    const timer = window.setTimeout(() => setStillsDeadlinePassed(true), 3000);
+    const timer = window.setTimeout(() => setStillsDeadlinePassed(true), 6000);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -80,12 +82,18 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
    * resolves to nulls, SlipA5 falls back to the bundled placeholder, and the
    * paper still comes out. `retry: false` for the same reason — a bridge with
    * no cameras must not spend three attempts discovering that.
+   *
+   * Asked again while the agent says the cameras are still being read: this
+   * tab opens the moment the weighing is saved, about a second before the
+   * stills land, and the first answer is nearly always "not yet".
    */
   const captures = useQuery({
     queryKey: ['captures', request.slipNumber],
     queryFn: () => agentApi.slipCaptures(request.slipNumber),
     retry: false,
+    refetchInterval: (q) => (q.state.data?.pending && !stillsDeadlinePassed ? 300 : false),
   });
+  const stillsSettled = (captures.isFetched && !captures.data?.pending) || stillsDeadlinePassed;
 
   /*
    * The print dialog opens by itself once the slip, the settings AND the
@@ -100,15 +108,31 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
    * camera is unplugged, settles into "asked and answered with nothing" and
    * must print exactly then rather than waiting for a picture that is not
    * coming.
+   *
+   * Then the <img>s themselves are waited for: knowing a still's URL is not
+   * having its 4 MP JPEG decoded, and the print snapshot does not wait.
    */
   useEffect(() => {
-    const stillsSettled = captures.isFetched || stillsDeadlinePassed;
     if (!weighment || !isLoaded || !stillsSettled || printedOnce.current) return;
     if (!settings.auto_print) return;
-    printedOnce.current = true;
-    const timer = window.setTimeout(() => window.print(), 350);
-    return () => window.clearTimeout(timer);
-  }, [weighment, isLoaded, captures.isFetched, stillsDeadlinePassed, settings.auto_print]);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      // A picture that fails to load must not stop the paper.
+      const decoded = Array.from(document.images, (img) => img.decode().catch(() => undefined));
+      const cap = new Promise((done) => window.setTimeout(done, 3000));
+      void Promise.race([Promise.all(decoded), cap]).then(() => {
+        // Marked here, not when scheduled: a re-render during the wait
+        // cancels this attempt and must leave the next one free to print.
+        if (cancelled || printedOnce.current) return;
+        printedOnce.current = true;
+        window.print();
+      });
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [weighment, isLoaded, stillsSettled, settings.auto_print]);
 
   // The page rules have to be in the document itself here, not handed to a
   // print library — this tab IS the print document.
@@ -181,7 +205,8 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
             verifyUrl={verifyUrl}
             frontImageUrl={frontImageUrl}
             sideImageUrl={sideImageUrl}
-            frontViewZoom={settings.front_view_zoom}
+            frontViewFrame={settings.front_view_frame}
+            sideViewFrame={settings.side_view_frame}
           />
         </div>
 
@@ -201,7 +226,8 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
           sideImageUrl={sideImageUrl}
           /* The same crop as the preview above, deliberately — unlike the
              calibration below, which the paper gets and nothing else. */
-          frontViewZoom={settings.front_view_zoom}
+          frontViewFrame={settings.front_view_frame}
+          sideViewFrame={settings.side_view_frame}
           /*
            * Calibration, for the paper only.
            *
@@ -215,11 +241,23 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
               x: settings.print.details_offset_x_mm,
               y: settings.print.details_offset_y_mm,
             },
+            weights: {
+              x: settings.print.weights_offset_x_mm,
+              y: settings.print.weights_offset_y_mm,
+            },
+            'weight-times': {
+              x: settings.print.weight_times_offset_x_mm,
+              y: settings.print.weight_times_offset_y_mm,
+            },
             'side-view': {
               x: settings.print.side_view_offset_x_mm,
               y: settings.print.side_view_offset_y_mm,
             },
             qr: { x: settings.print.qr_offset_x_mm, y: settings.print.qr_offset_y_mm },
+          }}
+          paperExtraWidth={{
+            'front-view': settings.print.front_view_extra_width_mm,
+            'side-view': settings.print.side_view_extra_width_mm,
           }}
         />
       </div>

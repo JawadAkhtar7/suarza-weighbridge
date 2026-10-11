@@ -214,6 +214,8 @@ export interface CameraStatus {
 export interface SlipCaptures {
   front: string | null;
   side: string | null;
+  /** The cameras are still being asked; the ids above may be about to change. */
+  pending?: boolean;
 }
 
 /** A stored still. Immutable, so the browser may cache it forever. */

@@ -9,7 +9,26 @@
 
 import { z } from 'zod';
 import { VEHICLE_TYPES } from '../constants/vehicle-types.js';
-import { FRONT_VIEW_ZOOM, SLIP_PAGE_MM } from '../constants/paper.js';
+import { FRONT_VIEW_ZOOM, SIDE_VIEW_ZOOM, SLIP_PAGE_MM } from '../constants/paper.js';
+import { clampViewFrame, VIEW_FRAME_ZOOM } from '../utils/framing.js';
+
+/**
+ * How a camera view is framed in its box: zoom, and pan as a fraction of the
+ * box (see utils/framing.ts), starting from that view's own default zoom.
+ * Clamped on the way in, so no stored or synced value can leave the pad's
+ * white showing at an edge.
+ */
+export const viewFrameSchema = (defaultZoom: number) =>
+  z
+    .object({
+      zoom: z.number().min(VIEW_FRAME_ZOOM.min).max(VIEW_FRAME_ZOOM.max).default(defaultZoom),
+      x: z.number().min(-0.5).max(0.5).default(0),
+      y: z.number().min(-0.5).max(0.5).default(0),
+    })
+    .transform(clampViewFrame);
+
+export const frontViewFrameSchema = viewFrameSchema(FRONT_VIEW_ZOOM.default);
+export const sideViewFrameSchema = viewFrameSchema(SIDE_VIEW_ZOOM.default);
 
 export const paperSizeSchema = z.enum(['A4', 'A5', 'LETTER', 'CUSTOM']);
 export type PaperSize = z.infer<typeof paperSizeSchema>;
@@ -39,10 +58,18 @@ export const printSettingsSchema = z.object({
    * tried first and was the wrong instrument: the error is not uniform, so
    * correcting the element that was visibly out pushed others off.
    *
-   * Three groups instead, each moved on its own:
-   *   details   — the slip number, the date, the customer fields, the weights
-   *   side view — the right-hand photograph
-   *   qr        — the code in the SCAN TO VERIFY box
+   * Five groups instead, each moved on its own:
+   *   details      — the slip number, the print date/time, the customer fields
+   *   weights      — first, second and net, with MANUAL and MANN
+   *   weight times — the date/time beside each weight box's calendar icon
+   *   side view    — the right-hand photograph
+   *   qr           — the code in the SCAN TO VERIFY box
+   *
+   * The weights rode with the details until the operator needed to move the
+   * details without knocking the weights out of their boxes. The weight times
+   * then left the weights for the reason the QR has its own group: they sit
+   * beside an icon printed on the pad, where a millimetre's drift shows at a
+   * glance, while the same drift under a big figure in a big box does not.
    *
    * Positive x is right, positive y is down. These apply to the PRINTED sheet
    * only: the screen copy, the PDF and the public page behind the QR are
@@ -51,10 +78,24 @@ export const printSettingsSchema = z.object({
    */
   details_offset_x_mm: z.number().min(-20).max(20).default(0),
   details_offset_y_mm: z.number().min(-20).max(20).default(0),
+  weights_offset_x_mm: z.number().min(-20).max(20).default(0),
+  weights_offset_y_mm: z.number().min(-20).max(20).default(0),
+  weight_times_offset_x_mm: z.number().min(-20).max(20).default(0),
+  weight_times_offset_y_mm: z.number().min(-20).max(20).default(0),
   side_view_offset_x_mm: z.number().min(-20).max(20).default(0),
   side_view_offset_y_mm: z.number().min(-20).max(20).default(0),
   qr_offset_x_mm: z.number().min(-20).max(20).default(0),
   qr_offset_y_mm: z.number().min(-20).max(20).default(0),
+  /*
+   * How far each photo prints past its pad's green line, per side, in mm.
+   *
+   * The pads' boxes run wider than the artwork, and by different amounts for
+   * the two boxes — on site the side view showed more white than the front.
+   * Printed sheet only, like the offsets above. The defaults are what cleared
+   * the white on the first batch of pads.
+   */
+  front_view_extra_width_mm: z.number().min(0).max(5).default(0.5),
+  side_view_extra_width_mm: z.number().min(0).max(5).default(1),
 });
 
 export type PrintSettings = z.infer<typeof printSettingsSchema>;
@@ -71,20 +112,21 @@ export const stationSettingsSchema = z.object({
   receipt_base_url: z.string().default(''),
   print: printSettingsSchema.default({}),
   /*
-   * How tightly the front camera's picture is cropped into its box.
+   * How each camera's picture is framed in its box — zoom and pan, set by
+   * the operator on the live preview.
    *
    * NOT under `print`, and deliberately so: everything in there corrects for
    * one printer putting the paper down crooked and is applied to the hard
-   * form alone. This is not a correction — it is how far back the camera
-   * ended up on its pole, which is equally true of the preview, the PDF and
-   * the page a customer scans. It travels to the cloud with the station
-   * profile so all four agree.
+   * form alone. This is not a correction — it is what the slip shows, which
+   * is equally true of the preview, the PDF and the page a customer scans.
+   * It travels to the cloud with the station profile so all of them agree.
+   *
+   * The front view's used to be a zoom alone (`front_view_zoom`); a station
+   * saved before then starts from that zoom, centred — see the agent's
+   * SettingsService.
    */
-  front_view_zoom: z
-    .number()
-    .min(FRONT_VIEW_ZOOM.min)
-    .max(FRONT_VIEW_ZOOM.max)
-    .default(FRONT_VIEW_ZOOM.default),
+  front_view_frame: frontViewFrameSchema.default({}),
+  side_view_frame: sideViewFrameSchema.default({}),
   /** Fire the print dialog automatically once a receipt appears (brief §3). */
   auto_print: z.boolean().default(true),
   pricing: pricingTableSchema.default({}),

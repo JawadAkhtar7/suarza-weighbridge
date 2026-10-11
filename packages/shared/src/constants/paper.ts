@@ -15,12 +15,15 @@
 export const SLIP_PAGE_MM = { width: 140, height: 200 } as const;
 
 /**
- * How tightly the front-view photograph is cropped into its box on the slip.
+ * How far the front-view photograph may be zoomed into its box on the slip,
+ * and how far it starts.
  *
  * The cameras send 16:9; the box on the pad is very nearly 2:1, so the picture
- * is already cropped top and bottom to fill it. Above 1 it crops further about
- * the centre, which is where the truck is — the lens sits back far enough that
- * the lorry occupies the middle of a wide frame and the edges are yard.
+ * is already cropped top and bottom to fill it. Above 1 it crops further. The
+ * default crops about the centre, which is where the truck is — the lens sits
+ * back far enough that the lorry occupies the middle of a wide frame and the
+ * edges are yard. Beyond that the operator frames it by hand on the live
+ * preview, zoom and pan, as the side view is (utils/framing.ts).
  *
  * Here, next to the paper, because it is a fact about the slip rather than
  * about the camera, and because four renderers have to agree on it: the
@@ -28,12 +31,21 @@ export const SLIP_PAGE_MM = { width: 140, height: 200 } as const;
  * page behind the QR code. A picture framed one way on paper and another way
  * on the page a customer scans is the same slip telling two stories.
  *
- * The bounds are not arbitrary. Below 1 the picture stops filling its box and
- * the pad's white shows through at the edges. The ceiling is what the stored
- * still can stand: the box is 62.8 mm wide, which wants 742 pixels at 300 dpi,
- * and the main stream's frame is some 2560 across — so a third of it still
- * covers the box. Three it is. A station storing the sub-stream instead will
- * see it soften well before that, which is a thing to look at rather than a
- * thing to forbid.
+ * Below 1 the picture stops filling its box and the pad's white shows through
+ * at the edges. The ceiling is 10, raised from 3 at the operator's request, and
+ * it costs sharpness: the box is 62.8 mm wide and wants 742 pixels at 300 dpi.
+ * The front still is 3840 across, so it stays crisp to about 5x and prints at
+ * ~155 dpi at 10x; the side's 2688 stays crisp to about 3.6x and prints at
+ * ~110 dpi at 10x. The 1920-wide live preview softens past about 3x. A thing
+ * to look at rather than a thing to forbid.
  */
-export const FRONT_VIEW_ZOOM = { default: 1.3, min: 1, max: 3 } as const;
+export const FRONT_VIEW_ZOOM = { default: 1.3, min: 1, max: 10 } as const;
+
+/**
+ * How far the operator may zoom the side view into its box.
+ *
+ * Framed by hand on the live preview (zoom and pan), like the front view. 1 is
+ * the whole frame, which is every slip before framing existed. Same ceiling as
+ * the front view, at the cost described there.
+ */
+export const SIDE_VIEW_ZOOM = { default: 1, min: 1, max: 10 } as const;

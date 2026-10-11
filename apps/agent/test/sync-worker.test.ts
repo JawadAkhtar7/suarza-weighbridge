@@ -404,3 +404,49 @@ describe('status reporting', () => {
     expect(worker.toSyncStatus()).toMatchObject({ online: true, pending_count: 0 });
   });
 });
+
+describe('station profile', () => {
+  it('sends a re-framed camera to the cloud with no weighing to carry it', async () => {
+    const cloud = fakeCloud();
+    let version = '2026-10-12T10:00:00.000Z';
+    const worker = newWorker(cloud.client, { profileVersion: () => version });
+
+    // Once on start: the cloud may hold an older framing from before a restart.
+    await worker.sync();
+    expect(cloud.received).toEqual([{ weighments: [], audit: [] }]);
+
+    // Nothing changed, nothing sent.
+    await worker.sync();
+    expect(cloud.received).toHaveLength(1);
+
+    // The operator re-frames a camera between trucks.
+    version = '2026-10-12T10:05:00.000Z';
+    await worker.sync();
+    expect(cloud.received).toHaveLength(2);
+    expect(worker.toSyncStatus().online).toBe(true);
+  });
+
+  it('sends nothing extra when a weighing already carried the newest profile', async () => {
+    service.createFirstWeight(firstWeight());
+    const cloud = fakeCloud();
+    const worker = newWorker(cloud.client, { profileVersion: () => 'v1' });
+
+    await worker.sync();
+    // One batch, the weighing's, with the profile riding along.
+    expect(cloud.received).toHaveLength(1);
+    expect(cloud.received[0]!.weighments).toHaveLength(1);
+  });
+
+  it('tries again later when the profile cannot be sent', async () => {
+    const cloud = fakeCloud();
+    cloud.goOffline();
+    const worker = newWorker(cloud.client, { profileVersion: () => 'v1' });
+
+    await worker.sync();
+    expect(worker.toSyncStatus().online).toBe(false);
+
+    cloud.goOnline();
+    await worker.sync();
+    expect(cloud.received).toEqual([{ weighments: [], audit: [] }]);
+  });
+});

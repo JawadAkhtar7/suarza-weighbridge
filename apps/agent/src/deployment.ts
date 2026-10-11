@@ -87,6 +87,23 @@ export function cloudSettings(env: NodeJS.ProcessEnv = process.env): {
  *           would stutter, and the live view exists to show the operator a
  *           truck moving onto the plate.
  *
+ * And a VIDEO URL, which is what the live view actually uses now:
+ *
+ *   video   the main stream as RTSP video, which ffmpeg on this PC turns into
+ *           1920-wide frames a few times a second (cameras/live-video.ts).
+ *           The 640x360 stills went soft the moment the operator zoomed in
+ *           to frame the slip's pictures. Snapshots cannot do better on these
+ *           cameras: a large one takes 1-1.5 s, and while it is being taken
+ *           the camera refuses every other snapshot — the slip's own picture
+ *           included (measured on site, October 2026). Video does not go
+ *           through the snapshot engine at all; the recorder already takes
+ *           two streams from each camera the same way. The `live` stills
+ *           remain the fallback when there is no ffmpeg or no video.
+ *
+ *           NOT channel 103. On these models (DS-2CD2083G2, DS-2CD2063G2)
+ *           "103" is the main stream under another name: setting it sets the
+ *           main stream, which the recorder records.
+ *
  * Empty disables a camera, and a bridge with none runs unchanged: every slip
  * simply prints the bundled placeholder.
  */
@@ -96,6 +113,9 @@ export const CAMERA_FRONT_URL = 'http://192.168.1.75/ISAPI/Streaming/channels/10
 export const CAMERA_SIDE_URL = 'http://192.168.1.66/ISAPI/Streaming/channels/101/picture';
 export const CAMERA_FRONT_LIVE_URL = 'http://192.168.1.75/ISAPI/Streaming/channels/102/picture';
 export const CAMERA_SIDE_LIVE_URL = 'http://192.168.1.66/ISAPI/Streaming/channels/102/picture';
+/* Credentials are added at run time, never written into these. */
+export const CAMERA_FRONT_VIDEO_URL = 'rtsp://192.168.1.75:554/Streaming/Channels/101';
+export const CAMERA_SIDE_VIDEO_URL = 'rtsp://192.168.1.66:554/Streaming/Channels/101';
 export const CAMERA_USERNAME = 'admin';
 export const CAMERA_PASSWORD = 'Cctvins247';
 
@@ -106,8 +126,20 @@ export const CAMERA_PASSWORD = 'Cctvins247';
  */
 export const CAMERA_TIMEOUT_MS = 2500;
 
-/** Frames a second for the operator's live view. */
+/** Frames a second for the operator's live view when it falls back to stills. */
 export const CAMERA_LIVE_FPS = 3;
+
+/**
+ * The live video's frames: how many a second, and how wide.
+ *
+ * Five a second is smooth enough to watch a truck roll on. 1920 wide keeps a
+ * 3x zoom of the preview sharp — the visible third is still 640 pixels — at
+ * about 200 KB a frame, which only ever crosses this PC's own loopback.
+ * Measured on this PC: about 16% of one core for the front camera's 4K and
+ * 11% for the side, with the Intel graphics decoding.
+ */
+export const CAMERA_VIDEO_FPS = 5;
+export const CAMERA_VIDEO_WIDTH = 1920;
 
 /** Where stills are kept, relative to the agent folder. */
 export const CAPTURE_PATH = './data/captures';
@@ -122,10 +154,15 @@ export interface CameraSettings {
   /** The sub-stream, for the operator's live panel only. */
   frontLiveUrl: string;
   sideLiveUrl: string;
+  /** RTSP video for the live panel; empty falls back to polling the stills. */
+  frontVideoUrl: string;
+  sideVideoUrl: string;
   username: string;
   password: string;
   timeoutMs: number;
   liveFps: number;
+  videoFps: number;
+  videoWidth: number;
   capturePath: string;
   keepDays: number;
 }
@@ -138,6 +175,17 @@ export interface CameraSettings {
  * site's addresses being edited. The weighbridge PC sets none of these and
  * therefore uses the constants above.
  */
+/**
+ * A camera's video URL. `none` turns the video off (stills only). A developer
+ * who has pointed the camera itself elsewhere — a webcam, a mock — does not
+ * get the site's video by default: it would be the wrong camera, or none.
+ */
+function videoUrl(env: NodeJS.ProcessEnv, view: 'FRONT' | 'SIDE', site: string): string {
+  const own = env[`CAMERA_${view}_VIDEO_URL`]?.trim();
+  if (own) return own.toLowerCase() === 'none' ? '' : own;
+  return env[`CAMERA_${view}_URL`]?.trim() ? '' : site;
+}
+
 export function cameraSettings(env: NodeJS.ProcessEnv = process.env): CameraSettings {
   const number = (raw: string | undefined, fallback: number) => {
     const parsed = Number(raw);
@@ -156,10 +204,14 @@ export function cameraSettings(env: NodeJS.ProcessEnv = process.env): CameraSett
       CAMERA_FRONT_LIVE_URL,
     sideLiveUrl:
       env['CAMERA_SIDE_LIVE_URL']?.trim() || env['CAMERA_SIDE_URL']?.trim() || CAMERA_SIDE_LIVE_URL,
+    frontVideoUrl: videoUrl(env, 'FRONT', CAMERA_FRONT_VIDEO_URL),
+    sideVideoUrl: videoUrl(env, 'SIDE', CAMERA_SIDE_VIDEO_URL),
     username: env['CAMERA_USERNAME']?.trim() || CAMERA_USERNAME,
     password: env['CAMERA_PASSWORD']?.trim() || CAMERA_PASSWORD,
     timeoutMs: number(env['CAMERA_TIMEOUT_MS'], CAMERA_TIMEOUT_MS),
     liveFps: number(env['CAMERA_LIVE_FPS'], CAMERA_LIVE_FPS),
+    videoFps: number(env['CAMERA_VIDEO_FPS'], CAMERA_VIDEO_FPS),
+    videoWidth: number(env['CAMERA_VIDEO_WIDTH'], CAMERA_VIDEO_WIDTH),
     capturePath: env['CAPTURE_PATH']?.trim() || CAPTURE_PATH,
     keepDays: number(env['CAPTURE_KEEP_DAYS'], CAPTURE_KEEP_DAYS),
   };

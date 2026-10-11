@@ -17,8 +17,8 @@ import {
   weighment,
 } from './helpers.js';
 import { ingest } from '../src/services/ingest.service.js';
-import { frontViewZoomForStation, paperForStation } from '../src/services/station.service.js';
-import { COMPANY, FRONT_VIEW_ZOOM } from '@suarza/shared';
+import { cameraFramingForStation, paperForStation } from '../src/services/station.service.js';
+import { COMPANY, DEFAULT_FRONT_VIEW_FRAME, DEFAULT_SIDE_VIEW_FRAME } from '@suarza/shared';
 
 let app: Express;
 
@@ -35,9 +35,11 @@ describe('whose company details the page shows', () => {
   const profile = {
     station_id: 'A',
     paper_size: 'A4' as const,
-    // Not the default, so a station reporting its own crop is the only thing
-    // this value can be explained by when it turns up on the page.
-    front_view_zoom: 1.45,
+    // Not the defaults, so a station reporting its own framing is the only
+    // thing these values can be explained by when they turn up on the page.
+    front_view_zoom: 1.6,
+    front_view_frame: { zoom: 1.6, x: -0.1, y: 0.05 },
+    side_view_frame: { zoom: 2, x: 0.1, y: -0.05 },
     updated_at: '2026-09-15T10:00:00.000Z',
   };
 
@@ -66,25 +68,42 @@ describe('whose company details the page shows', () => {
     );
   });
 
-  it("crops the front view the way the weighing station does", async () => {
+  it('frames both views the way the weighing station does', async () => {
     /*
-     * The station's figure has to reach the page behind the QR code, not just
-     * the paper: a customer scanning his own slip and finding the lorry framed
-     * differently has two documents that do not match, and no way to tell
-     * which one is the record.
+     * The operator framed them by hand on the live previews, and the page
+     * behind the QR code has to show them that way, not just the paper: a
+     * customer scanning his own slip and finding the lorry framed differently
+     * has two documents that do not match, and no way to tell which one is
+     * the record.
      */
     await ingest([completedWeighment({ slip_number: '2026123' })], [], profile);
-    expect(await frontViewZoomForStation('A')).toBe(1.45);
+    expect(await cameraFramingForStation('A')).toEqual({
+      front: { zoom: 1.6, x: -0.1, y: 0.05 },
+      side: { zoom: 2, x: 0.1, y: -0.05 },
+    });
 
     const { text } = await request(app).get('/r/2026123');
-    expect(text).toContain('scale(1.45)');
+    expect(text).toContain('scale(1.6) translate(-10.000%, 5.000%)');
+    expect(text).toContain('scale(2) translate(10.000%, -5.000%)');
   });
 
-  it('falls back to the design\'s own crop for a station it has never heard of', async () => {
-    // Not "no crop": every slip printed before this setting existed already
-    // showed the default, and those slips are still in customers' hands.
-    expect(await frontViewZoomForStation('never-synced')).toBe(FRONT_VIEW_ZOOM.default);
-    expect(await frontViewZoomForStation(null)).toBe(FRONT_VIEW_ZOOM.default);
+  it('centres the front zoom from an agent that predates front framing', async () => {
+    // Exactly the picture that agent prints: its zoom, about the centre.
+    const { front_view_frame: _absent, ...older } = profile;
+    await ingest([completedWeighment({ slip_number: '2026123' })], [], {
+      ...older,
+      front_view_zoom: 1.45,
+    });
+    expect((await cameraFramingForStation('A')).front).toEqual({ zoom: 1.45, x: 0, y: 0 });
+    expect((await request(app).get('/r/2026123')).text).toContain('scale(1.45)');
+  });
+
+  it("falls back to the design's own framing for a station it has never heard of", async () => {
+    // Not "no crop" for the front: every slip printed before framing existed
+    // already showed the default, and those slips are still in customers' hands.
+    const defaults = { front: DEFAULT_FRONT_VIEW_FRAME, side: DEFAULT_SIDE_VIEW_FRAME };
+    expect(await cameraFramingForStation('never-synced')).toEqual(defaults);
+    expect(await cameraFramingForStation(null)).toEqual(defaults);
   });
 
   it('uses the paper the station prints on', async () => {

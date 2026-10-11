@@ -126,4 +126,26 @@ describe('cameraSettings', () => {
     // ...while the camera they said nothing about keeps both of its own.
     expect(settings.sideLiveUrl).toBe(CAMERA_SIDE_LIVE_URL);
   });
+
+  it("takes the live video from the main stream, never from '103'", () => {
+    /*
+     * On these cameras 103 is the main stream under another name, and
+     * setting it reconfigured what the recorder records (October 2026). The
+     * live video only ever READS the main stream; this pins that it is the
+     * main stream it reads, and with no credentials written into the URL.
+     */
+    const settings = cameraSettings({});
+    for (const url of [settings.frontVideoUrl, settings.sideVideoUrl]) {
+      expect(url).toMatch(/^rtsp:\/\/[\d.]+:554\/Streaming\/Channels\/101$/);
+      expect(url).not.toContain('@');
+    }
+  });
+
+  it('gives a developer who points a camera elsewhere no site video for it', () => {
+    const settings = cameraSettings({ CAMERA_FRONT_URL: 'http://127.0.0.1:9000/snap' });
+    expect(settings.frontVideoUrl).toBe('');
+    expect(settings.sideVideoUrl).not.toBe('');
+    // ...and lets anyone switch the video off and keep the stills.
+    expect(cameraSettings({ CAMERA_SIDE_VIDEO_URL: 'none' }).sideVideoUrl).toBe('');
+  });
 });

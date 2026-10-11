@@ -5,7 +5,12 @@ import type { ReceiptSettings } from '../lib/receipt-settings.js';
 
 export interface ReceiptSettingsContextValue {
   settings: ReceiptSettings;
-  update: (next: ReceiptSettings) => void;
+  /**
+   * Saves to the agent. `quiet` skips the "Settings saved" toast, for saves
+   * the operator makes by doing something rather than by pressing Save —
+   * framing the side view, say. Failures are reported either way.
+   */
+  update: (next: ReceiptSettings, options?: { quiet?: boolean }) => void;
   isSaving: boolean;
   isLoaded: boolean;
 }

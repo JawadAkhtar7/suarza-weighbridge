@@ -115,7 +115,11 @@ export function WeighmentDetail({ weighment, onClose, receiptBaseUrl }: Weighmen
               sideImageUrl={captureUrl(captures.data?.side)}
               /* The weighing bridge's crop, not this browser's: the preview
                  has to match the paper the customer was handed. */
-              frontViewZoom={captures.data?.front_view_zoom}
+              frontViewFrame={
+                captures.data?.front_view_frame ??
+                (captures.data ? { zoom: captures.data.front_view_zoom, x: 0, y: 0 } : undefined)
+              }
+              sideViewFrame={captures.data?.side_view_frame}
             />
           </div>
         </div>

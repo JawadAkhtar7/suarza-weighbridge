@@ -10,9 +10,10 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent } from '@suarza/ui';
+import { Card, CardContent, VIEW_ASPECT } from '@suarza/ui';
 import { CameraOff } from 'lucide-react';
 import { agentApi, cameraLiveUrl } from '../lib/api.js';
+import { CameraFramer } from './camera-framer.js';
 
 const LABELS: Record<'FRONT' | 'SIDE', string> = {
   FRONT: 'Front view',
@@ -96,23 +97,27 @@ export function CameraPanel() {
                 a laptop off the bridge's network — the stream never loads,
                 and without this the panel reads as empty space rather than
                 as two views waiting for a signal. */}
-            <div className="relative overflow-hidden rounded-md border border-border/70 bg-muted">
-              {visible && !failed[view] ? (
-                <img
-                  src={cameraLiveUrl(view, nonce)}
-                  alt={`${LABELS[view]} of the weighbridge, live`}
-                  onError={() => setFailed((current) => ({ ...current, [view]: true }))}
-                  /* 16:9, which is what these cameras send. A fixed box stops
-                     the panel jumping about while the first frame arrives. */
-                  className="aspect-video w-full object-cover"
-                />
-              ) : (
-                <div className="flex aspect-video w-full flex-col items-center justify-center gap-1 text-muted-foreground">
-                  <CameraOff className="h-6 w-6" />
-                  {failed[view] && <span className="text-[11px]">No signal</span>}
-                </div>
-              )}
-            </div>
+            {visible && !failed[view] ? (
+              /* Framed by hand, and printed as framed: see CameraFramer. It
+                 draws its own frame, in the slip box's shape, with its
+                 controls underneath. */
+              <CameraFramer
+                view={view}
+                src={cameraLiveUrl(view, nonce)}
+                alt={`${LABELS[view]} of the weighbridge, live`}
+                onError={() => setFailed((current) => ({ ...current, [view]: true }))}
+              />
+            ) : (
+              /* The same shape as the picture it stands in for, so the panel
+                 does not jump about when the stream starts or stops. */
+              <div
+                className="flex w-full flex-col items-center justify-center gap-1 rounded-md border border-border/70 bg-muted text-muted-foreground"
+                style={{ aspectRatio: VIEW_ASPECT[view === 'FRONT' ? 'front-view' : 'side-view'] }}
+              >
+                <CameraOff className="h-6 w-6" />
+                {failed[view] && <span className="text-[11px]">No signal</span>}
+              </div>
+            )}
           </figure>
         ))}
       </CardContent>
