@@ -154,6 +154,31 @@ interface SettingsPanelProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/**
+ * What the operator can move on the printed slip, and what each control
+ * covers.
+ *
+ * Named by what is on the paper rather than by anything in the code: an
+ * operator holding a slip is looking for "the side view picture", not for a
+ * layout group. The front view is deliberately absent — it has never needed
+ * moving, and a control nobody uses is one more thing to set wrong.
+ */
+const CALIBRATION_GROUPS = [
+  {
+    key: 'details',
+    label: 'Slip number, date and all details',
+    x: 'details_offset_x_mm',
+    y: 'details_offset_y_mm',
+  },
+  {
+    key: 'side-view',
+    label: 'Side view picture',
+    x: 'side_view_offset_x_mm',
+    y: 'side_view_offset_y_mm',
+  },
+  { key: 'qr', label: 'QR code', x: 'qr_offset_x_mm', y: 'qr_offset_y_mm' },
+] as const;
+
 export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const { settings, update, isSaving } = useReceiptSettings();
   const [draft, setDraft] = useState<ReceiptSettings>(settings);
@@ -280,34 +305,67 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </div>
 
               {/*
-                * One number, for one square.
+                * Calibration, three groups, paper only.
                 *
-                * The pads are printed slightly off-centre, and the QR is the
-                * only element where that shows: its box is barely bigger than
-                * it is. Everything else has millimetres of room. Shifting the
-                * whole sheet to chase it was tried and made things worse —
-                * one element lands right and three others move off.
+                * The pads are pre-printed on one press and overprinted on
+                * another, and they disagree about where the sheet starts —
+                * not by one uniform amount, which is why a single page-wide
+                * nudge was tried and withdrawn. Each group that drifts on its
+                * own gets moved on its own.
                 */}
-              <div className="space-y-1.5">
-                <Label htmlFor="qr-offset">QR code position (mm)</Label>
-                <NumberInput
-                  id="qr-offset"
-                  step="0.5"
-                  min={-20}
-                  max={20}
-                  value={draft.print.qr_offset_x_mm}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      print: { ...draft.print, qr_offset_x_mm: Number(event.target.value) },
-                    })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Moves the QR code sideways only. Nothing else on the slip moves. Positive goes
-                  right, negative goes left &mdash; if the QR sits 2&nbsp;mm left of its box, enter
-                  2.
-                </p>
+              <div className="space-y-3 rounded-md border p-3">
+                <div>
+                  <p className="text-sm font-medium">Print alignment</p>
+                  <p className="text-xs text-muted-foreground">
+                    Moves things on the printed slip only, to line up with your pads. The copy on
+                    screen, the PDF and the page behind the QR code never move. Right and down are
+                    positive; use a minus for left and up.
+                  </p>
+                </div>
+
+                {CALIBRATION_GROUPS.map((group) => (
+                  <div key={group.key} className="space-y-1.5">
+                    <p className="text-xs font-medium">{group.label}</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor={`${group.key}-x`} className="text-xs font-normal">
+                          Left / right (mm)
+                        </Label>
+                        <NumberInput
+                          id={`${group.key}-x`}
+                          step="0.5"
+                          min={-20}
+                          max={20}
+                          value={draft.print[group.x]}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              print: { ...draft.print, [group.x]: Number(event.target.value) },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`${group.key}-y`} className="text-xs font-normal">
+                          Up / down (mm)
+                        </Label>
+                        <NumberInput
+                          id={`${group.key}-y`}
+                          step="0.5"
+                          min={-20}
+                          max={20}
+                          value={draft.print[group.y]}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              print: { ...draft.print, [group.y]: Number(event.target.value) },
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <label className="flex items-center gap-2 text-sm">

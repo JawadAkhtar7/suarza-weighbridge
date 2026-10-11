@@ -181,7 +181,6 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
             verifyUrl={verifyUrl}
             frontImageUrl={frontImageUrl}
             sideImageUrl={sideImageUrl}
-            qrOffsetXmm={settings.print.qr_offset_x_mm}
           />
         </div>
 
@@ -199,9 +198,25 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
           verifyUrl={verifyUrl}
           frontImageUrl={frontImageUrl}
           sideImageUrl={sideImageUrl}
-          /* The only adjustment the operator has. Whole-sheet offsets are
-             pinned to zero by the agent, so they are not passed at all. */
-          qrOffsetXmm={settings.print.qr_offset_x_mm}
+          /*
+           * Calibration, for the paper only.
+           *
+           * SlipA5 applies it when the view is `overprint` and ignores it
+           * otherwise, so the preview above, the PDF and the page behind the
+           * QR all stay on the design's own coordinates. A printer's quirk
+           * must not reach the record.
+           */
+          calibration={{
+            details: {
+              x: settings.print.details_offset_x_mm,
+              y: settings.print.details_offset_y_mm,
+            },
+            'side-view': {
+              x: settings.print.side_view_offset_x_mm,
+              y: settings.print.side_view_offset_y_mm,
+            },
+            qr: { x: settings.print.qr_offset_x_mm, y: settings.print.qr_offset_y_mm },
+          }}
         />
       </div>
     </>

@@ -28,17 +28,30 @@ export const printSettingsSchema = z.object({
   offset_left_mm: z.number().min(-50).max(200).default(0),
   /** Scales the whole central block if the pad's blank area is tight. */
   scale_percent: z.number().min(50).max(150).default(100),
-  /**
-   * How far to move the QR code sideways, in millimetres, and nothing else.
+  /*
+   * Overprint calibration, in millimetres.
    *
-   * The pads are printed a little off-centre, and the only element where that
-   * shows is the QR: it is small, it sits in a box barely bigger than itself,
-   * and a millimetre of drift is obvious. Everything else has room to spare.
+   * The pads are pre-printed on one press and overprinted on another, and the
+   * two do not agree about where the paper starts. One page-wide nudge was
+   * tried first and was the wrong instrument: the error is not uniform, so
+   * correcting the element that was visibly out pushed others off.
    *
-   * So this moves the QR alone. Negative is left. Deliberately narrow: it is
-   * a nudge for one square, not a page-wide correction.
+   * Three groups instead, each moved on its own:
+   *   details   — the slip number, the date, the customer fields, the weights
+   *   side view — the right-hand photograph
+   *   qr        — the code in the SCAN TO VERIFY box
+   *
+   * Positive x is right, positive y is down. These apply to the PRINTED sheet
+   * only: the screen copy, the PDF and the public page behind the QR are
+   * rendered from the same coordinates as the design and never shift, so the
+   * record and the paper cannot drift apart.
    */
+  details_offset_x_mm: z.number().min(-20).max(20).default(0),
+  details_offset_y_mm: z.number().min(-20).max(20).default(0),
+  side_view_offset_x_mm: z.number().min(-20).max(20).default(0),
+  side_view_offset_y_mm: z.number().min(-20).max(20).default(0),
   qr_offset_x_mm: z.number().min(-20).max(20).default(0),
+  qr_offset_y_mm: z.number().min(-20).max(20).default(0),
 });
 
 export type PrintSettings = z.infer<typeof printSettingsSchema>;

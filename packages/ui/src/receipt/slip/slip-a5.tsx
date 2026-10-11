@@ -57,15 +57,18 @@ export interface SlipA5Props {
   offsetXmm?: number;
   offsetYmm?: number;
   /**
-   * Move the QR code sideways by this many millimetres, and nothing else.
+   * Overprint calibration, in millimetres, per group.
    *
-   * The pads are printed slightly off-centre. Shifting the whole sheet to
-   * chase that puts three other things out for every one it fixes — tried on
-   * site, and the result was harder to reason about than the original fault.
-   * The QR is the only element where the drift actually shows, because its
-   * box is barely bigger than it is, so the QR is the only element that moves.
+   * The pads are pre-printed on one press and overprinted on another, and
+   * they disagree about where the paper starts — not by one uniform amount,
+   * which is why a single page-wide nudge made things worse on site.
+   *
+   * APPLIED ONLY WHEN `view` IS `overprint`. The screen copy, the PDF and the
+   * public page behind the QR are drawn from the design's own coordinates and
+   * never shift: a calibration is a fact about one printer, not about the
+   * record, and the two must not drift apart.
    */
-  qrOffsetXmm?: number;
+  calibration?: Partial<Record<'details' | 'side-view' | 'qr', { x: number; y: number }>>;
   /** For an on-screen preview; never applied when printing. */
   className?: string;
 }
@@ -81,13 +84,15 @@ export function SlipA5({
   logoUrl,
   offsetXmm = 0,
   offsetYmm = 0,
-  qrOffsetXmm = 0,
+  calibration,
   className,
 }: SlipA5Props) {
   const layers = LAYERS[view];
   /* A first-weight slip loses the furniture that belongs to numbers it does
      not have yet, and the net drops to line up with the second weight. */
   const pending = isPendingSlip(values);
+  /* Paper only. Every other view is the design, unmoved. */
+  const shifts = view === 'overprint' ? calibration : undefined;
   const items = SLIP.filter(
     (item) => layers.includes(item.layer) && !(pending && item.omitWhenPending),
   ).map((item) =>
@@ -128,7 +133,8 @@ export function SlipA5({
           frontImageUrl={frontImageUrl}
           sideImageUrl={sideImageUrl}
           logoUrl={logoUrl}
-          qrOffsetXmm={qrOffsetXmm}
+          /* `none` is a real answer: the front view never moves. */
+          shift={item.group === 'none' ? undefined : shifts?.[item.group ?? 'details']}
         />
       ))}
     </div>
@@ -142,7 +148,7 @@ function Item({
   frontImageUrl,
   sideImageUrl,
   logoUrl,
-  qrOffsetXmm = 0,
+  shift,
 }: {
   item: SlipItem;
   values: SlipValues;
@@ -150,13 +156,24 @@ function Item({
   frontImageUrl?: string;
   sideImageUrl?: string;
   logoUrl?: string;
-  qrOffsetXmm?: number;
+  shift?: { x: number; y: number };
 }) {
+  /*
+   * Where the item sits, plus any calibration for its group.
+   *
+   * The shift is a transform rather than an adjustment to `top` and `left`,
+   * so the coordinate table stays exactly the design's: the numbers in
+   * layout.ts always mean what the artwork means, and a printer's quirk never
+   * rewrites them.
+   */
   const place: React.CSSProperties = {
     position: 'absolute',
     top: mm(item.top),
     ...(item.left === undefined ? {} : { left: mm(item.left) }),
     ...(item.right === undefined ? {} : { right: mm(item.right) }),
+    ...(shift && (shift.x || shift.y)
+      ? { transform: `translate(${shift.x.toFixed(2)}mm, ${shift.y.toFixed(2)}mm)` }
+      : {}),
   };
 
   if (item.kind === 'box') {
@@ -193,16 +210,7 @@ function Item({
     if (item.slot === 'qr') {
       if (!verifyUrl) return null;
       return (
-        <div
-          style={{
-            ...place,
-            width: mm(item.width),
-            height: mm(item.height),
-            /* The one element the operator can nudge. Applied here rather
-               than to `left` so the layout table stays the design's. */
-            transform: qrOffsetXmm ? `translateX(${qrOffsetXmm.toFixed(2)}mm)` : undefined,
-          }}
-        >
+        <div style={{ ...place, width: mm(item.width), height: mm(item.height) }}>
           <QRCodeSVG
             value={verifyUrl}
             /* Sized in CSS, not in pixels: the SVG scales, and a QR drawn at a

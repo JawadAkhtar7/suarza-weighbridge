@@ -107,6 +107,16 @@ interface Placed {
    * waiting for a timestamp, the MANN box waiting for a conversion — reads as
    * a slip that failed to print rather than one that is honestly half done.
    */
+  /**
+   * Which calibration group moves this item on the PRINTED sheet.
+   *
+   * Left out means `details`, which is almost everything: the slip number,
+   * the date, the customer fields and the weights sit in the same band and go
+   * out of register together. `none` is for an item that must never move,
+   * which the front view is — nothing has asked for it, and a control nobody
+   * needs is one more thing to set wrong.
+   */
+  group?: 'details' | 'side-view' | 'qr' | 'none';
   omitWhenPending?: true;
   /**
    * Where this item sits on a first-weight slip instead.
@@ -281,8 +291,8 @@ export const SLIP: SlipItem[] = [
    * so a sheet that feeds a fraction out of true still lands inside the
    * pre-printed border instead of across it.
    */
-  { kind: 'image', layer: 'value', slot: 'front-view', left: 21, top: 528.63, width: 237.31, height: 119.28, radius: '3px', zoom: 1.3, alt: 'Truck on the weighbridge, front view' },
-  { kind: 'image', layer: 'value', slot: 'side-view', left: 271.32, top: 528.63, width: 237.31, height: 119.28, radius: '3px', alt: 'Truck on the weighbridge, side view' },
+  { kind: 'image', layer: 'value', slot: 'front-view', group: 'none', left: 21, top: 528.63, width: 237.31, height: 119.28, radius: '3px', zoom: 1.3, alt: 'Truck on the weighbridge, front view' },
+  { kind: 'image', layer: 'value', slot: 'side-view', group: 'side-view', left: 271.32, top: 528.63, width: 237.31, height: 119.28, radius: '3px', alt: 'Truck on the weighbridge, side view' },
 
   /* ---------------------------------------------------------------- the QR */
   /* Moved for this size: it used to sit centred above the footer, and now
@@ -290,7 +300,7 @@ export const SLIP: SlipItem[] = [
   /* Dead centre of the SCAN TO VERIFY box, measured at 438.86 -> 504.13 by
      667.67 -> 726.68. The box is wider than it is tall, so the square sits
      centred on both axes rather than filling either. */
-  { kind: 'image', layer: 'value', slot: 'qr', left: 443.99, top: 669.67, width: 55, height: 55, alt: 'Scan to verify this slip' },
+  { kind: 'image', layer: 'value', slot: 'qr', group: 'qr', left: 443.99, top: 669.67, width: 55, height: 55, alt: 'Scan to verify this slip' },
 ];
 
 export const LAYERS: Record<SlipView, readonly Layer[]> = {
