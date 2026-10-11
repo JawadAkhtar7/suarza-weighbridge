@@ -30,6 +30,8 @@ export interface SlipPageOptions {
   verifyUrl?: string;
   frontImageUrl?: string;
   sideImageUrl?: string;
+  /** The station's crop for the front view; the design's own figure if absent. */
+  frontViewZoom?: number;
   offsetXmm?: number;
   offsetYmm?: number;
   /**
@@ -51,6 +53,7 @@ export function renderSlipPage(options: SlipPageOptions): string {
     verifyUrl,
     frontImageUrl,
     sideImageUrl,
+    frontViewZoom,
     offsetXmm,
     offsetYmm,
     autoPrint = false,
@@ -63,6 +66,7 @@ export function renderSlipPage(options: SlipPageOptions): string {
       verifyUrl,
       frontImageUrl,
       sideImageUrl,
+      frontViewZoom,
       offsetXmm,
       offsetYmm,
     }),

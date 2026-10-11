@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { VEHICLE_TYPES } from '../constants/vehicle-types.js';
+import { FRONT_VIEW_ZOOM } from '../constants/paper.js';
 
 export const paperSizeSchema = z.enum(['A4', 'A5', 'LETTER', 'CUSTOM']);
 export type PaperSize = z.infer<typeof paperSizeSchema>;
@@ -67,6 +68,21 @@ export const stationSettingsSchema = z.object({
   /** Base URL the receipt QR points at, e.g. https://app.example.com. */
   receipt_base_url: z.string().default(''),
   print: printSettingsSchema.default({}),
+  /*
+   * How tightly the front camera's picture is cropped into its box.
+   *
+   * NOT under `print`, and deliberately so: everything in there corrects for
+   * one printer putting the paper down crooked and is applied to the hard
+   * form alone. This is not a correction — it is how far back the camera
+   * ended up on its pole, which is equally true of the preview, the PDF and
+   * the page a customer scans. It travels to the cloud with the station
+   * profile so all four agree.
+   */
+  front_view_zoom: z
+    .number()
+    .min(FRONT_VIEW_ZOOM.min)
+    .max(FRONT_VIEW_ZOOM.max)
+    .default(FRONT_VIEW_ZOOM.default),
   /** Fire the print dialog automatically once a receipt appears (brief §3). */
   auto_print: z.boolean().default(true),
   pricing: pricingTableSchema.default({}),

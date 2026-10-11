@@ -118,7 +118,8 @@ export class SettingsService {
   }
 
   /**
-   * The company details as the cloud needs them, for the page behind the QR.
+   * What this station looks like, as the cloud needs it for the page behind
+   * the QR: its paper, and how its front camera is framed.
    *
    * Sent with every batch so the public receipt matches the printed one; see
    * `stationProfileSchema`.
@@ -128,7 +129,11 @@ export class SettingsService {
     return {
       station_id: settings.station_id,
       paper_size: settings.print.paper_size === 'CUSTOM' ? 'A5' : settings.print.paper_size,
-      // Never edited on this station: epoch, so any real edit anywhere wins.
+      /* So the page behind the QR crops the truck exactly as the paper does. */
+      front_view_zoom: settings.front_view_zoom,
+      // Epoch until this station's settings have been saved at least once,
+      // so a station that has never been touched cannot win against one that
+      // has. Saving bumps it, which is what lets a zoom change take.
       updated_at: this.meta.get(META_KEYS.settingsUpdatedAt) ?? new Date(0).toISOString(),
     };
   }

@@ -68,7 +68,8 @@ export interface IngestResult extends IngestResponse {
 }
 
 /**
- * Records what the station tells us about itself — these days, its paper size.
+ * Records what the station tells us about itself: its paper, and how its
+ * front camera is framed.
  *
  * Guarded on the station's own edit time: batches can arrive out of order after
  * an outage, and an old one must not undo a correction made since.
@@ -79,6 +80,7 @@ async function storeStationProfile(station: StationProfile): Promise<void> {
     {
       $set: {
         paper_size: station.paper_size,
+        front_view_zoom: station.front_view_zoom,
         updated_at: new Date(station.updated_at),
         synced_at: new Date(),
       },
@@ -93,6 +95,7 @@ async function storeStationProfile(station: StationProfile): Promise<void> {
     {
       $setOnInsert: {
         paper_size: station.paper_size,
+        front_view_zoom: station.front_view_zoom,
         updated_at: new Date(station.updated_at),
         synced_at: new Date(),
       },

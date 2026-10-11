@@ -15,6 +15,7 @@ import { COMPANY, normalizeSlipNumber } from '@suarza/shared';
 import type { ServerConfig } from '../config.js';
 import { findBySlip } from '../services/weighment.service.js';
 import { renderNotFoundPage } from '../receipt/render-page.js';
+import { frontViewZoomForStation } from '../services/station.service.js';
 import { renderSlipPage, slipValues } from '@suarza/ui';
 import { createReadStream } from 'node:fs';
 import {
@@ -87,6 +88,9 @@ export function receiptRouter(config: ServerConfig): Router {
        has managed to send them up. Absent is the ordinary case for a slip
        made minutes ago on a bad link, and the placeholder stands in. */
     const images = await imagesForWeighment(weighment.id);
+    /* The bridge that weighed this truck decides how its front view is
+       cropped, so the page a customer scans shows what the paper shows. */
+    const frontViewZoom = await frontViewZoomForStation(weighment.station_id);
 
     lockDown(res);
     res
@@ -109,6 +113,7 @@ export function receiptRouter(config: ServerConfig): Router {
           verifyUrl: pageUrl(weighment.slip_number),
           frontImageUrl: images.front ? `/captures/${images.front}` : undefined,
           sideImageUrl: images.side ? `/captures/${images.side}` : undefined,
+          frontViewZoom,
         }),
       );
   });

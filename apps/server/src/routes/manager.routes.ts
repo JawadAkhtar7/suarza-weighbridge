@@ -5,6 +5,7 @@ import { weighmentQuerySchema } from '@suarza/shared';
 import { z } from 'zod';
 import { requireAuth, requireCapability } from '../middleware/auth.js';
 import { imagesForWeighment } from '../services/capture.service.js';
+import { frontViewZoomForStation } from '../services/station.service.js';
 import { listWeighments, requireBySlip, suggestValues } from '../services/weighment.service.js';
 import { getAnalytics } from '../services/analytics.service.js';
 import { parse } from './helpers.js';
@@ -39,7 +40,14 @@ export function managerRouter(jwtSecret: string): Router {
    */
   router.get<{ slip: string }>('/weighments/:slip/captures', ...guard, async (req, res) => {
     const weighment = await requireBySlip(req.params.slip);
-    res.json(await imagesForWeighment(weighment.id));
+    /* The station's crop travels with the pictures rather than from an
+       endpoint of its own: it is not a fact about the station the manager
+       might browse, it is how to draw these two images. Sending them apart
+       invites a preview that crops differently from the slip it previews. */
+    res.json({
+      ...(await imagesForWeighment(weighment.id)),
+      front_view_zoom: await frontViewZoomForStation(weighment.station_id),
+    });
   });
 
   /** Typeahead for the dashboard's customer and company filters. */

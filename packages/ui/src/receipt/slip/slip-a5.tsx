@@ -43,6 +43,15 @@ export interface SlipA5Props {
   /** The two camera stills. Both fall back to the bundled placeholder. */
   frontImageUrl?: string;
   sideImageUrl?: string;
+  /**
+   * How tightly to crop the front view into its box.
+   *
+   * UNLIKE the calibration below, this applies in every view. A crop is a
+   * statement about what the picture shows, so the paper, the screen, the
+   * PDF and the page behind the QR code must all show the same truck framed
+   * the same way. Omitted falls back to the design's own figure.
+   */
+  frontViewZoom?: number;
   /** Overrides the bundled Suarza mark, for a station with its own. */
   logoUrl?: string;
   /**
@@ -81,6 +90,7 @@ export function SlipA5({
   verifyUrl,
   frontImageUrl,
   sideImageUrl,
+  frontViewZoom,
   logoUrl,
   offsetXmm = 0,
   offsetYmm = 0,
@@ -132,6 +142,7 @@ export function SlipA5({
           verifyUrl={verifyUrl}
           frontImageUrl={frontImageUrl}
           sideImageUrl={sideImageUrl}
+          frontViewZoom={frontViewZoom}
           logoUrl={logoUrl}
           /* `none` is a real answer: the front view never moves. */
           shift={item.group === 'none' ? undefined : shifts?.[item.group ?? 'details']}
@@ -147,6 +158,7 @@ function Item({
   verifyUrl,
   frontImageUrl,
   sideImageUrl,
+  frontViewZoom,
   logoUrl,
   shift,
 }: {
@@ -155,6 +167,7 @@ function Item({
   verifyUrl?: string;
   frontImageUrl?: string;
   sideImageUrl?: string;
+  frontViewZoom?: number;
   logoUrl?: string;
   shift?: { x: number; y: number };
 }) {
@@ -226,6 +239,10 @@ function Item({
 
     if (!src) return null;
 
+    /* The station's figure wins for the front view, and only for it: the
+       side camera looks along the bridge from close in and needs no crop. */
+    const zoom = item.slot === 'front-view' ? (frontViewZoom ?? item.zoom) : item.zoom;
+
     const picture = (
       <img
         src={src}
@@ -237,7 +254,7 @@ function Item({
           objectFit: item.slot ? 'cover' : undefined,
           /* Scaled about the centre, so cropping in keeps the middle of the
              frame — which is where the truck is. */
-          ...(item.zoom && item.zoom !== 1 ? { transform: `scale(${item.zoom})` } : {}),
+          ...(zoom && zoom !== 1 ? { transform: `scale(${zoom})` } : {}),
         }}
       />
     );

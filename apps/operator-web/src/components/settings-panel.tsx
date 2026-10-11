@@ -28,7 +28,12 @@ import {
   buildTestPrintStyle,
   toast,
 } from '@suarza/ui';
-import { formatDateTimePkt, formatPKR, type SyncOutcome } from '@suarza/shared';
+import {
+  FRONT_VIEW_ZOOM,
+  formatDateTimePkt,
+  formatPKR,
+  type SyncOutcome,
+} from '@suarza/shared';
 import { ListChecks, Loader2, Printer, RefreshCw, RotateCcw } from 'lucide-react';
 import { agentApi, AgentApiError } from '../lib/api.js';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
@@ -377,6 +382,45 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 />
                 Print automatically after saving or completing a weighing
               </label>
+            </section>
+
+            <Separator />
+
+            {/*
+              * Framing, which is NOT alignment and does not belong above.
+              *
+              * Everything under Print alignment corrects for one printer
+              * putting the paper down crooked, and reaches the paper alone.
+              * This changes what the picture shows, so it applies everywhere
+              * — the preview here, the printed slip, the manager's copy and
+              * the page a customer scans. The figure travels to the cloud
+              * with this station's profile on the next sync.
+              */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold">Camera pictures</h3>
+
+              <div className="space-y-1">
+                <Label htmlFor="front-view-zoom" className="text-xs font-normal">
+                  Front view zoom
+                </Label>
+                <NumberInput
+                  id="front-view-zoom"
+                  step="0.05"
+                  min={FRONT_VIEW_ZOOM.min}
+                  max={FRONT_VIEW_ZOOM.max}
+                  value={draft.front_view_zoom}
+                  onChange={(event) =>
+                    setDraft({ ...draft, front_view_zoom: Number(event.target.value) })
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  How close the front camera's picture is on the slip. {FRONT_VIEW_ZOOM.min} shows
+                  the whole frame the camera sends; higher crops in on the middle, where the truck
+                  is. Going below {FRONT_VIEW_ZOOM.min} would leave gaps around the picture, and
+                  past {FRONT_VIEW_ZOOM.max} it starts to look grainy on paper. This changes the
+                  picture everywhere, not just on the printed slip.
+                </p>
+              </div>
             </section>
 
             <Separator />

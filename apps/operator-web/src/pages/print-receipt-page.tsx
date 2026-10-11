@@ -181,6 +181,7 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
             verifyUrl={verifyUrl}
             frontImageUrl={frontImageUrl}
             sideImageUrl={sideImageUrl}
+            frontViewZoom={settings.front_view_zoom}
           />
         </div>
 
@@ -198,6 +199,9 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
           verifyUrl={verifyUrl}
           frontImageUrl={frontImageUrl}
           sideImageUrl={sideImageUrl}
+          /* The same crop as the preview above, deliberately — unlike the
+             calibration below, which the paper gets and nothing else. */
+          frontViewZoom={settings.front_view_zoom}
           /*
            * Calibration, for the paper only.
            *

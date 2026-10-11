@@ -44,7 +44,7 @@
  * exporter's own unit means a coordinate can be read off the design and typed
  * in here unchanged, with no arithmetic in between to get wrong.
  */
-import { SLIP_PAGE_MM } from '@suarza/shared';
+import { FRONT_VIEW_ZOOM, SLIP_PAGE_MM } from '@suarza/shared';
 
 export const CANVAS = { width: 529.1338, height: 755.9055 } as const;
 
@@ -173,6 +173,11 @@ export interface ImageItem extends Placed {
    * These cameras are mounted far back and wide, so the truck is a small part
    * of the frame. 1 draws what the camera sent; 1.3 shows the middle 77% of
    * it, bigger. Overflow is clipped by a wrapper, not by the page.
+   *
+   * The front view's figure here is only a starting point: it is what every
+   * renderer falls back to, and the station's own setting overrides it. The
+   * right crop depends on where the camera ended up on its pole, which is not
+   * something this table can know.
    */
   zoom?: number;
   /** A key into the generated art module, or a slot the renderer fills. */
@@ -291,7 +296,7 @@ export const SLIP: SlipItem[] = [
    * so a sheet that feeds a fraction out of true still lands inside the
    * pre-printed border instead of across it.
    */
-  { kind: 'image', layer: 'value', slot: 'front-view', group: 'none', left: 21, top: 528.63, width: 237.31, height: 119.28, radius: '3px', zoom: 1.3, alt: 'Truck on the weighbridge, front view' },
+  { kind: 'image', layer: 'value', slot: 'front-view', group: 'none', left: 21, top: 528.63, width: 237.31, height: 119.28, radius: '3px', zoom: FRONT_VIEW_ZOOM.default, alt: 'Truck on the weighbridge, front view' },
   { kind: 'image', layer: 'value', slot: 'side-view', group: 'side-view', left: 271.32, top: 528.63, width: 237.31, height: 119.28, radius: '3px', alt: 'Truck on the weighbridge, side view' },
 
   /* ---------------------------------------------------------------- the QR */

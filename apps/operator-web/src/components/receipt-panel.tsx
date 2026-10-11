@@ -103,6 +103,7 @@ export function ReceiptPanel({ weighment, variant, title, autoPrint = false }: R
               captures.data?.front ? captureImageUrl(captures.data.front) : undefined
             }
             sideImageUrl={captures.data?.side ? captureImageUrl(captures.data.side) : undefined}
+            frontViewZoom={settings.front_view_zoom}
           />
         </div>
 

@@ -111,9 +111,12 @@ export const api = {
   weighment: (slip: string) =>
     request<{ weighment: Weighment }>(`/weighments/${encodeURIComponent(slip)}`),
 
-  /** The camera stills for a weighing; nulls on a bridge without cameras. */
+  /**
+   * The camera stills for a weighing, and how its bridge frames the front one;
+   * nulls on a bridge without cameras.
+   */
   weighmentCaptures: (slip: string) =>
-    request<{ front: string | null; side: string | null }>(
+    request<{ front: string | null; side: string | null; front_view_zoom: number }>(
       `/weighments/${encodeURIComponent(slip)}/captures`,
     ),
 

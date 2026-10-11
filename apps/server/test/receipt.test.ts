@@ -17,8 +17,8 @@ import {
   weighment,
 } from './helpers.js';
 import { ingest } from '../src/services/ingest.service.js';
-import { paperForStation } from '../src/services/station.service.js';
-import { COMPANY } from '@suarza/shared';
+import { frontViewZoomForStation, paperForStation } from '../src/services/station.service.js';
+import { COMPANY, FRONT_VIEW_ZOOM } from '@suarza/shared';
 
 let app: Express;
 
@@ -35,6 +35,9 @@ describe('whose company details the page shows', () => {
   const profile = {
     station_id: 'A',
     paper_size: 'A4' as const,
+    // Not the default, so a station reporting its own crop is the only thing
+    // this value can be explained by when it turns up on the page.
+    front_view_zoom: 1.45,
     updated_at: '2026-09-15T10:00:00.000Z',
   };
 
@@ -63,6 +66,27 @@ describe('whose company details the page shows', () => {
     );
   });
 
+  it("crops the front view the way the weighing station does", async () => {
+    /*
+     * The station's figure has to reach the page behind the QR code, not just
+     * the paper: a customer scanning his own slip and finding the lorry framed
+     * differently has two documents that do not match, and no way to tell
+     * which one is the record.
+     */
+    await ingest([completedWeighment({ slip_number: '2026123' })], [], profile);
+    expect(await frontViewZoomForStation('A')).toBe(1.45);
+
+    const { text } = await request(app).get('/r/2026123');
+    expect(text).toContain('scale(1.45)');
+  });
+
+  it('falls back to the design\'s own crop for a station it has never heard of', async () => {
+    // Not "no crop": every slip printed before this setting existed already
+    // showed the default, and those slips are still in customers' hands.
+    expect(await frontViewZoomForStation('never-synced')).toBe(FRONT_VIEW_ZOOM.default);
+    expect(await frontViewZoomForStation(null)).toBe(FRONT_VIEW_ZOOM.default);
+  });
+
   it('uses the paper the station prints on', async () => {
     // The fixture says A4 deliberately: A5 is the default, so a station that
     // reported something else is the only way to prove its choice travels.
@@ -84,18 +108,33 @@ describe('GET /r/:slip — what a scanned QR leads to', () => {
     expect(response.status).toBe(200);
     expect(response.type).toBe('text/html');
     expect(response.text).toContain('2026123');
-    expect(response.text).toContain('WEIGHT BRIDGE SLIP');
+    // The heading is drawn, not written: every label on the 140 x 200 pads —
+    // English and Urdu alike — is outlined into the artwork, so the page can
+    // carry them with no font to fetch and no shaping engine to trust.
+    expect(response.text).toContain('Suarza International weight bridge slip');
   });
 
   it('carries the Urdu the design is built on', async () => {
-    // The thing the old PDF silently dropped. If this ever regresses, half the
-    // labels on the client's slip vanish.
+    /*
+     * The thing the old PDF silently dropped. If this ever regresses, half the
+     * labels on the client's slip vanish.
+     *
+     * It can no longer be checked by searching for the words: the Urdu is in
+     * the artwork as outlines rather than as text, which is precisely what
+     * made it safe. What can still regress is the artwork going missing or
+     * arriving stripped down, so that is what this asserts — the template, in
+     * full, embedded in the page.
+     */
     await store(completedWeighment({ slip_number: '2026123' }));
     const { text } = await request(app).get('/r/2026123');
 
-    for (const label of ['سلپ نمبر', 'پہلاوزن', 'دوسراوزن', 'صافی وزن']) {
-      expect(text, label).toContain(label);
-    }
+    const art = /src="(data:image\/svg\+xml;base64,[^"]+)"/.exec(text);
+    expect(art, 'the slip artwork').not.toBeNull();
+
+    const svg = Buffer.from(art![1]!.split(',')[1]!, 'base64').toString('utf8');
+    // The design is 575 paths. A handful would mean a placeholder; this many
+    // can only be the real thing, Urdu outlines and all.
+    expect(svg.match(/<path/g)?.length ?? 0).toBeGreaterThan(500);
   });
 
   it('fetches nothing from anywhere — artwork and fonts travel with it', async () => {
@@ -118,11 +157,26 @@ describe('GET /r/:slip — what a scanned QR leads to', () => {
 
   it('accepts the slip in the shorthand an operator might type', async () => {
     await store(completedWeighment({ slip_number: '2026123' }));
-    for (const typed of ['si-000123', '123']) {
-      const response = await request(app).get(`/r/${typed}`);
-      expect(response.status, typed).toBe(200);
-      expect(response.text, typed).toContain('2026123');
-    }
+    const response = await request(app).get('/r/123');
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('2026123');
+  });
+
+  it('does not read an old SI- number as shorthand for a new one', async () => {
+    /*
+     * `SI-000123` used to normalise down to its digits, which made it another
+     * way of typing slip 123 of this year. It is not: it is a slip of its own,
+     * printed before the numbering changed, and the pad it was torn from is
+     * still in the office drawer. Collapsing the two would serve one truck's
+     * weighing to a customer holding the other truck's slip.
+     */
+    await store(completedWeighment({ slip_number: '2026123' }));
+    expect((await request(app).get('/r/si-000123')).status).toBe(404);
+
+    await store(completedWeighment({ slip_number: 'SI-000123' }));
+    const { status, text } = await request(app).get('/r/si-000123');
+    expect(status).toBe(200);
+    expect(text).toContain('SI-000123');
   });
 
   it('shows an open ticket with the second weight simply absent', async () => {

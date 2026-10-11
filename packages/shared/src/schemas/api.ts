@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { vehicleTypeSchema, weighmentSchema } from './weighment.js';
 import { auditEntrySchema } from './audit.js';
 import { WEIGHMENT_STATUSES, USER_ROLES } from '../constants/domain.js';
+import { FRONT_VIEW_ZOOM } from '../constants/paper.js';
 
 /**
  * POST /ingest — the agent's outbox payload.
@@ -25,6 +26,12 @@ export const stationProfileSchema = z.object({
   station_id: z.string().min(1).max(16),
   /** What this station prints on. */
   paper_size: z.enum(['A4', 'A5', 'LETTER']).default('A5'),
+  /** How tightly this station's front camera is cropped into its box. */
+  front_view_zoom: z
+    .number()
+    .min(FRONT_VIEW_ZOOM.min)
+    .max(FRONT_VIEW_ZOOM.max)
+    .default(FRONT_VIEW_ZOOM.default),
   /** When the station last changed them, so a stale batch cannot overwrite. */
   updated_at: z.string().datetime({ offset: true }),
 });

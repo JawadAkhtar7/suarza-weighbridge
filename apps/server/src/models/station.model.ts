@@ -10,6 +10,7 @@
 
 import mongoose from 'mongoose';
 import type { InferSchemaType, Model } from 'mongoose';
+import { FRONT_VIEW_ZOOM } from '@suarza/shared';
 
 // Mongoose is CommonJS: Node's ESM interop does not expose every named
 // export, so the runtime values come off the default export.
@@ -24,6 +25,15 @@ const stationSchema = new Schema(
        may still carry the old fields; nothing reads them. */
     /** What this station prints on; the downloaded PDF follows it. */
     paper_size: { type: String, enum: ['A4', 'A5', 'LETTER'], default: 'A5' },
+    /**
+     * How tightly this station's front camera crops into its box on the slip.
+     *
+     * Here for the same reason the paper size is: the page behind the QR code
+     * is drawn on this machine, and a picture framed one way on the printed
+     * slip and another on the page the customer scans is the same slip
+     * telling two stories.
+     */
+    front_view_zoom: { type: Number, default: FRONT_VIEW_ZOOM.default },
     /** The station's own edit time, used to ignore a stale batch. */
     updated_at: { type: Date, required: true },
     synced_at: { type: Date, required: true, default: () => new Date() },
