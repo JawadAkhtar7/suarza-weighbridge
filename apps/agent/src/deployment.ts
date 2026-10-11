@@ -78,7 +78,9 @@ export function cloudSettings(env: NodeJS.ProcessEnv = process.env): {
  * Empty disables a camera, and a bridge with none runs unchanged: every slip
  * simply prints the bundled placeholder.
  */
-export const CAMERA_FRONT_URL = 'http://192.168.1.83/ISAPI/Streaming/channels/102/picture';
+/* .75, not .83: the front camera was replaced on site in October 2026 and the
+   new unit came up on a different address. */
+export const CAMERA_FRONT_URL = 'http://192.168.1.75/ISAPI/Streaming/channels/102/picture';
 export const CAMERA_SIDE_URL = 'http://192.168.1.66/ISAPI/Streaming/channels/102/picture';
 export const CAMERA_USERNAME = 'admin';
 export const CAMERA_PASSWORD = 'Cctvins247';
