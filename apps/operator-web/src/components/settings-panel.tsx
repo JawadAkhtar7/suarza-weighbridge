@@ -305,7 +305,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 </Button>
                 <p className="text-xs text-muted-foreground">
                   Prints a dashed outline onto a blank pad sheet, so you can check the slip lands
-                  inside the blank area before using a real pad.
+                  inside the blank area before using a real pad
                 </p>
               </div>
 
