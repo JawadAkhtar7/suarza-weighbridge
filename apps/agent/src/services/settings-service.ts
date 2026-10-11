@@ -82,15 +82,18 @@ export class SettingsService {
       custom_width_mm: SLIP_PAGE_MM.width,
       custom_height_mm: SLIP_PAGE_MM.height,
       /*
-       * Scale stays pinned — an overprint at 97% is wrong everywhere at once,
-       * and no printer needs it. The OFFSETS are not pinned any more.
+       * Whole-sheet nudges and scale stay pinned.
        *
-       * They were, while every station printed the same way. But a pad is
-       * pre-printed on one press and overprinted on another, and the two do
-       * not agree about where the paper starts: on site the whole sheet came
-       * out a millimetre or two low, with nothing in the software able to
-       * correct it. These two figures are that correction.
+       * The offsets were opened up briefly to correct a pad printed slightly
+       * off-centre, and moving everything at once turned out to be the wrong
+       * instrument: fixing the one element that was visibly out pushed three
+       * others off their boxes, and the result was harder to judge than the
+       * original fault. The QR is the only element where the drift actually
+       * shows — its box is barely larger than it is — so qr_offset_x_mm moves
+       * that alone, and nothing else moves at all.
        */
+      offset_top_mm: 0,
+      offset_left_mm: 0,
       scale_percent: 100,
     };
 

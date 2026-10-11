@@ -14,16 +14,31 @@ export const paperSizeSchema = z.enum(['A4', 'A5', 'LETTER', 'CUSTOM']);
 export type PaperSize = z.infer<typeof paperSizeSchema>;
 
 export const printSettingsSchema = z.object({
-  // A5 everywhere: the client's pre-printed pads are A5, and the size is no
-  // longer an option in the operator app.
+  /* The client's pre-printed pads are 140 x 200, which has no standard name,
+     so the size is CUSTOM with SLIP_PAGE_MM's figures. Not an operator
+     choice: the agent normalises it on read. */
   paper_size: paperSizeSchema.default('A5'),
   /** Only used when paper_size is CUSTOM. Millimetres. */
   custom_width_mm: z.number().min(50).max(500).default(148),
   custom_height_mm: z.number().min(50).max(500).default(210),
+  /* Whole-sheet nudges. Pinned to zero by the agent and not offered in the
+     operator app: moving everything at once to chase one misplaced element
+     puts three others out, which is what happened on site. */
   offset_top_mm: z.number().min(-50).max(200).default(0),
   offset_left_mm: z.number().min(-50).max(200).default(0),
   /** Scales the whole central block if the pad's blank area is tight. */
   scale_percent: z.number().min(50).max(150).default(100),
+  /**
+   * How far to move the QR code sideways, in millimetres, and nothing else.
+   *
+   * The pads are printed a little off-centre, and the only element where that
+   * shows is the QR: it is small, it sits in a box barely bigger than itself,
+   * and a millimetre of drift is obvious. Everything else has room to spare.
+   *
+   * So this moves the QR alone. Negative is left. Deliberately narrow: it is
+   * a nudge for one square, not a page-wide correction.
+   */
+  qr_offset_x_mm: z.number().min(-20).max(20).default(0),
 });
 
 export type PrintSettings = z.infer<typeof printSettingsSchema>;

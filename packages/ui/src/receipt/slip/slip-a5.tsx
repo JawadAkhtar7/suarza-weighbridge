@@ -56,6 +56,16 @@ export interface SlipA5Props {
    */
   offsetXmm?: number;
   offsetYmm?: number;
+  /**
+   * Move the QR code sideways by this many millimetres, and nothing else.
+   *
+   * The pads are printed slightly off-centre. Shifting the whole sheet to
+   * chase that puts three other things out for every one it fixes — tried on
+   * site, and the result was harder to reason about than the original fault.
+   * The QR is the only element where the drift actually shows, because its
+   * box is barely bigger than it is, so the QR is the only element that moves.
+   */
+  qrOffsetXmm?: number;
   /** For an on-screen preview; never applied when printing. */
   className?: string;
 }
@@ -71,6 +81,7 @@ export function SlipA5({
   logoUrl,
   offsetXmm = 0,
   offsetYmm = 0,
+  qrOffsetXmm = 0,
   className,
 }: SlipA5Props) {
   const layers = LAYERS[view];
@@ -117,6 +128,7 @@ export function SlipA5({
           frontImageUrl={frontImageUrl}
           sideImageUrl={sideImageUrl}
           logoUrl={logoUrl}
+          qrOffsetXmm={qrOffsetXmm}
         />
       ))}
     </div>
@@ -130,6 +142,7 @@ function Item({
   frontImageUrl,
   sideImageUrl,
   logoUrl,
+  qrOffsetXmm = 0,
 }: {
   item: SlipItem;
   values: SlipValues;
@@ -137,6 +150,7 @@ function Item({
   frontImageUrl?: string;
   sideImageUrl?: string;
   logoUrl?: string;
+  qrOffsetXmm?: number;
 }) {
   const place: React.CSSProperties = {
     position: 'absolute',
@@ -179,7 +193,16 @@ function Item({
     if (item.slot === 'qr') {
       if (!verifyUrl) return null;
       return (
-        <div style={{ ...place, width: mm(item.width), height: mm(item.height) }}>
+        <div
+          style={{
+            ...place,
+            width: mm(item.width),
+            height: mm(item.height),
+            /* The one element the operator can nudge. Applied here rather
+               than to `left` so the layout table stays the design's. */
+            transform: qrOffsetXmm ? `translateX(${qrOffsetXmm.toFixed(2)}mm)` : undefined,
+          }}
+        >
           <QRCodeSVG
             value={verifyUrl}
             /* Sized in CSS, not in pixels: the SVG scales, and a QR drawn at a

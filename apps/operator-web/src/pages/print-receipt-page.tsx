@@ -181,6 +181,7 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
             verifyUrl={verifyUrl}
             frontImageUrl={frontImageUrl}
             sideImageUrl={sideImageUrl}
+            qrOffsetXmm={settings.print.qr_offset_x_mm}
           />
         </div>
 
@@ -198,8 +199,9 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
           verifyUrl={verifyUrl}
           frontImageUrl={frontImageUrl}
           sideImageUrl={sideImageUrl}
-          offsetXmm={settings.print.offset_left_mm}
-          offsetYmm={settings.print.offset_top_mm}
+          /* The only adjustment the operator has. Whole-sheet offsets are
+             pinned to zero by the agent, so they are not passed at all. */
+          qrOffsetXmm={settings.print.qr_offset_x_mm}
         />
       </div>
     </>

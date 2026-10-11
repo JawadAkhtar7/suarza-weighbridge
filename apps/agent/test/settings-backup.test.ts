@@ -63,9 +63,10 @@ describe('SettingsService', () => {
 
     const read = new SettingsService(db).get().print;
     expect(read.paper_size).toBe('CUSTOM');
-    /* The offset is the operator's calibration against their own printer and
-       must survive a read; only the paper size and scale are normalised. */
-    expect(read.offset_top_mm).toBe(14);
+    /* Whole-sheet offsets are normalised away again: moving everything to
+       correct one element was tried on site and made the slip harder to
+       judge, not easier. qr_offset_x_mm is the adjustment that survives. */
+    expect(read.offset_top_mm).toBe(0);
     expect(read.scale_percent).toBe(100);
   });
 
