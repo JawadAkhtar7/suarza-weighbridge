@@ -70,18 +70,32 @@ export function cloudSettings(env: NodeJS.ProcessEnv = process.env): {
  * them up like any other change.
  *
  * These are Hikvision, whose stills live at
- *   http://<ip>/ISAPI/Streaming/channels/102/picture
- * where 102 is the sub-stream — 640x360 at roughly 23 KB, which is within 2%
- * of what the slip's photo box needs at 300 dpi. The main stream (101) would
- * be four times the file for no more detail on paper.
+ *   http://<ip>/ISAPI/Streaming/channels/<channel>/picture
+ * where 101 is the main stream and 102 the sub-stream.
+ *
+ * TWO URLS PER CAMERA, and the difference is the point:
+ *
+ *   still   channel 101, the main stream. About 1.25 MB of 4 MP frame. Far
+ *           more than the slip's 62.8 mm photo box can print, and kept
+ *           anyway because it is also the yard's record of what arrived —
+ *           a number plate nobody can read later is worth nothing.
+ *
+ *   live    channel 102, the sub-stream, 640x360 at roughly 23 KB. The
+ *           operator's panel polls this several times a second, so the main
+ *           stream here would be some 7 MB a second across the bridge's
+ *           switch for two cameras. That is not a disk-space question: it
+ *           would stutter, and the live view exists to show the operator a
+ *           truck moving onto the plate.
  *
  * Empty disables a camera, and a bridge with none runs unchanged: every slip
  * simply prints the bundled placeholder.
  */
 /* .75, not .83: the front camera was replaced on site in October 2026 and the
    new unit came up on a different address. */
-export const CAMERA_FRONT_URL = 'http://192.168.1.75/ISAPI/Streaming/channels/102/picture';
-export const CAMERA_SIDE_URL = 'http://192.168.1.66/ISAPI/Streaming/channels/102/picture';
+export const CAMERA_FRONT_URL = 'http://192.168.1.75/ISAPI/Streaming/channels/101/picture';
+export const CAMERA_SIDE_URL = 'http://192.168.1.66/ISAPI/Streaming/channels/101/picture';
+export const CAMERA_FRONT_LIVE_URL = 'http://192.168.1.75/ISAPI/Streaming/channels/102/picture';
+export const CAMERA_SIDE_LIVE_URL = 'http://192.168.1.66/ISAPI/Streaming/channels/102/picture';
 export const CAMERA_USERNAME = 'admin';
 export const CAMERA_PASSWORD = 'Cctvins247';
 
@@ -102,8 +116,12 @@ export const CAPTURE_PATH = './data/captures';
 export const CAPTURE_KEEP_DAYS = 60;
 
 export interface CameraSettings {
+  /** The main stream, stored and printed. */
   frontUrl: string;
   sideUrl: string;
+  /** The sub-stream, for the operator's live panel only. */
+  frontLiveUrl: string;
+  sideLiveUrl: string;
   username: string;
   password: string;
   timeoutMs: number;
@@ -129,6 +147,15 @@ export function cameraSettings(env: NodeJS.ProcessEnv = process.env): CameraSett
   return {
     frontUrl: env['CAMERA_FRONT_URL']?.trim() || CAMERA_FRONT_URL,
     sideUrl: env['CAMERA_SIDE_URL']?.trim() || CAMERA_SIDE_URL,
+    /* A developer who overrides only the still URL — pointing at a mock, or
+       at a webcam — gets it for the live view too. One camera on a laptop is
+       the ordinary case, and two separate overrides to say so is a trap. */
+    frontLiveUrl:
+      env['CAMERA_FRONT_LIVE_URL']?.trim() ||
+      env['CAMERA_FRONT_URL']?.trim() ||
+      CAMERA_FRONT_LIVE_URL,
+    sideLiveUrl:
+      env['CAMERA_SIDE_LIVE_URL']?.trim() || env['CAMERA_SIDE_URL']?.trim() || CAMERA_SIDE_LIVE_URL,
     username: env['CAMERA_USERNAME']?.trim() || CAMERA_USERNAME,
     password: env['CAMERA_PASSWORD']?.trim() || CAMERA_PASSWORD,
     timeoutMs: number(env['CAMERA_TIMEOUT_MS'], CAMERA_TIMEOUT_MS),

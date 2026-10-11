@@ -60,6 +60,8 @@ async function main(): Promise<void> {
   const cameras = new CameraClient({
     frontUrl: cameraConfig.frontUrl,
     sideUrl: cameraConfig.sideUrl,
+    frontLiveUrl: cameraConfig.frontLiveUrl,
+    sideLiveUrl: cameraConfig.sideLiveUrl,
     username: cameraConfig.username,
     password: cameraConfig.password,
     timeoutMs: cameraConfig.timeoutMs,

@@ -14,9 +14,20 @@ import { fetchWithDigest } from './digest.js';
 export const CAMERA_VIEWS = ['FRONT', 'SIDE'] as const;
 export type CameraView = (typeof CAMERA_VIEWS)[number];
 
+/**
+ * Which picture is wanted.
+ *
+ * `still` is the one that is stored and printed, and comes off the main
+ * stream. `live` feeds the operator's panel several times a second and comes
+ * off the sub-stream, which is a fraction of the bytes — see deployment.ts.
+ */
+export type CameraPurpose = 'still' | 'live';
+
 export interface CameraClientOptions {
   frontUrl: string;
   sideUrl: string;
+  frontLiveUrl: string;
+  sideLiveUrl: string;
   username: string;
   password: string;
   timeoutMs: number;
@@ -33,8 +44,16 @@ export interface Snapshot {
 export class CameraClient {
   constructor(private readonly options: CameraClientOptions) {}
 
-  private urlFor(view: CameraView): string {
-    return view === 'FRONT' ? this.options.frontUrl.trim() : this.options.sideUrl.trim();
+  private urlFor(view: CameraView, purpose: CameraPurpose = 'still'): string {
+    const { frontUrl, sideUrl, frontLiveUrl, sideLiveUrl } = this.options;
+    if (purpose === 'live') {
+      // A camera configured for stills but not for live falls back rather
+      // than going dark: a lower-resolution live view is the optimisation,
+      // not the requirement.
+      const live = view === 'FRONT' ? frontLiveUrl : sideLiveUrl;
+      if (live.trim() !== '') return live.trim();
+    }
+    return (view === 'FRONT' ? frontUrl : sideUrl).trim();
   }
 
   /** Which cameras are configured at all. */
@@ -53,8 +72,8 @@ export class CameraClient {
    * same — carry on without the picture — and making each of them write a
    * try/catch to say so invites one of them forgetting.
    */
-  async snapshot(view: CameraView): Promise<Snapshot | null> {
-    const url = this.urlFor(view);
+  async snapshot(view: CameraView, purpose: CameraPurpose = 'still'): Promise<Snapshot | null> {
+    const url = this.urlFor(view, purpose);
     if (!url) return null;
 
     try {

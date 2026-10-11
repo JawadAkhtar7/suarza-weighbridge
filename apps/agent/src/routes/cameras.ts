@@ -136,7 +136,10 @@ export function registerCameraRoutes(app: FastifyInstance, deps: AgentDeps): voi
     void (async () => {
       while (!stopped) {
         const started = Date.now();
-        const shot = await cameras.snapshot(view);
+        // The sub-stream: this runs several times a second for as long as the
+        // operator's screen is open, and the main stream's 4 MP frames would
+        // flood the bridge's switch for a picture nobody keeps.
+        const shot = await cameras.snapshot(view, 'live');
 
         if (stopped) break;
         if (shot) {

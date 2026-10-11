@@ -29,7 +29,11 @@ export const SLIP_PAGE_MM = { width: 140, height: 200 } as const;
  * on the page a customer scans is the same slip telling two stories.
  *
  * The bounds are not arbitrary. Below 1 the picture stops filling its box and
- * the pad's white shows through at the edges; past about 1.6 a sub-stream
- * still has too few pixels left to survive a 63 mm print.
+ * the pad's white shows through at the edges. The ceiling is what the stored
+ * still can stand: the box is 62.8 mm wide, which wants 742 pixels at 300 dpi,
+ * and the main stream's frame is some 2560 across — so a third of it still
+ * covers the box. Three it is. A station storing the sub-stream instead will
+ * see it soften well before that, which is a thing to look at rather than a
+ * thing to forbid.
  */
-export const FRONT_VIEW_ZOOM = { default: 1.3, min: 1, max: 1.6 } as const;
+export const FRONT_VIEW_ZOOM = { default: 1.3, min: 1, max: 3 } as const;

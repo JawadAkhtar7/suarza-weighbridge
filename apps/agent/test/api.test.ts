@@ -224,8 +224,19 @@ describe('GET /weighments/:slip', () => {
 
   it('accepts the slip as the operator types it', async () => {
     await app.inject({ method: 'POST', url: '/weighments', payload: firstWeightBody() });
-    expect((await app.inject({ url: '/weighments/si-000001' })).statusCode).toBe(200);
     expect((await app.inject({ url: '/weighments/1' })).statusCode).toBe(200);
+  });
+
+  it('does not read an old SI- number as shorthand for a new one', async () => {
+    /*
+     * `SI-000001` used to normalise down to its digits, which made it another
+     * way of typing slip 1 of this year. It is not: it names a slip printed
+     * before the numbering changed, and pads carrying those numbers are still
+     * in the office drawer. Collapsing the two would put one truck's weighing
+     * on another truck's slip.
+     */
+    await app.inject({ method: 'POST', url: '/weighments', payload: firstWeightBody() });
+    expect((await app.inject({ url: '/weighments/si-000001' })).statusCode).toBe(404);
   });
 
   it('404s a slip that does not exist', async () => {

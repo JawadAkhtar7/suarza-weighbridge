@@ -10,6 +10,8 @@ import { describe, expect, it } from 'vitest';
 import {
   CAMERA_FRONT_URL,
   CAMERA_SIDE_URL,
+  CAMERA_FRONT_LIVE_URL,
+  CAMERA_SIDE_LIVE_URL,
   CLOUD_API_KEY,
   CLOUD_API_URL,
   CLOUD_DISABLED,
@@ -91,9 +93,37 @@ describe('cameraSettings', () => {
   });
 
   it('ships real addresses, not placeholders', () => {
-    for (const url of [CAMERA_FRONT_URL, CAMERA_SIDE_URL]) {
+    for (const url of [
+      CAMERA_FRONT_URL,
+      CAMERA_SIDE_URL,
+      CAMERA_FRONT_LIVE_URL,
+      CAMERA_SIDE_LIVE_URL,
+    ]) {
       expect(url).toMatch(/^https?:\/\//);
       expect(url).not.toContain('example.com');
     }
+  });
+
+  it('stores the main stream and streams the sub-stream', () => {
+    /*
+     * The two differ only by a digit, which is exactly why this is worth
+     * pinning: swapping 101 and 102 produces no error anywhere. It shows up
+     * months later as a live view that stutters, or as a slip whose number
+     * plate cannot be read when somebody finally needs to read it.
+     */
+    const settings = cameraSettings({});
+    expect(settings.frontUrl).toContain('/channels/101/');
+    expect(settings.sideUrl).toContain('/channels/101/');
+    expect(settings.frontLiveUrl).toContain('/channels/102/');
+    expect(settings.sideLiveUrl).toContain('/channels/102/');
+  });
+
+  it('sends a developer who overrides one camera to that camera for both', () => {
+    // One webcam on a laptop is the ordinary case off site, and needing two
+    // environment variables to say so is a trap.
+    const settings = cameraSettings({ CAMERA_FRONT_URL: 'http://127.0.0.1:9000/snap' });
+    expect(settings.frontLiveUrl).toBe('http://127.0.0.1:9000/snap');
+    // ...while the camera they said nothing about keeps both of its own.
+    expect(settings.sideLiveUrl).toBe(CAMERA_SIDE_LIVE_URL);
   });
 });

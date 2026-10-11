@@ -416,9 +416,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <p className="text-xs text-muted-foreground">
                   How close the front camera's picture is on the slip. {FRONT_VIEW_ZOOM.min} shows
                   the whole frame the camera sends; higher crops in on the middle, where the truck
-                  is. Going below {FRONT_VIEW_ZOOM.min} would leave gaps around the picture, and
-                  past {FRONT_VIEW_ZOOM.max} it starts to look grainy on paper. This changes the
-                  picture everywhere, not just on the printed slip.
+                  is. Change it, save, then open a slip to see the result — it changes the picture
+                  everywhere, not only on the printed one.
                 </p>
               </div>
             </section>

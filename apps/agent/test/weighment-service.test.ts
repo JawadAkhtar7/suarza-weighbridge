@@ -207,9 +207,15 @@ describe('complete', () => {
 describe('getBySlip', () => {
   it('accepts what the operator types off the printed slip', () => {
     const { weighment } = service.createFirstWeight(firstWeightInput());
-    expect(service.getBySlip('si-000001').id).toBe(weighment.id);
     expect(service.getBySlip('1').id).toBe(weighment.id);
     expect(service.getBySlip('  20261 ').id).toBe(weighment.id);
+  });
+
+  it('keeps an old SI- number distinct from the slip with the same digits', () => {
+    // Stripping it to its digits would turn SI-000001 into slip 1 of this
+    // year — a different truck, weighed years later.
+    service.createFirstWeight(firstWeightInput());
+    expect(() => service.getBySlip('si-000001')).toThrowError();
   });
 
   it('reports a missing slip clearly', () => {
