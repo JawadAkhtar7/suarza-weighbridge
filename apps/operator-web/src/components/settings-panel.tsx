@@ -341,42 +341,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             <Separator />
 
             <section className="space-y-3">
-              <h3 className="text-sm font-semibold">Receipt details</h3>
-              <p className="text-xs text-muted-foreground">
-                The company name, address, phone and website are fixed in the software and are the
-                same on every slip, so there is nothing to set here. If they ever change, we push an
-                update and you press <span className="font-medium">Update Weighbridge</span>.
-              </p>
-
-              {/*
-                * Shown, not edited. The address follows the cloud, and the
-                * cloud's address lives in the software — an operator typing a
-                * tunnel in here once left every slip carrying a QR that led
-                * nowhere, months after the tunnel was gone.
-                */}
-              <div className="space-y-2">
-                <Label>Receipt web address</Label>
-                <p className="text-sm">
-                  {draft.receipt_base_url ? (
-                    <code>{draft.receipt_base_url}/r/2026123</code>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      No cloud address — slips print without a QR code.
-                    </span>
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  This is where the QR code on a slip takes the customer. It comes from the
-                  software and follows the cloud the station syncs to, so there is nothing to set
-                  here. If it ever moves, we push an update and you press{' '}
-                  <span className="font-medium">Update Weighbridge</span>.
-                </p>
-              </div>
-            </section>
-
-            <Separator />
-
-            <section className="space-y-3">
               <h3 className="text-sm font-semibold">Backup</h3>
               <p className="text-xs text-muted-foreground">
                 A spare copy of all weighing records. If this PC ever fails, the copy is your data.
