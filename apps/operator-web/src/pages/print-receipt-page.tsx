@@ -237,6 +237,10 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
            * must not reach the record.
            */
           calibration={{
+            'slip-number': {
+              x: settings.print.slip_number_offset_x_mm,
+              y: settings.print.slip_number_offset_y_mm,
+            },
             details: {
               x: settings.print.details_offset_x_mm,
               y: settings.print.details_offset_y_mm,
@@ -245,20 +249,19 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
               x: settings.print.weights_offset_x_mm,
               y: settings.print.weights_offset_y_mm,
             },
-            'weight-times': {
-              x: settings.print.weight_times_offset_x_mm,
-              y: settings.print.weight_times_offset_y_mm,
+            'first-time': {
+              x: settings.print.first_time_offset_x_mm,
+              y: settings.print.first_time_offset_y_mm,
             },
-            'side-view': {
-              x: settings.print.side_view_offset_x_mm,
-              y: settings.print.side_view_offset_y_mm,
+            'second-time': {
+              x: settings.print.second_time_offset_x_mm,
+              y: settings.print.second_time_offset_y_mm,
             },
             qr: { x: settings.print.qr_offset_x_mm, y: settings.print.qr_offset_y_mm },
           }}
-          paperExtraWidth={{
-            'front-view': settings.print.front_view_extra_width_mm,
-            'side-view': settings.print.side_view_extra_width_mm,
-          }}
+          /* The photographs go in their boxes as measured on these pads,
+             read off the measuring sheet (Settings -> Print). */
+          paperPhotoBoxes={settings.print.photo_boxes_mm}
         />
       </div>
     </>

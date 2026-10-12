@@ -156,14 +156,18 @@ describe('GET /r/:slip — what a scanned QR leads to', () => {
     expect(svg.match(/<path/g)?.length ?? 0).toBeGreaterThan(500);
   });
 
-  it('fetches nothing from anywhere — artwork and fonts travel with it', async () => {
-    // This is what lets the page run under a policy that permits no scripts and
-    // no network, and what lets the weighbridge PC print with the line down.
+  it('fetches nothing from anywhere else — artwork and fonts travel with it', async () => {
+    // What lets the page run under a policy that permits nothing from any
+    // other site. The only addresses on it are this server's own two scripts
+    // for the share and download buttons.
     await store(completedWeighment({ slip_number: '2026123' }));
     const { text } = await request(app).get('/r/2026123');
 
-    const external = text.match(/(?:src|href)="(?!data:)[^"]*"/g) ?? [];
-    expect(external).toEqual([]);
+    const references = text.match(/(?:src|href)="(?!data:)[^"]*"/g) ?? [];
+    expect(references).toEqual([
+      'src="/r-assets/html-to-image.js"',
+      'src="/r-assets/slip-share.js"',
+    ]);
   });
 
   it('never lets a phone cache it', async () => {
@@ -300,5 +304,40 @@ describe('the QR routes are public by design', () => {
     // Without a slip number there is nothing to see; /weighments needs auth.
     expect((await request(app).get('/r/')).status).toBe(404);
     expect((await request(app).get('/weighments')).status).toBe(401);
+  });
+});
+
+describe('share and download on the QR page', () => {
+  it('offers the four buttons, off until their scripts load', async () => {
+    await store(completedWeighment({ slip_number: '2026123' }));
+    const { text } = await request(app).get('/r/2026123');
+
+    for (const [action, label] of [
+      ['share-pdf', 'Share as PDF'],
+      ['download-pdf', 'Download PDF'],
+      ['share-image', 'Share as image'],
+      ['download-image', 'Download image'],
+    ]) {
+      expect(text).toMatch(new RegExp(`data-action="${action}"[^>]*disabled>${label}</button>`));
+    }
+    expect(text).toContain('data-file-name="Weight-Bridge-Slip-2026123"');
+    expect(text).toContain('<script src="/r-assets/html-to-image.js"></script>');
+    expect(text).toContain('<script type="module" src="/r-assets/slip-share.js"></script>');
+  });
+
+  it('lets this server, and only this server, run scripts on the page', async () => {
+    await store(completedWeighment({ slip_number: '2026123' }));
+    const csp = (await request(app).get('/r/2026123')).headers['content-security-policy'];
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).not.toMatch(/script-src[^;]*('unsafe-inline'|https?:)/);
+  });
+
+  it('serves both scripts', async () => {
+    for (const path of ['/r-assets/html-to-image.js', '/r-assets/slip-share.js']) {
+      const response = await request(app).get(path);
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/javascript/);
+      expect(response.text.length).toBeGreaterThan(1000);
+    }
   });
 });

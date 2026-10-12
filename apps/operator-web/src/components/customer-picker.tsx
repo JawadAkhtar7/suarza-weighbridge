@@ -7,6 +7,10 @@
  * field stays editable, because the same customer turns up with a different
  * truck all the time.
  *
+ * Searches by name, company or vehicle plate. A plate search finds the
+ * customer by any truck they have been weighed with, and picking that result
+ * fills in that truck rather than the one they brought last.
+ *
  * The box is never locked to the list: a customer who has never been here is
  * the normal case, and the operator just types.
  */
@@ -42,12 +46,13 @@ export function CustomerPicker({ onPick }: CustomerPickerProps) {
   const options: AutocompleteOption<Customer>[] = useMemo(
     () =>
       (search.data?.customers ?? []).map((customer) => ({
-        value: customer.id,
+        /* Customer AND truck: a plate search lists one customer once per
+           matching truck, and each must be its own option. */
+        value: `${customer.id}|${customer.last_vehicle_plate ?? ''}`,
         label: customerLabel(customer),
-        description:
-          customer.weighment_count === 1
-            ? 'Weighed once here'
-            : `Weighed ${customer.weighment_count} times here`,
+        /* The truck, which is what tells two results for the same customer
+           apart, and what a plate search was looking for. */
+        description: customer.last_vehicle_plate ?? 'No plate recorded',
         data: customer,
       })),
     [search.data],
@@ -69,9 +74,9 @@ export function CustomerPicker({ onPick }: CustomerPickerProps) {
         options={options}
         isLoading={search.isFetching}
         listLabel="Existing customers"
-        emptyMessage="No customer by that name yet — just fill the form in below."
-        placeholder="Search Customer"
-        aria-label="Search Customer"
+        emptyMessage="No customer or vehicle like that yet — just fill the form in below."
+        placeholder="Search customer or vehicle plate"
+        aria-label="Search customer or vehicle plate"
         className="pl-9"
         onSelect={(option) => {
           if (!option.data) return;

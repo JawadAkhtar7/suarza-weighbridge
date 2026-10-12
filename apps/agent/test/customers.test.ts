@@ -178,3 +178,57 @@ describe('searching', () => {
     expect(customers.search('', 2)).toHaveLength(2);
   });
 });
+
+describe('search by vehicle plate', () => {
+  it('finds the customer by any plate they have been weighed with', () => {
+    weigh({ vehicle_plate: 'LES-1234' });
+    weigh({ vehicle_plate: 'RER-9600', vehicle_type: 'container' });
+
+    // Not just the last truck: the first one is found too, and brings its own
+    // plate and vehicle type, so picking it fills in that truck.
+    const found = customers.search('LES-1234');
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      name: 'Ali Raza',
+      last_vehicle_plate: 'LES-1234',
+      last_vehicle_type: 'truck',
+    });
+    expect(customers.search('9600')[0]).toMatchObject({
+      last_vehicle_plate: 'RER-9600',
+      last_vehicle_type: 'container',
+    });
+  });
+
+  it('ignores spaces, hyphens and capitals in the plate', () => {
+    weigh({ vehicle_plate: 'LES-1234' });
+    for (const typed of ['les1234', 'LES 1234', 'les-12', '1234']) {
+      expect(customers.search(typed).map((c) => c.last_vehicle_plate)).toEqual(['LES-1234']);
+    }
+  });
+
+  it('lists a customer once per matching truck', () => {
+    weigh({ vehicle_plate: 'LES-1001' });
+    weigh({ vehicle_plate: 'LES-1002' });
+    weigh({ vehicle_plate: 'LES-1001' });
+
+    const plates = customers.search('LES-10').map((c) => c.last_vehicle_plate);
+    expect(plates).toHaveLength(2);
+    expect(plates).toEqual(expect.arrayContaining(['LES-1001', 'LES-1002']));
+  });
+
+  it('puts plate matches first when the search has a digit, names first otherwise', () => {
+    weigh({ customer_name: 'Ali Raza', vehicle_plate: 'ABC-111' });
+    weigh({ customer_name: 'Abcd Khan', customer_company: 'Khan & Sons', vehicle_plate: 'XYZ-222' });
+
+    // "ABC" matches Ali's plate and Abcd's name; letters only, so the name leads.
+    expect(customers.search('abc')[0]?.name).toBe('Abcd Khan');
+    // With a digit it is a plate.
+    expect(customers.search('abc-1')[0]?.last_vehicle_plate).toBe('ABC-111');
+  });
+
+  it('never finds a customer the manager removed, by plate either', () => {
+    weigh({ vehicle_plate: 'LES-1234' });
+    db.prepare('UPDATE customers SET deleted = 1').run();
+    expect(customers.search('LES-1234')).toEqual([]);
+  });
+});

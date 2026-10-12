@@ -6,6 +6,8 @@
  */
 
 export { SlipA5, SLIP_PAGE_CSS, SLIP_CANVAS } from './slip-a5.js';
+export { MeasureSheet, rulerMarks } from './measure-sheet.js';
+export type { MeasureSheetProps, RulerMark } from './measure-sheet.js';
 export { renderSlipPage } from './page.js';
 export type { SlipPageOptions } from './page.js';
 export type { SlipA5Props } from './slip-a5.js';

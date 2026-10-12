@@ -46,6 +46,17 @@ export interface SlipPageOptions {
    * that page was opened.
    */
   autoPrint?: boolean;
+  /**
+   * Share as PDF, Download PDF, Share as image and Download image buttons
+   * above the slip, on screen only — for the page behind the QR code.
+   *
+   * The work is done on the phone by the scripts named here, served by the
+   * host page's own origin: one draws this page's slip into an image, the
+   * other wraps it in a PDF and shares or downloads it. The buttons start
+   * disabled and those scripts enable them, so a page whose scripts did not
+   * load shows buttons that do nothing rather than ones that pretend to.
+   */
+  shareActions?: { fileName: string; scripts: readonly string[] };
 }
 
 export function renderSlipPage(options: SlipPageOptions): string {
@@ -61,6 +72,7 @@ export function renderSlipPage(options: SlipPageOptions): string {
     offsetXmm,
     offsetYmm,
     autoPrint = false,
+    shareActions,
   } = options;
 
   const slip = renderToStaticMarkup(
@@ -84,10 +96,43 @@ export function renderSlipPage(options: SlipPageOptions): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>${escapeHtml(title)}</title>
-<style>
+<style id="slip-fonts">
 ${SLIP_FONT_CSS}
+</style>
+<style>
 ${SLIP_PAGE_CSS}
 html, body { margin: 0; padding: 0; background: #e9ecea; }
+/* The share and download buttons: two by two on a phone, one row on a
+   screen wide enough, never on paper. */
+.actions {
+  box-sizing: border-box;
+  max-width: ${PAGE_MM.width}mm;
+  margin: 0 auto;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+@media (min-width: 560px) {
+  .actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.actions button {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: #125b31;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.actions button.secondary { background: #fff; color: #125b31; box-shadow: inset 0 0 0 1.5px #125b31; }
+.actions button:disabled { opacity: 0.55; cursor: default; }
+.actions .status { grid-column: 1 / -1; margin: 0; min-height: 1.2em; font-size: 13px; color: #374151; text-align: center; }
+@media print { .actions { display: none; } }
 /* On a phone the sheet is wider than the screen, so it scales to fit rather
    than making the reader pan across an A5 page with two fingers. */
 .sheet {
@@ -107,10 +152,36 @@ html, body { margin: 0; padding: 0; background: #e9ecea; }
 </style>
 </head>
 <body>
+${shareActions ? renderShareActions(shareActions, title) : ''}
 <div class="sheet">${slip}</div>
 ${autoPrint ? '<script>window.addEventListener("load",function(){window.print()})</script>' : ''}
 </body>
 </html>`;
+}
+
+/** The four buttons, their status line, and the scripts that drive them. */
+function renderShareActions(
+  actions: NonNullable<SlipPageOptions['shareActions']>,
+  title: string,
+): string {
+  const button = (action: string, label: string, secondary: boolean) =>
+    `<button type="button" data-action="${action}"${secondary ? ' class="secondary"' : ''} disabled>${label}</button>`;
+  /* In order: the library first, as a classic script that defines its global;
+     ours after it, as a module, which always runs once the page is parsed. */
+  const [library, ...ours] = actions.scripts;
+  const scripts = [
+    library ? `<script src="${escapeHtml(library)}"></script>` : '',
+    ...ours.map((src) => `<script type="module" src="${escapeHtml(src)}"></script>`),
+  ].join('\n');
+
+  return `<div class="actions" data-slip-actions data-file-name="${escapeHtml(actions.fileName)}" data-title="${escapeHtml(title)}">
+${button('share-pdf', 'Share as PDF', false)}
+${button('download-pdf', 'Download PDF', true)}
+${button('share-image', 'Share as image', false)}
+${button('download-image', 'Download image', true)}
+<p class="status" data-slip-status role="status" aria-live="polite"></p>
+</div>
+${scripts}`;
 }
 
 function escapeHtml(value: string): string {

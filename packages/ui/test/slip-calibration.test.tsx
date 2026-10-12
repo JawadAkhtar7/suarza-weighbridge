@@ -19,9 +19,15 @@ const values = {
   mann: 'MANN',
 } as SlipValues;
 
-const DETAILS = ['SLIP-1', 'PRINTED-AT', 'DRIVER', 'CUSTOMER'];
-const WEIGHTS = ['FIRST-KG', 'SECOND-KG', 'NET-KG', 'MANN'];
-const TIMES = ['FIRST-AT', 'SECOND-AT'];
+/** Each group, and the printed values it alone should move. */
+const GROUPS = {
+  'slip-number': ['SLIP-1'],
+  details: ['PRINTED-AT', 'DRIVER', 'CUSTOMER'],
+  weights: ['FIRST-KG', 'SECOND-KG', 'NET-KG', 'MANN'],
+  'first-time': ['FIRST-AT'],
+  'second-time': ['SECOND-AT'],
+} as const;
+const ALL = Object.values(GROUPS).flat();
 
 /** The calibration shift on a printed value, in mm, or null if it is not moved. */
 function shift(text: string): [number, number] | null {
@@ -32,48 +38,24 @@ function shift(text: string): [number, number] | null {
 }
 
 describe('print alignment groups', () => {
-  it('moves the slip number, date/time and customer details, and nothing in the weight boxes', () => {
-    render(<SlipA5 view="overprint" values={values} calibration={{ details: { x: 0, y: -2 } }} />);
+  for (const [group, moved] of Object.entries(GROUPS)) {
+    it(`moves ${moved.join(', ')} and nothing else for "${group}"`, () => {
+      render(
+        <SlipA5 view="overprint" values={values} calibration={{ [group]: { x: 0.5, y: -0.75 } }} />,
+      );
 
-    for (const text of DETAILS) expect(shift(text)).toEqual([0, -2]);
-    for (const text of [...WEIGHTS, ...TIMES]) expect(shift(text)).toBeNull();
-  });
-
-  it('moves the weight figures without the date/time beside the calendar icons', () => {
-    render(
-      <SlipA5 view="overprint" values={values} calibration={{ weights: { x: 1, y: 0.5 } }} />,
-    );
-
-    for (const text of WEIGHTS) expect(shift(text)).toEqual([1, 0.5]);
-    for (const text of [...DETAILS, ...TIMES]) expect(shift(text)).toBeNull();
-  });
-
-  it('moves the date/time beside the calendar icons on its own', () => {
-    render(
-      <SlipA5
-        view="overprint"
-        values={values}
-        calibration={{ 'weight-times': { x: 0, y: -0.75 } }}
-      />,
-    );
-
-    for (const text of TIMES) expect(shift(text)).toEqual([0, -0.75]);
-    for (const text of [...DETAILS, ...WEIGHTS]) expect(shift(text)).toBeNull();
-  });
+      for (const text of ALL) {
+        expect(shift(text)).toEqual((moved as readonly string[]).includes(text) ? [0.5, -0.75] : null);
+      }
+    });
+  }
 
   it('never moves anything on screen', () => {
-    render(
-      <SlipA5
-        view="soft"
-        values={values}
-        calibration={{
-          details: { x: 0, y: -2 },
-          weights: { x: 1, y: 0.5 },
-          'weight-times': { x: 0, y: -0.75 },
-        }}
-      />,
+    const everything = Object.fromEntries(
+      Object.keys(GROUPS).map((group) => [group, { x: 1, y: -1 }]),
     );
+    render(<SlipA5 view="soft" values={values} calibration={everything} />);
 
-    for (const text of [...DETAILS, ...WEIGHTS, ...TIMES]) expect(shift(text)).toBeNull();
+    for (const text of ALL) expect(shift(text)).toBeNull();
   });
 });

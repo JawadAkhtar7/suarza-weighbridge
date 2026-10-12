@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@suarza/ui';
 import { App } from './App.js';
 import { PrintReceiptPage, parsePrintRequest } from './pages/print-receipt-page.js';
+import { MeasurePicturesPage, MEASURE_PICTURES_PATH } from './pages/measure-pictures-page.js';
 import { ReceiptSettingsProvider } from './components/receipt-settings-provider.js';
 import './index.css';
 /* The slip's four families, self-hosted. The weighbridge PC can be offline for
@@ -31,12 +32,20 @@ if (!container) throw new Error('Root element not found');
  * single leaf page would cost more than it explains.
  */
 const printRequest = parsePrintRequest(new URL(window.location.href));
+/* The picture-box measuring sheet, also a tab of its own (Settings -> Print). */
+const measuring = window.location.pathname === MEASURE_PICTURES_PATH;
 
 createRoot(container).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ReceiptSettingsProvider>
-        {printRequest ? <PrintReceiptPage request={printRequest} /> : <App />}
+        {printRequest ? (
+          <PrintReceiptPage request={printRequest} />
+        ) : measuring ? (
+          <MeasurePicturesPage />
+        ) : (
+          <App />
+        )}
       </ReceiptSettingsProvider>
       {/* Bottom-left is the only corner that stays clear in both modes: the
           live-weight panel sits top-left, the mode switch top-right, and the

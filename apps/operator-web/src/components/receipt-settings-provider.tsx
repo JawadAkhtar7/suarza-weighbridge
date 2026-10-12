@@ -21,8 +21,15 @@ export function ReceiptSettingsProvider({ children }: { children: ReactNode }) {
   const query = useQuery({
     queryKey: SETTINGS_KEY,
     queryFn: agentApi.getSettings,
-    // Settings change rarely; refetching them on every focus is noise.
     staleTime: 5 * 60 * 1000,
+    /*
+     * Read again whenever a window comes back into focus, however recent the
+     * copy. The print tab stays open to print again, and an alignment changed
+     * in the main window meanwhile must reach the next sheet from that tab —
+     * it went to the printer with the offsets the tab had opened with. One
+     * request to this PC's own agent; nothing to save by skipping it.
+     */
+    refetchOnWindowFocus: 'always',
     retry: 1,
   });
 

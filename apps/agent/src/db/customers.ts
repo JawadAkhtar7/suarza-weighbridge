@@ -59,6 +59,24 @@ const SELECT_ALL = `
 /** Everywhere the operator picks a customer, a removed one must not appear. */
 const LIVE = 'deleted = 0';
 
+/**
+ * A plate as compared: capitals, no spaces, hyphens or dots. The same truck
+ * gets typed "LES-1234", "les 1234" and "LES1234" on different days, and a
+ * search for one must find the others.
+ */
+function normalisePlate(plate: string): string {
+  return plate.toUpperCase().replace(/[\s.\-]/g, '');
+}
+
+/** The same normalisation, in SQL, for a plate column. */
+const PLATE_SQL = (column: string) =>
+  `REPLACE(REPLACE(REPLACE(UPPER(${column}), ' ', ''), '-', ''), '.', '')`;
+
+/** Escapes LIKE's wildcards, so a "%" or "_" typed in is searched for literally. */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 export class CustomerRepository {
   constructor(private readonly db: Db) {}
 
@@ -105,7 +123,19 @@ export class CustomerRepository {
       });
   }
 
-  /** Matches on either name or company, so one box finds both. */
+  /**
+   * Matches on name, company or vehicle plate, so one box finds all three.
+   *
+   * A plate match is a customer WITH THAT TRUCK: one result per matching plate
+   * the customer has been weighed with — any of them, not only the last — and
+   * that result carries the plate and the vehicle type it was last weighed as
+   * in `last_vehicle_plate` / `last_vehicle_type`, so picking it fills in the
+   * truck the operator searched for. A customer who sends three trucks shows
+   * three times when the search matches all three, once per truck.
+   *
+   * A search with a digit in it is almost certainly a plate (names rarely
+   * have one), so plate matches lead then and name matches otherwise.
+   */
   search(query: string, limit = 20): Customer[] {
     const trimmed = query.trim();
 
@@ -119,9 +149,58 @@ export class CustomerRepository {
       return rows.map(rowToCustomer);
     }
 
+    const byName = this.searchByName(trimmed, limit);
+    const byPlate = this.searchByPlate(trimmed, limit);
+    const ordered = /\d/.test(trimmed) ? [...byPlate, ...byName] : [...byName, ...byPlate];
+
+    // The same customer and truck from both searches is one result.
+    const seen = new Set<string>();
+    const results: Customer[] = [];
+    for (const customer of ordered) {
+      const key = `${customer.id}|${normalisePlate(customer.last_vehicle_plate ?? '')}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(customer);
+      if (results.length === limit) break;
+    }
+    return results;
+  }
+
+  /** Every truck a customer has been weighed with whose plate matches. */
+  private searchByPlate(query: string, limit: number): Customer[] {
+    const plate = normalisePlate(query);
+    if (!plate) return [];
+
+    const rows = this.db
+      .prepare(
+        `SELECT c.id, c.name, c.company, c.phone,
+                -- SQLite takes bare columns from the row MAX() picked: the
+                -- truck's most recent weighing, so its latest vehicle type.
+                w.vehicle_type  AS last_vehicle_type,
+                w.vehicle_plate AS last_vehicle_plate,
+                c.last_product, c.weighment_count, c.first_seen_at,
+                MAX(w.first_weight_at) AS last_seen_at
+           FROM weighments w
+           JOIN customers c
+             ON LOWER(c.name) = LOWER(w.customer_name)
+            AND LOWER(c.company) = LOWER(w.customer_company)
+          WHERE c.${LIVE}
+            AND ${PLATE_SQL('w.vehicle_plate')} LIKE @pattern ESCAPE '\\'
+          GROUP BY c.id, ${PLATE_SQL('w.vehicle_plate')}
+          ORDER BY
+            CASE WHEN ${PLATE_SQL('w.vehicle_plate')} LIKE @prefix ESCAPE '\\' THEN 0 ELSE 1 END,
+            last_seen_at DESC
+          LIMIT @limit`,
+      )
+      .all({ pattern: `%${escapeLike(plate)}%`, prefix: `${escapeLike(plate)}%`, limit }) as CustomerRow[];
+
+    return rows.map(rowToCustomer);
+  }
+
+  private searchByName(trimmed: string, limit: number): Customer[] {
     // LIKE with an escaped pattern: a customer called "100% Traders" must not
     // turn into a wildcard search.
-    const pattern = `%${trimmed.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const pattern = `%${escapeLike(trimmed)}%`;
     const rows = this.db
       .prepare(
         `${SELECT_ALL}
@@ -138,7 +217,7 @@ export class CustomerRepository {
       )
       .all({
         pattern,
-        prefix: `${trimmed.replace(/[\\%_]/g, (c) => `\\${c}`)}%`,
+        prefix: `${escapeLike(trimmed)}%`,
         limit,
       }) as CustomerRow[];
 

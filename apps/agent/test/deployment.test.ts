@@ -135,17 +135,29 @@ describe('cameraSettings', () => {
      * main stream it reads, and with no credentials written into the URL.
      */
     const settings = cameraSettings({});
-    for (const url of [settings.frontVideoUrl, settings.sideVideoUrl]) {
-      expect(url).toMatch(/^rtsp:\/\/[\d.]+:554\/Streaming\/Channels\/101$/);
-      expect(url).not.toContain('@');
-    }
+    expect(settings.frontVideoUrl).toMatch(/^rtsp:\/\/[\d.]+:554\/Streaming\/Channels\/101$/);
+    expect(settings.frontVideoUrl).not.toContain('@');
+  });
+
+  it('keeps the side view on the sub-stream stills, as the client asked', () => {
+    // No side video, so its live preview is the 640x360 stills it had before
+    // the video existed; the front keeps its video.
+    const settings = cameraSettings({});
+    expect(settings.sideVideoUrl).toBe('');
+    expect(settings.sideLiveUrl).toContain('/channels/102/');
+    // The side's printed picture is unaffected: still the main stream.
+    expect(settings.sideUrl).toContain('/channels/101/');
   });
 
   it('gives a developer who points a camera elsewhere no site video for it', () => {
     const settings = cameraSettings({ CAMERA_FRONT_URL: 'http://127.0.0.1:9000/snap' });
     expect(settings.frontVideoUrl).toBe('');
-    expect(settings.sideVideoUrl).not.toBe('');
     // ...and lets anyone switch the video off and keep the stills.
-    expect(cameraSettings({ CAMERA_SIDE_VIDEO_URL: 'none' }).sideVideoUrl).toBe('');
+    expect(cameraSettings({ CAMERA_FRONT_VIDEO_URL: 'none' }).frontVideoUrl).toBe('');
+    // ...or give a camera video from their own environment.
+    expect(
+      cameraSettings({ CAMERA_SIDE_VIDEO_URL: 'rtsp://10.0.0.9:554/Streaming/Channels/101' })
+        .sideVideoUrl,
+    ).toBe('rtsp://10.0.0.9:554/Streaming/Channels/101');
   });
 });

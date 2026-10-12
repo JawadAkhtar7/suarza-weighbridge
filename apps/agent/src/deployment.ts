@@ -115,7 +115,15 @@ export const CAMERA_FRONT_LIVE_URL = 'http://192.168.1.75/ISAPI/Streaming/channe
 export const CAMERA_SIDE_LIVE_URL = 'http://192.168.1.66/ISAPI/Streaming/channels/102/picture';
 /* Credentials are added at run time, never written into these. */
 export const CAMERA_FRONT_VIDEO_URL = 'rtsp://192.168.1.75:554/Streaming/Channels/101';
-export const CAMERA_SIDE_VIDEO_URL = 'rtsp://192.168.1.66:554/Streaming/Channels/101';
+/*
+ * No video for the side camera, at the client's request (October 2026): its
+ * live preview is the 640x360 sub-stream stills it showed before the video
+ * existed, while the front keeps the 1080p video. Only the operator's live
+ * preview changes — the side's PRINTED picture is still the main stream's
+ * full-resolution still. To give it video again:
+ *   'rtsp://192.168.1.66:554/Streaming/Channels/101'
+ */
+export const CAMERA_SIDE_VIDEO_URL = '';
 export const CAMERA_USERNAME = 'admin';
 export const CAMERA_PASSWORD = 'Cctvins247';
 

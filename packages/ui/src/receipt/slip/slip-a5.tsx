@@ -27,7 +27,13 @@ import {
   type SlipValues,
   type SlipView,
 } from './layout.js';
-import { viewFrameTransform, type ViewFrame } from '@suarza/shared';
+import {
+  DEFAULT_PHOTO_BOXES_MM,
+  PHOTO_BOX_FILL_MM,
+  viewFrameTransform,
+  type PhotoBox,
+  type ViewFrame,
+} from '@suarza/shared';
 import { isPendingSlip } from './values.js';
 import * as ART from './art.js';
 
@@ -83,18 +89,19 @@ export interface SlipA5Props {
    */
   calibration?: Partial<
     Record<
-      'details' | 'weights' | 'weight-times' | 'side-view' | 'qr',
+      'slip-number' | 'details' | 'weights' | 'first-time' | 'second-time' | 'qr',
       { x: number; y: number }
     >
   >;
   /**
-   * How much wider each photo prints, in millimetres added to EACH side.
+   * Where each photograph's box is on this station's pads, in millimetres —
+   * read off the measuring sheet. The printed picture runs PHOTO_BOX_FILL_MM
+   * past every edge.
    *
-   * Paper only, like `calibration`: it widens the photo past the pad's green
-   * line so no white shows between them, which is a fact about this batch of
-   * pads and not about the record.
+   * Paper only, like `calibration`: a fact about these pads and this printer,
+   * not about the record. Omitted uses DEFAULT_PHOTO_BOXES_MM.
    */
-  paperExtraWidth?: Partial<Record<'front-view' | 'side-view', number>>;
+  paperPhotoBoxes?: Partial<Record<'front' | 'side', PhotoBox>>;
   /** For an on-screen preview; never applied when printing. */
   className?: string;
 }
@@ -113,7 +120,7 @@ export function SlipA5({
   offsetXmm = 0,
   offsetYmm = 0,
   calibration,
-  paperExtraWidth,
+  paperPhotoBoxes,
   className,
 }: SlipA5Props) {
   const layers = LAYERS[view];
@@ -129,7 +136,7 @@ export function SlipA5({
     .map((item) =>
       pending && item.topWhenPending !== undefined ? { ...item, top: item.topWhenPending } : item,
     )
-    .map((item) => (onPaper ? onPaperGeometry(item, paperExtraWidth) : item));
+    .map((item) => (onPaper ? onPaperGeometry(item, paperPhotoBoxes) : item));
 
   /* The overprint goes onto paper that is already printed, so it draws no
      background of its own — white ink does not exist, and a white rectangle
@@ -176,22 +183,27 @@ export function SlipA5({
 }
 
 /**
- * A photo's printed box: its `paper` geometry, widened equally on both sides
- * so it stays centred on the pre-printed box (and the side view's offset
- * still holds). Everything else is returned as it is.
+ * A photo's printed box: the station's measured box on the pad, plus
+ * PHOTO_BOX_FILL_MM on every side, in design pixels. Everything else is
+ * returned as it is.
  */
-function onPaperGeometry(
-  item: SlipItem,
-  extraWidth: SlipA5Props['paperExtraWidth'],
-): SlipItem {
-  if (item.kind !== 'image' || !item.paper) return item;
-  const slot = item.slot === 'front-view' || item.slot === 'side-view' ? item.slot : undefined;
-  const extra = Math.max(0, (slot && extraWidth?.[slot]) || 0) / UNIT_MM;
+function onPaperGeometry(item: SlipItem, boxes: SlipA5Props['paperPhotoBoxes']): SlipItem {
+  if (item.kind !== 'image') return item;
+  const which = item.slot === 'front-view' ? 'front' : item.slot === 'side-view' ? 'side' : null;
+  if (!which) return item;
+
+  const box = boxes?.[which] ?? DEFAULT_PHOTO_BOXES_MM[which];
+  const fill = PHOTO_BOX_FILL_MM;
   return {
     ...item,
-    ...item.paper,
-    left: item.paper.left - extra,
-    width: item.paper.width + extra * 2,
+    left: (box.left - fill) / UNIT_MM,
+    top: (box.top - fill) / UNIT_MM,
+    width: (box.right - box.left + 2 * fill) / UNIT_MM,
+    height: (box.bottom - box.top + 2 * fill) / UNIT_MM,
+    /* The pad box's own bottom corners, 1.27 mm, plus the fill: a box grown
+       by the fill with its radius grown by the same still covers the pad's
+       rounded corner, and follows it rather than poking past it. */
+    radius: `0 0 ${(1.27 + fill).toFixed(2)}mm ${(1.27 + fill).toFixed(2)}mm`,
   };
 }
 

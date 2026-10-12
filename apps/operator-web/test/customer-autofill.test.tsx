@@ -70,7 +70,24 @@ describe('picking a customer', () => {
     await user.type(screen.getByLabelText(/search customer/i), 'ali');
 
     await waitFor(() => expect(screen.getByText(/Ali Raza — Raza Traders/)).toBeInTheDocument());
-    expect(screen.getByText(/weighed 4 times here/i)).toBeInTheDocument();
+    // The truck, not how often they have been here.
+    expect(screen.getByRole('listbox')).toHaveTextContent('LES-1234');
+    expect(screen.queryByText(/weighed .* here/i)).not.toBeInTheDocument();
+  });
+
+  it('lists the same customer once per truck, and fills in the truck picked', async () => {
+    // As the agent answers a plate search matching two of Ali's trucks.
+    const user = setup([
+      customer({ last_vehicle_plate: 'LES-1234', last_vehicle_type: 'trailer' }),
+      customer({ last_vehicle_plate: 'RER-9600', last_vehicle_type: 'truck' }),
+    ]);
+    await user.type(screen.getByLabelText(/search customer or vehicle plate/i), 'les');
+
+    await waitFor(() => expect(screen.getAllByText(/Ali Raza — Raza Traders/)).toHaveLength(2));
+    await user.click(screen.getByText('RER-9600'));
+
+    expect(field(/number plate/i).value).toBe('RER-9600');
+    expect(vehicleType()).toMatch(/truck/i);
   });
 
   it('fills the identity fields', async () => {
@@ -160,7 +177,7 @@ describe('a customer who has never been here', () => {
     const user = setup([]);
     await user.type(screen.getByLabelText(/search customer/i), 'Brand New');
     await waitFor(() =>
-      expect(screen.getByText(/no customer by that name yet/i)).toBeInTheDocument(),
+      expect(screen.getByText(/no customer or vehicle like that yet/i)).toBeInTheDocument(),
     );
 
     await user.type(field(/customer name/i), 'Brand New Customer');

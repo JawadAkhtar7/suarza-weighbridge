@@ -38,6 +38,7 @@ import { agentApi, AgentApiError } from '../lib/api.js';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
 import { defaultReceiptSettings, type ReceiptSettings } from '../lib/receipt-settings.js';
 import { TestPrintSheet } from './test-print-sheet.js';
+import { MEASURE_PICTURES_PATH } from '../pages/measure-pictures-page.js';
 
 /**
  * One pullable list.
@@ -164,17 +165,25 @@ interface SettingsPanelProps {
  *
  * Named by what is on the paper rather than by anything in the code: an
  * operator holding a slip is looking for "the side view picture", not for a
- * layout group. The front view is deliberately absent — it has never needed
- * moving, and a control nobody uses is one more thing to set wrong.
+ * layout group. The two pictures are not here: they are placed by their
+ * measured boxes (PHOTO_BOX_FIELDS below), not nudged.
  *
- * The weight date/time steps in quarter millimetres: it is centred on a
+ * The slip number and the weight date/times step in quarter millimetres: the
+ * number sits in a small white box and each date/time is centred on a
  * pre-printed icon only 3.7 mm tall, where half a millimetre is a visible
- * jump.
+ * jump. Listed in the order they appear on the paper, top to bottom.
  */
 const CALIBRATION_GROUPS = [
   {
+    key: 'slip-number',
+    label: 'Slip number',
+    x: 'slip_number_offset_x_mm',
+    y: 'slip_number_offset_y_mm',
+    step: 0.25,
+  },
+  {
     key: 'details',
-    label: 'Slip number, date/time and customer details',
+    label: 'Print date/time and customer details',
     x: 'details_offset_x_mm',
     y: 'details_offset_y_mm',
     step: 0.5,
@@ -187,20 +196,28 @@ const CALIBRATION_GROUPS = [
     step: 0.5,
   },
   {
-    key: 'weight-times',
-    label: 'Date/time beside the calendar icons',
-    x: 'weight_times_offset_x_mm',
-    y: 'weight_times_offset_y_mm',
+    key: 'first-time',
+    label: 'First weight date/time',
+    x: 'first_time_offset_x_mm',
+    y: 'first_time_offset_y_mm',
     step: 0.25,
   },
   {
-    key: 'side-view',
-    label: 'Side view picture',
-    x: 'side_view_offset_x_mm',
-    y: 'side_view_offset_y_mm',
-    step: 0.5,
+    key: 'second-time',
+    label: 'Second weight date/time',
+    x: 'second_time_offset_x_mm',
+    y: 'second_time_offset_y_mm',
+    step: 0.25,
   },
   { key: 'qr', label: 'QR code', x: 'qr_offset_x_mm', y: 'qr_offset_y_mm', step: 0.5 },
+] as const;
+
+/** The eight readings off the measuring sheet, in the order it is read. */
+const PHOTO_BOX_FIELDS = [
+  ['left', 'Left'],
+  ['right', 'Right'],
+  ['top', 'Top'],
+  ['bottom', 'Bottom'],
 ] as const;
 
 export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
@@ -329,7 +346,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </div>
 
               {/*
-                * Calibration, five groups, paper only.
+                * Calibration, seven groups, paper only.
                 *
                 * The pads are pre-printed on one press and overprinted on
                 * another, and they disagree about where the sheet starts —
@@ -391,41 +408,72 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   </div>
                 ))}
 
-                {/* Widens, rather than moves: white on BOTH sides of a
-                    picture is a box wider than the photo, not an offset. */}
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium">Picture width</p>
-                  <p className="text-xs text-muted-foreground">
-                    Extra width added to each side of the picture. Raise it if white shows on both
-                    sides of a picture; lower it if the picture spills past the green line.
-                  </p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {(
-                      [
-                        ['front_view_extra_width_mm', 'Front view (mm)'],
-                        ['side_view_extra_width_mm', 'Side view (mm)'],
-                      ] as const
-                    ).map(([field, label]) => (
-                      <div key={field} className="space-y-1">
-                        <Label htmlFor={field} className="text-xs font-normal">
-                          {label}
-                        </Label>
-                        <NumberInput
-                          id={field}
-                          step="0.25"
-                          min={0}
-                          max={5}
-                          value={draft.print[field]}
-                          onChange={(event) =>
-                            setDraft({
-                              ...draft,
-                              print: { ...draft.print, [field]: Number(event.target.value) },
-                            })
-                          }
-                        />
-                      </div>
-                    ))}
+                {/*
+                  * The pictures are placed, not nudged: their boxes are
+                  * MEASURED, on one pad, by a sheet of scales printed through
+                  * the same printer — which a ruler against the paper's edge
+                  * cannot do. See MeasureSheet.
+                  */}
+                <div className="space-y-2 border-t pt-3">
+                  <div className="flex flex-wrap items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium">Picture boxes (mm)</p>
+                      <p className="text-xs text-muted-foreground">
+                        Where the two picture boxes are on your pads. Print the measuring sheet on
+                        one pad, read the number at the middle of each green line (the top: where
+                        the green band ends), and type it here. The pictures then print a little
+                        over the green line on every side.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(MEASURE_PICTURES_PATH, '_blank')}
+                    >
+                      <Printer />
+                      Measuring sheet
+                    </Button>
                   </div>
+                  {(['front', 'side'] as const).map((which) => (
+                    <div key={which} className="space-y-1">
+                      <p className="text-xs">{which === 'front' ? 'Front view' : 'Side view'}</p>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {PHOTO_BOX_FIELDS.map(([edge, label]) => (
+                          <div key={edge} className="space-y-1">
+                            <Label
+                              htmlFor={`${which}-box-${edge}`}
+                              className="text-xs font-normal"
+                            >
+                              {label}
+                            </Label>
+                            <NumberInput
+                              id={`${which}-box-${edge}`}
+                              step="0.25"
+                              min={0}
+                              max={edge === 'top' || edge === 'bottom' ? 200 : 140}
+                              value={draft.print.photo_boxes_mm[which][edge]}
+                              onChange={(event) =>
+                                setDraft({
+                                  ...draft,
+                                  print: {
+                                    ...draft.print,
+                                    photo_boxes_mm: {
+                                      ...draft.print.photo_boxes_mm,
+                                      [which]: {
+                                        ...draft.print.photo_boxes_mm[which],
+                                        [edge]: Number(event.target.value),
+                                      },
+                                    },
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 

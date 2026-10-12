@@ -9,7 +9,12 @@
 
 import { z } from 'zod';
 import { VEHICLE_TYPES } from '../constants/vehicle-types.js';
-import { FRONT_VIEW_ZOOM, SIDE_VIEW_ZOOM, SLIP_PAGE_MM } from '../constants/paper.js';
+import {
+  DEFAULT_PHOTO_BOXES_MM,
+  FRONT_VIEW_ZOOM,
+  SIDE_VIEW_ZOOM,
+  SLIP_PAGE_MM,
+} from '../constants/paper.js';
 import { clampViewFrame, VIEW_FRAME_ZOOM } from '../utils/framing.js';
 
 /**
@@ -29,6 +34,24 @@ export const viewFrameSchema = (defaultZoom: number) =>
 
 export const frontViewFrameSchema = viewFrameSchema(FRONT_VIEW_ZOOM.default);
 export const sideViewFrameSchema = viewFrameSchema(SIDE_VIEW_ZOOM.default);
+
+/**
+ * A camera picture's box on the pad, in the slip's millimetres, as read off
+ * the measuring sheet: each edge at the middle of its green line.
+ */
+const photoBoxSchema = (defaults: { left: number; right: number; top: number; bottom: number }) =>
+  z
+    .object({
+      left: z.number().min(0).max(SLIP_PAGE_MM.width).default(defaults.left),
+      right: z.number().min(0).max(SLIP_PAGE_MM.width).default(defaults.right),
+      top: z.number().min(0).max(SLIP_PAGE_MM.height).default(defaults.top),
+      bottom: z.number().min(0).max(SLIP_PAGE_MM.height).default(defaults.bottom),
+    })
+    .refine((box) => box.right - box.left >= 20 && box.bottom - box.top >= 10, {
+      message: 'A picture box must be at least 20 mm wide and 10 mm tall.',
+    });
+
+export type PhotoBox = z.infer<ReturnType<typeof photoBoxSchema>>;
 
 export const paperSizeSchema = z.enum(['A4', 'A5', 'LETTER', 'CUSTOM']);
 export type PaperSize = z.infer<typeof paperSizeSchema>;
@@ -58,44 +81,60 @@ export const printSettingsSchema = z.object({
    * tried first and was the wrong instrument: the error is not uniform, so
    * correcting the element that was visibly out pushed others off.
    *
-   * Five groups instead, each moved on its own:
-   *   details      — the slip number, the print date/time, the customer fields
+   * Six groups instead, each moved on its own:
+   *   slip number  — the number in its white box at the top
+   *   details      — the print date/time and the customer fields
    *   weights      — first, second and net, with MANUAL and MANN
-   *   weight times — the date/time beside each weight box's calendar icon
-   *   side view    — the right-hand photograph
+   *   first time   — the first weight's date/time, beside its calendar icon
+   *   second time  — the second weight's date/time, beside its calendar icon
    *   qr           — the code in the SCAN TO VERIFY box
    *
-   * The weights rode with the details until the operator needed to move the
-   * details without knocking the weights out of their boxes. The weight times
-   * then left the weights for the reason the QR has its own group: they sit
-   * beside an icon printed on the pad, where a millimetre's drift shows at a
-   * glance, while the same drift under a big figure in a big box does not.
+   * The two photographs are not nudged: they are placed by `photo_boxes_mm`
+   * below, read off a measuring sheet.
+   *
+   * They split off one at a time, each when the operator needed to move one
+   * thing without disturbing its neighbours: the weights from the details,
+   * then the date/times from the weights — they sit beside icons printed on
+   * the pad, where a millimetre's drift shows at a glance, as the QR's does —
+   * then each date/time from the other, and the slip number from the details.
+   * A split group starts where the group it left had put it (see the agent's
+   * SettingsService), so nothing moves on paper the day it appears.
    *
    * Positive x is right, positive y is down. These apply to the PRINTED sheet
    * only: the screen copy, the PDF and the public page behind the QR are
    * rendered from the same coordinates as the design and never shift, so the
    * record and the paper cannot drift apart.
    */
+  slip_number_offset_x_mm: z.number().min(-20).max(20).default(0),
+  slip_number_offset_y_mm: z.number().min(-20).max(20).default(0),
   details_offset_x_mm: z.number().min(-20).max(20).default(0),
   details_offset_y_mm: z.number().min(-20).max(20).default(0),
   weights_offset_x_mm: z.number().min(-20).max(20).default(0),
   weights_offset_y_mm: z.number().min(-20).max(20).default(0),
-  weight_times_offset_x_mm: z.number().min(-20).max(20).default(0),
-  weight_times_offset_y_mm: z.number().min(-20).max(20).default(0),
-  side_view_offset_x_mm: z.number().min(-20).max(20).default(0),
-  side_view_offset_y_mm: z.number().min(-20).max(20).default(0),
+  first_time_offset_x_mm: z.number().min(-20).max(20).default(0),
+  first_time_offset_y_mm: z.number().min(-20).max(20).default(0),
+  second_time_offset_x_mm: z.number().min(-20).max(20).default(0),
+  second_time_offset_y_mm: z.number().min(-20).max(20).default(0),
   qr_offset_x_mm: z.number().min(-20).max(20).default(0),
   qr_offset_y_mm: z.number().min(-20).max(20).default(0),
   /*
-   * How far each photo prints past its pad's green line, per side, in mm.
+   * Where each photograph's box is on this station's pads, in the slip's own
+   * millimetres: each edge where the measuring sheet's scale crosses the
+   * middle of the box's green line. The picture prints PHOTO_BOX_FILL_MM past
+   * every edge.
    *
-   * The pads' boxes run wider than the artwork, and by different amounts for
-   * the two boxes — on site the side view showed more white than the front.
-   * Printed sheet only, like the offsets above. The defaults are what cleared
-   * the white on the first batch of pads.
+   * Replaces a side-view nudge and a per-side extra width, which tried to
+   * correct the artwork's boxes by hand, one test pad at a time, and never
+   * got there: the pads are larger than the artwork and off-centre, and the
+   * printer adds its own placement on top. A scale printed by the same
+   * printer measures all of that at once, on one pad.
    */
-  front_view_extra_width_mm: z.number().min(0).max(5).default(0.5),
-  side_view_extra_width_mm: z.number().min(0).max(5).default(1),
+  photo_boxes_mm: z
+    .object({
+      front: photoBoxSchema(DEFAULT_PHOTO_BOXES_MM.front).default({}),
+      side: photoBoxSchema(DEFAULT_PHOTO_BOXES_MM.side).default({}),
+    })
+    .default({}),
 });
 
 export type PrintSettings = z.infer<typeof printSettingsSchema>;

@@ -94,14 +94,17 @@ describe('SettingsService', () => {
     const read = new SettingsService(db).get().print;
     expect(read.weights_offset_x_mm).toBe(0.5);
     expect(read.weights_offset_y_mm).toBe(-2);
-    // ...and through them to the date/time, which moved with them too.
-    expect(read.weight_times_offset_x_mm).toBe(0.5);
-    expect(read.weight_times_offset_y_mm).toBe(-2);
+    // ...the slip number, which moved with the details...
+    expect(read.slip_number_offset_x_mm).toBe(0.5);
+    expect(read.slip_number_offset_y_mm).toBe(-2);
+    // ...and through the weights to both date/times, which moved with them.
+    expect(read.first_time_offset_y_mm).toBe(-2);
+    expect(read.second_time_offset_y_mm).toBe(-2);
   });
 
-  it('starts the date/time beside the calendar icons where the weights put it', () => {
-    // As the weighbridge PC stores it now: weights saved on their own, no
-    // date/time fields yet.
+  it('starts each date/time where the old shared date/time group put them', () => {
+    // As the weighbridge PC stores it now: one figure for both date/times,
+    // tuned on site, and nothing yet for either on its own.
     db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
       'station_settings',
       JSON.stringify({
@@ -110,13 +113,36 @@ describe('SettingsService', () => {
           details_offset_y_mm: -2,
           weights_offset_x_mm: 0,
           weights_offset_y_mm: 0,
+          weight_times_offset_x_mm: 0,
+          weight_times_offset_y_mm: -1,
         },
       }),
     );
 
     const read = new SettingsService(db).get().print;
-    expect(read.weight_times_offset_x_mm).toBe(0);
-    expect(read.weight_times_offset_y_mm).toBe(0);
+    expect([read.first_time_offset_x_mm, read.first_time_offset_y_mm]).toEqual([0, -1]);
+    expect([read.second_time_offset_x_mm, read.second_time_offset_y_mm]).toEqual([0, -1]);
+    expect([read.slip_number_offset_x_mm, read.slip_number_offset_y_mm]).toEqual([0, -2]);
+  });
+
+  it('moves each date/time and the slip number on its own once saved', () => {
+    const service = new SettingsService(db);
+    const current = service.get();
+    service.replace({
+      ...current,
+      print: {
+        ...current.print,
+        first_time_offset_y_mm: -0.75,
+        second_time_offset_y_mm: -1.25,
+        slip_number_offset_x_mm: 0.5,
+      },
+    });
+
+    const read = new SettingsService(db).get().print;
+    expect(read.first_time_offset_y_mm).toBe(-0.75);
+    expect(read.second_time_offset_y_mm).toBe(-1.25);
+    expect(read.slip_number_offset_x_mm).toBe(0.5);
+    expect(read.details_offset_x_mm).toBe(0);
   });
 
   it('moves the details and the weights independently once both are saved', () => {

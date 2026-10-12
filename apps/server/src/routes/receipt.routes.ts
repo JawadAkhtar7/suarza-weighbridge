@@ -17,13 +17,42 @@ import { findBySlip } from '../services/weighment.service.js';
 import { renderNotFoundPage } from '../receipt/render-page.js';
 import { cameraFramingForStation } from '../services/station.service.js';
 import { renderSlipPage, slipValues } from '@suarza/ui';
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   findCapture,
   imagesForWeighment,
   resolveCapturePath,
   captureFileExists,
 } from '../services/capture.service.js';
+
+/** Where the slip page's share and download scripts are served from. */
+const SHARE_SCRIPTS = {
+  library: '/r-assets/html-to-image.js',
+  share: '/r-assets/slip-share.js',
+} as const;
+
+/* html-to-image's single-file browser build, straight from its package. */
+const HTML_TO_IMAGE_FILE = createRequire(import.meta.url).resolve(
+  'html-to-image/dist/html-to-image.js',
+);
+
+/*
+ * public/slip-share.js, found from wherever this module runs: src/routes/ in
+ * development, the bundled dist/ in production — or the working directory.
+ */
+const SLIP_SHARE_FILE = (() => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  return (
+    [
+      resolve(process.cwd(), 'public', 'slip-share.js'),
+      resolve(here, '..', 'public', 'slip-share.js'),
+      resolve(here, '..', '..', 'public', 'slip-share.js'),
+    ].find((path) => existsSync(path)) ?? null
+  );
+})();
 
 export function receiptRouter(config: ServerConfig): Router {
   const router = Router();
@@ -32,20 +61,24 @@ export function receiptRouter(config: ServerConfig): Router {
    * A tighter CSP than the rest of the server runs, for the one page the whole
    * internet can open.
    *
-   * The page still has no JavaScript at all, so it can say so. `script-src
-   * 'none'` means that even if something were ever injected into this markup,
-   * there is nothing to execute it.
+   * Scripts only from this server, by address — the share and download
+   * buttons' two files under /r-assets/ — and never inline, so nothing
+   * injected into the markup could run. Those scripts draw the page's own
+   * slip into an image: they read its pictures (`connect-src 'self'`, and
+   * `data:` for the artwork already inside the page), paint them through a
+   * `data:` image, and hand the result over as a `blob:` file.
    *
-   * It needs nothing from the network either: the slip's artwork and its four
-   * font families travel inside the document as data URIs, which is why
-   * `img-src` and `font-src` allow `data:` and nothing else allows anything.
+   * Nothing from anywhere else: the slip's artwork and its four font families
+   * travel inside the document as data URIs.
    */
   const lockDown = (res: Response) =>
     res.setHeader(
       'Content-Security-Policy',
       [
         "default-src 'none'",
-        "img-src 'self' data:",
+        "script-src 'self'",
+        "connect-src 'self' data:",
+        "img-src 'self' data: blob:",
         "font-src data:",
         "style-src 'unsafe-inline'",
         "base-uri 'none'",
@@ -53,6 +86,26 @@ export function receiptRouter(config: ServerConfig): Router {
         "frame-ancestors 'none'",
       ].join('; '),
     );
+
+  /*
+   * The share and download buttons' scripts. Their own short cache: a fixed
+   * address, so a phone must not hold on to an old copy for long.
+   */
+  const assetHeaders = (res: Response) =>
+    res.type('application/javascript').set('Cache-Control', 'public, max-age=3600');
+  /* `dotfiles: 'allow'` because pnpm keeps packages under node_modules/.pnpm,
+     and Express otherwise refuses any path with a dot-folder in it — two
+     fixed files named here, never a path taken from a request. */
+  router.get(SHARE_SCRIPTS.library, (_req, res) => {
+    assetHeaders(res).sendFile(HTML_TO_IMAGE_FILE, { dotfiles: 'allow' });
+  });
+  router.get(SHARE_SCRIPTS.share, (_req, res) => {
+    if (!SLIP_SHARE_FILE) {
+      res.status(404).end();
+      return;
+    }
+    assetHeaders(res).sendFile(SLIP_SHARE_FILE, { dotfiles: 'allow' });
+  });
 
   const pageUrl = (slip: string) =>
     `${config.APP_DOMAIN.replace(/\/+$/, '')}/r/${encodeURIComponent(slip)}`;
@@ -64,8 +117,9 @@ export function receiptRouter(config: ServerConfig): Router {
    * hand with PDFKit, which cannot shape Arabic script — so it silently dropped
    * every Urdu label the client's design is built on, and it could never be
    * made to match the paper slip. This page IS the slip: the same component,
-   * the same coordinates, the same artwork. Anyone who wants a file uses their
-   * browser's "Save as PDF", which at A5 produces it exactly.
+   * the same coordinates, the same artwork. Its share and download buttons
+   * make the PDF and the image from this very page, on the phone
+   * (public/slip-share.js), so the files cannot disagree with it either.
    */
   router.get('/r/:slip', async (req, res) => {
     const slip = normalizeSlipNumber(req.params.slip);
@@ -115,6 +169,12 @@ export function receiptRouter(config: ServerConfig): Router {
           sideImageUrl: images.side ? `/captures/${images.side}` : undefined,
           frontViewFrame: framing.front,
           sideViewFrame: framing.side,
+          /* Share as PDF / Download PDF / Share as image / Download image,
+             for the customer holding the paper. */
+          shareActions: {
+            fileName: `Weight-Bridge-Slip-${weighment.slip_number}`,
+            scripts: [SHARE_SCRIPTS.library, SHARE_SCRIPTS.share],
+          },
         }),
       );
   });

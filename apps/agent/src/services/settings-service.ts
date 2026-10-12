@@ -106,23 +106,42 @@ export class SettingsService {
      * group put them, so a station saved before the split prints exactly as
      * it did instead of jumping back to zero on the next slip:
      *
-     *   weights      moved with the details  ("First, second and net weight")
-     *   weight times moved with the weights  ("Date/time beside the calendar
-     *                                          icons")
+     *   slip number   moved with the details  ("Slip number")
+     *   weights       moved with the details  ("First, second and net weight")
+     *   first/second  moved together as the "weight times" (gone now, but
+     *   time          possibly still stored), and before those existed with
+     *                 the weights ("First / Second weight date/time")
      *
-     * In that order, so a station older than both carries the details' figures
-     * through to the times. The first save writes each group's own figures,
-     * and this stops applying.
+     * In that order, so a station older than all of them carries the details'
+     * figures through to the times. The first save writes each group's own
+     * figures, and this stops applying.
      */
     const storedPrint = (stored as { print?: unknown } | null)?.print;
     if (typeof storedPrint === 'object' && storedPrint !== null) {
-      if (!('weights_offset_x_mm' in storedPrint)) {
-        settings.print.weights_offset_x_mm = settings.print.details_offset_x_mm;
-        settings.print.weights_offset_y_mm = settings.print.details_offset_y_mm;
+      const raw = storedPrint as Record<string, unknown>;
+      const print = settings.print;
+      if (!('slip_number_offset_x_mm' in raw)) {
+        print.slip_number_offset_x_mm = print.details_offset_x_mm;
+        print.slip_number_offset_y_mm = print.details_offset_y_mm;
       }
-      if (!('weight_times_offset_x_mm' in storedPrint)) {
-        settings.print.weight_times_offset_x_mm = settings.print.weights_offset_x_mm;
-        settings.print.weight_times_offset_y_mm = settings.print.weights_offset_y_mm;
+      if (!('weights_offset_x_mm' in raw)) {
+        print.weights_offset_x_mm = print.details_offset_x_mm;
+        print.weights_offset_y_mm = print.details_offset_y_mm;
+      }
+      /* The one group both times used to share, or else the weights. */
+      const timesX =
+        typeof raw['weight_times_offset_x_mm'] === 'number'
+          ? (raw['weight_times_offset_x_mm'] as number)
+          : print.weights_offset_x_mm;
+      const timesY =
+        typeof raw['weight_times_offset_y_mm'] === 'number'
+          ? (raw['weight_times_offset_y_mm'] as number)
+          : print.weights_offset_y_mm;
+      for (const which of ['first', 'second'] as const) {
+        if (!(`${which}_time_offset_x_mm` in raw)) {
+          print[`${which}_time_offset_x_mm`] = timesX;
+          print[`${which}_time_offset_y_mm`] = timesY;
+        }
       }
     }
 

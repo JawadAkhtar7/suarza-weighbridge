@@ -49,3 +49,32 @@ export const FRONT_VIEW_ZOOM = { default: 1.3, min: 1, max: 10 } as const;
  * the front view, at the cost described there.
  */
 export const SIDE_VIEW_ZOOM = { default: 1, min: 1, max: 10 } as const;
+
+/**
+ * Where each camera picture's box is on the pads, in the slip's own
+ * millimetres from the sheet's top-left corner.
+ *
+ * NOT the artwork's boxes. The pads were printed ~2.7% larger than the
+ * artwork and off-centre, and the printer adds its own placement on top, so
+ * on this site's pads no arithmetic from the artwork lands the picture in its
+ * box. The station's real figures are read off a measuring sheet printed on
+ * one pad (Settings -> Print -> Picture boxes) and stored in the print
+ * settings; these defaults are what a station starts from before that.
+ *
+ * With PHOTO_BOX_FILL_MM they print the placement that came out best on site
+ * before the measuring sheet existed (October 2026).
+ */
+export const DEFAULT_PHOTO_BOXES_MM = {
+  front: { left: 4.5, right: 70.15, top: 138.85, bottom: 172.8 },
+  side: { left: 71.9, right: 137.5, top: 138.85, bottom: 172.8 },
+} as const;
+
+/**
+ * How far the printed picture runs past each edge of its box.
+ *
+ * The edges are read off the measuring sheet at the middle of the green line,
+ * to about a quarter of a millimetre. Half a millimetre past that covers the
+ * line's inner half even when a reading is a quarter out, so no white shows,
+ * and puts barely 0.4 mm of picture beyond the line's outer edge.
+ */
+export const PHOTO_BOX_FILL_MM = 0.5;

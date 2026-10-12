@@ -110,15 +110,22 @@ interface Placed {
   /**
    * Which calibration group moves this item on the PRINTED sheet.
    *
-   * Left out means `details`: the slip number, the print date/time and the
-   * customer fields. The figures in the three weight boxes are `weights`, so
-   * the details can be moved without moving them out of their boxes, and the
-   * date/time beside each box's calendar icon is `weight-times`, so it can be
-   * centred on that pre-printed icon without moving the figures. `none` is
-   * for an item that must never move, which the front view is — nothing has
-   * asked for it, and a control nobody needs is one more thing to set wrong.
+   * Left out means `details`: the print date/time and the customer fields.
+   * The slip number has its own (`slip-number`), as do the figures in the
+   * three weight boxes (`weights`) and each weight's date/time beside its
+   * calendar icon (`first-time`, `second-time`), so each can be put right on
+   * the pad without moving its neighbours. `none` is for an item that must
+   * never move, which the front view is — nothing has asked for it, and a
+   * control nobody needs is one more thing to set wrong.
    */
-  group?: 'details' | 'weights' | 'weight-times' | 'side-view' | 'qr' | 'none';
+  group?:
+    | 'slip-number'
+    | 'details'
+    | 'weights'
+    | 'first-time'
+    | 'second-time'
+    | 'qr'
+    | 'none';
   omitWhenPending?: true;
   /**
    * Where this item sits on a first-weight slip instead.
@@ -186,15 +193,6 @@ export interface ImageItem extends Placed {
   art?: string;
   slot?: 'front-view' | 'side-view' | 'qr' | 'logo';
   alt: string;
-  /**
-   * Where it goes on the PRINTED sheet instead, if that differs.
-   *
-   * Only the photos have one: the pre-printed boxes run wider than the
-   * artwork, and a photo sized to the artwork leaves white at its edges on
-   * paper. The screen, the PDF and the page behind the QR keep the design's
-   * own box above.
-   */
-  paper?: { left: number; top: number; width: number; height: number; radius?: string };
 }
 
 export type SlipItem = BoxItem | TextItem | ImageItem;
@@ -259,7 +257,7 @@ export const SLIP: SlipItem[] = [
 
   /* ----------------------------------------------------------- the slip row */
   /* Centred in the white box, measured off the artwork at 130.53 -> 258.82. */
-  { kind: 'text', layer: 'value', left: 130.53, width: 128.28, align: 'center', top: 181.36, field: 'slip_number', size: 11.35, weight: 700, colour: ink, font: 'display', tracking: 0.28 },
+  { kind: 'text', layer: 'value', group: 'slip-number', left: 130.53, width: 128.28, align: 'center', top: 181.36, field: 'slip_number', size: 11.35, weight: 700, colour: ink, font: 'display', tracking: 0.28 },
   /* The one value the design sets in Open Sans rather than Montserrat. */
   /* Centred in the space to the right of the "Print Date/Time" label, which
      the artwork ends at 362.84. */
@@ -281,14 +279,15 @@ export const SLIP: SlipItem[] = [
   /* The figures are the `weights` group: Settings -> Print moves them on
      their own, not with the slip number and customer fields above. */
   /*
-   * The date/time beside each calendar icon: `weight-times`.
+   * The date/time beside each calendar icon: `first-time` and `second-time`,
+   * each moved on its own.
    *
    * Centred on the icon in the design, measured off an 8x render: the icon's
    * ink spans 413.75-427.63 (centre 420.69), the digits' 417.5-423.5 (centre
    * 420.5). On paper the icon is the pad's, wherever its press put it, so the
    * centring there is a calibration, set in Settings -> Print.
    */
-  { kind: 'text', layer: 'value', group: 'weight-times', left: 63.9, top: 416.39, field: 'first_at', size: 8.28, weight: 500, colour: ink, font: 'display', tracking: 0.26 },
+  { kind: 'text', layer: 'value', group: 'first-time', left: 63.9, top: 416.39, field: 'first_at', size: 8.28, weight: 500, colour: ink, font: 'display', tracking: 0.26 },
   { kind: 'text', layer: 'value', group: 'weights', left: 39.6, top: 439.24, field: 'first_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.42 },
   /*
    * The first weight's MANUAL marker.
@@ -300,7 +299,7 @@ export const SLIP: SlipItem[] = [
    */
   { kind: 'text', layer: 'value', group: 'weights', left: 73.9, top: 473.02, field: 'first_manual', size: 8.83, weight: 500, colour: ink, font: 'display', tracking: 0.21 },
 
-  { kind: 'text', layer: 'value', group: 'weight-times', left: 222.9, top: 416.39, field: 'second_at', size: 8.28, weight: 500, colour: ink, font: 'display', tracking: 0.26 },
+  { kind: 'text', layer: 'value', group: 'second-time', left: 222.9, top: 416.39, field: 'second_at', size: 8.28, weight: 500, colour: ink, font: 'display', tracking: 0.26 },
   { kind: 'text', layer: 'value', group: 'weights', left: 198.6, top: 439.24, field: 'second_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.4 },
   { kind: 'text', layer: 'value', group: 'weights', left: 232.9, top: 473.02, field: 'second_manual', size: 8.83, weight: 500, colour: ink, font: 'display', tracking: 0.21 },
 
@@ -320,19 +319,15 @@ export const SLIP: SlipItem[] = [
    *
    * TWO GEOMETRIES. On screen, in the PDF and behind the QR the photo sits
    * just inside the drawn border (1.2-1.9 px of inset), which is how the
-   * design reads. On paper — `paper` below — any inset shows as a white
-   * sliver, because the pads are printed on another press and their boxes run
-   * wider than the artwork. There the photo covers the green line to its
-   * outer edge on every side, and Settings -> Print widens it further
-   * (`*_extra_width_mm`) by however much this batch of pads needs.
+   * design reads. On paper each is printed in its box as measured on this
+   * station's own pads — `photo_boxes_mm` in the print settings, read off a
+   * measuring sheet — and not from these coordinates at all (SlipA5).
    */
   {
     kind: 'image', layer: 'value', slot: 'front-view', group: 'none', left: 21, top: 528.63, width: 237.31, height: 119.28, radius: '3px', zoom: FRONT_VIEW_ZOOM.default, alt: 'Truck on the weighbridge, front view',
-    paper: { left: 18, top: 526.2, width: 242.88, height: 124.05, radius: '0 0 4.3px 4.3px' },
   },
   {
-    kind: 'image', layer: 'value', slot: 'side-view', group: 'side-view', left: 271.32, top: 528.63, width: 237.31, height: 119.28, radius: '3px', alt: 'Truck on the weighbridge, side view',
-    paper: { left: 268.25, top: 526.2, width: 242.75, height: 124.05, radius: '0 0 4.3px 4.3px' },
+    kind: 'image', layer: 'value', slot: 'side-view', group: 'none', left: 271.32, top: 528.63, width: 237.31, height: 119.28, radius: '3px', alt: 'Truck on the weighbridge, side view',
   },
 
   /* ---------------------------------------------------------------- the QR */
