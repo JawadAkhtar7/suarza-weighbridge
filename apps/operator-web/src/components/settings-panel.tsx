@@ -422,7 +422,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                         Where the two picture boxes are on your pads. Print the measuring sheet on
                         one pad, read the number at the middle of each green line (the top: where
                         the green band ends), and type it here. The pictures then print a little
-                        over the green line on every side.
+                        over the green line on every side
                       </p>
                     </div>
                     <Button
