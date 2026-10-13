@@ -5,7 +5,7 @@ import { render, screen } from '@testing-library/react';
 import { DEFAULT_PHOTO_BOXES_MM, PHOTO_BOX_FILL_MM } from '@suarza/shared';
 import { SlipA5 } from '../src/receipt/slip/slip-a5.js';
 import { UNIT_MM, type SlipValues } from '../src/receipt/slip/layout.js';
-import { MeasureSheet, rulerMarks } from '../src/receipt/slip/measure-sheet.js';
+import { MeasureSheet, offsetMarks, rulerMarks } from '../src/receipt/slip/measure-sheet.js';
 
 const values = { net_kg: '12,000' } as SlipValues;
 const mm = (designPx: number) => Number((designPx * UNIT_MM).toFixed(4));
@@ -84,5 +84,70 @@ describe('measuring sheet', () => {
     }
     // The side box's right edge at 137.25: its scale is numbered around it.
     expect(texts).toEqual(expect.arrayContaining(['132', '134', '136', '138', '140']));
+  });
+
+  it('numbers a value group outwards from zero at its own edge', () => {
+    /*
+     * The difference that makes the sheet usable. A picture box's setting is
+     * where the box IS, so those scales read in millimetres from the corner
+     * of the sheet. A group's setting is how far to MOVE it, so these read
+     * from zero at the edge — and the number at the pad's own line is already
+     * the distance to type, sign and all.
+     */
+    const marks = offsetMarks(34.37, 2);
+    expect(marks.map((mark) => mark.at)).toEqual([
+      32.37, 32.87, 33.37, 33.87, 34.37, 34.87, 35.37, 35.87, 36.37,
+    ]);
+    expect(marks.filter((mark) => mark.label).map((mark) => mark.label)).toEqual(['-2', '0', '+2']);
+    // Exactly one mark is the edge, and it is the one reading zero.
+    const origin = marks.filter((mark) => mark.origin);
+    expect(origin).toHaveLength(1);
+    expect(origin[0]!.at).toBeCloseTo(34.37, 6);
+  });
+
+  it('draws a scale on every side of every group but the two it cannot', () => {
+    const { container } = render(<MeasureSheet boxes={MEASURED} />);
+    const texts = [...container.querySelectorAll('text')].map((t) => t.textContent);
+
+    for (const caption of [
+      'Slip no right',
+      'Slip no top',
+      'Slip no bottom',
+      'Details left',
+      'Details right',
+      'Details top',
+      'Details bottom',
+      'Weights left',
+      'Weights right',
+      'Weights top',
+      'Weights bottom',
+    ]) {
+      expect(texts).toContain(caption);
+    }
+
+    /*
+     * No scale across the slip number's left edge: the pad's green SLIP NO
+     * tab runs up to it, and black ink on dark green is nothing at all. Its
+     * absence is deliberate and is explained on the page, so a test keeps it
+     * from being "fixed" back into an unreadable scale.
+     */
+    expect(texts).not.toContain('Slip no left');
+  });
+
+  it('keeps every scale clear of the sheet it is printed on', () => {
+    // A scale that runs off the paper loses the end a reading needs most.
+    const { container } = render(<MeasureSheet boxes={MEASURED} />);
+    for (const line of container.querySelectorAll('line')) {
+      for (const [axis, limit] of [
+        ['x', 140],
+        ['y', 200],
+      ] as const) {
+        for (const end of ['1', '2'] as const) {
+          const value = Number(line.getAttribute(`${axis}${end}`));
+          expect(value).toBeGreaterThanOrEqual(0);
+          expect(value).toBeLessThanOrEqual(limit);
+        }
+      }
+    }
   });
 });

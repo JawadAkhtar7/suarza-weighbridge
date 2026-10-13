@@ -387,13 +387,30 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                * own gets moved on its own.
                */}
               <div className="space-y-3 rounded-md border p-3">
-                <div>
-                  <p className="text-sm font-medium">Print alignment</p>
-                  <p className="text-xs text-muted-foreground">
-                    Moves things on the printed slip only, to line up with your pads. The copy on
-                    screen, the PDF and the page behind the QR code never move. Right and down are
-                    positive; use a minus for left and up.
-                  </p>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-[14rem] flex-1">
+                    <p className="text-sm font-medium">Print alignment</p>
+                    <p className="text-xs text-muted-foreground">
+                      Moves things on the printed slip only, to line up with your pads. The copy on
+                      screen, the PDF and the page behind the QR code never move. Right and down are
+                      positive; use a minus for left and up.
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Rather than guess: print the measuring sheet on one pad. Each box gets a scale
+                      across all four sides, reading <strong>0</strong> where the slip puts that
+                      edge now. The number where your pad&apos;s own line crosses the scale is what
+                      to type here, sign and all.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(MEASURE_PICTURES_PATH, '_blank')}
+                  >
+                    <Printer />
+                    Measuring sheet
+                  </Button>
                 </div>
 
                 {CALIBRATION_GROUPS.map((group) => (
@@ -451,10 +468,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium">Picture boxes (mm)</p>
                       <p className="text-xs text-muted-foreground">
-                        Where the two picture boxes are on your pads. Print the measuring sheet on
-                        one pad, read the number at the middle of each green line (the top: where
-                        the green band ends), and type it here. The pictures then print a little
-                        over the green line on every side
+                        Where the two picture boxes are on your pads. On the same measuring sheet,
+                        these four scales are the ones numbered in plain millimetres rather than
+                        from zero: read the number at the middle of each green line (the top: where
+                        the green band ends) and type it here. The pictures then print a little over
+                        the green line on every side
                       </p>
                     </div>
                     <Button

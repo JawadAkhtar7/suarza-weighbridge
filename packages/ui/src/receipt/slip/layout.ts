@@ -355,6 +355,40 @@ function boxAspect(slot: 'front-view' | 'side-view'): number {
   return box.width / box.height;
 }
 
+/**
+ * The pre-printed boxes that the movable groups of values sit inside, in
+ * millimetres from the sheet's top-left.
+ *
+ * Measured off the artwork itself rather than typed from the design file: the
+ * template was rendered at four times size and scanned for the dark green
+ * stroke of each box, taking the middle of the stroke — which is the same
+ * thing the picture boxes are read to on a printed pad, so a reading of one
+ * means what a reading of the other means. In the artwork's own design pixels
+ * they are:
+ *
+ *   slip number   129.91 - 259.32  x  175.29 - 198.93
+ *   details        17.88 - 511.38  x  212.80 - 362.34
+ *   weights        19.00 - 510.63  x  373.59 - 498.74
+ *
+ * The weights box is the pale green band as a whole, not the three boxes
+ * inside it. The three figures move together — one `weights` offset carries
+ * all of them — so one box around the lot is the thing worth measuring, and
+ * it is the only outline the artwork draws around them anyway.
+ *
+ * These are the ARTWORK's boxes, which is what makes them useful on the
+ * measuring sheet and useless anywhere else: the pads are printed larger than
+ * the artwork and off-centre, so where a box really lands on paper is a
+ * question only a sheet printed on a pad can answer. See DEFAULT_PHOTO_BOXES_MM
+ * for the same point made about the photographs.
+ */
+export const GROUP_BOXES_MM = {
+  'slip-number': { left: 34.37, right: 68.61, top: 46.38, bottom: 52.63 },
+  details: { left: 4.73, right: 135.3, top: 56.3, bottom: 95.87 },
+  weights: { left: 5.03, right: 135.1, top: 98.88, bottom: 131.94 },
+} as const;
+
+export type MeasurableGroup = keyof typeof GROUP_BOXES_MM;
+
 export const VIEW_ASPECT = {
   'front-view': boxAspect('front-view'),
   'side-view': boxAspect('side-view'),
