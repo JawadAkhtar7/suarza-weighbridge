@@ -14,7 +14,8 @@ import { WeighmentModel } from '../src/models/weighment.model.js';
 import { StationModel } from '../src/models/station.model.js';
 import { AuditModel } from '../src/models/audit.model.js';
 import { UserModel } from '../src/models/user.model.js';
-import { newId, nowUtc, type Weighment } from '@suarza/shared';
+import { newId, nowUtc, type UserRole, type Weighment } from '@suarza/shared';
+import bcrypt from 'bcryptjs';
 
 let mongod: MongoMemoryServer | null = null;
 
@@ -130,4 +131,29 @@ export function auditEntry(weighmentId: string, overrides: Record<string, unknow
     at: nowUtc(),
     ...overrides,
   };
+}
+
+/**
+ * A user of a given role, with a password of its own.
+ *
+ * Tests that need somebody to sign in as make their own rather than reaching
+ * for whatever accounts happen to ship. Role gating is a fact about roles; a
+ * test that proves it through an account named `manager` is really testing
+ * the seed list, and goes red the day that list is tidied up — which is what
+ * happened when the published defaults were retired.
+ */
+export async function createUser(options: {
+  username: string;
+  password: string;
+  role: UserRole;
+  displayName?: string;
+}): Promise<void> {
+  await UserModel.create({
+    username: options.username,
+    // The same cost the server uses; these are seconds, not milliseconds, at
+    // the production rounds, so tests say 4 and mean it.
+    password_hash: await bcrypt.hash(options.password, 4),
+    display_name: options.displayName ?? options.username,
+    role: options.role,
+  });
 }

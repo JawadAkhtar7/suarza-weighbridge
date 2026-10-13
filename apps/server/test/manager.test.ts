@@ -9,12 +9,12 @@ import type { Express } from 'express';
 import {
   clearWeighments,
   completedWeighment,
+  createUser,
   startDatabase,
   stopDatabase,
   testApp,
   weighment,
 } from './helpers.js';
-import { seedUsers } from '../src/services/auth.service.js';
 import { ingest } from '../src/services/ingest.service.js';
 
 let app: Express;
@@ -23,7 +23,7 @@ let token: string;
 beforeAll(async () => {
   await startDatabase();
   app = testApp();
-  await seedUsers();
+  await createUser({ username: 'a-manager', password: 'manager-pw', role: 'MANAGER' });
 
   // Signed in ONCE for the whole file. /auth/login is rate-limited to 20
   // attempts per window — correct for a public endpoint guarding every record
@@ -31,7 +31,7 @@ beforeAll(async () => {
   // later assertion fails as "unauthorized".
   const response = await request(app)
     .post('/auth/login')
-    .send({ username: 'manager', password: 'manager' });
+    .send({ username: 'a-manager', password: 'manager-pw' });
   token = response.body.token;
 });
 

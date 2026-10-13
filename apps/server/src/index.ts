@@ -8,7 +8,7 @@
 
 import { loadConfig } from './config.js';
 import { connectDatabase, describeConnection, disconnectDatabase } from './db/connection.js';
-import { seedUsers } from './services/auth.service.js';
+import { removeDefaultUsers, seedUsers } from './services/auth.service.js';
 import { syncLedgerIndexes } from './models/ledger.model.js';
 import { seedVehicleTypes } from './services/catalogue.service.js';
 import { buildApp } from './app.js';
@@ -33,6 +33,15 @@ async function main(): Promise<void> {
   // A database with no rate card would hand every bridge an empty dropdown.
   const seededTypes = await seedVehicleTypes();
   if (seededTypes > 0) console.info(`Seeded ${seededTypes} vehicle type(s)`);
+
+  /*
+   * The published defaults go before the new login arrives, so there is never
+   * a moment where both work and nothing has told anyone.
+   */
+  const retired = await removeDefaultUsers();
+  if (retired.length > 0) {
+    console.info(`Removed the default account(s) still using their shipped password: ${retired.join(', ')}`);
+  }
 
   const created = await seedUsers();
   if (created > 0) console.info(`Seeded ${created} user account(s)`);

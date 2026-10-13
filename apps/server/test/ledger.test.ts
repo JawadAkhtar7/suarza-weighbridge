@@ -12,12 +12,12 @@ import type { Express } from 'express';
 import {
   clearWeighments,
   completedWeighment,
+  createUser,
   startDatabase,
   stopDatabase,
   testApp,
   weighment,
 } from './helpers.js';
-import { seedUsers } from '../src/services/auth.service.js';
 import { customerKey } from '@suarza/shared';
 import {
   LedgerCustomerModel,
@@ -34,7 +34,10 @@ let managerToken: string;
 beforeAll(async () => {
   await startDatabase();
   app = testApp();
-  await seedUsers();
+  // A manager of this file's own making, rather than whichever accounts
+  // happen to ship: what is under test is the ledger's role gate.
+  await createUser({ username: 'a-manager', password: 'manager-pw', role: 'MANAGER' });
+  await createUser({ username: 'an-operator', password: 'operator-pw', role: 'OPERATOR' });
   // Signed in once for the whole file: /auth/login is rate limited, and a
   // sign-in per test starts returning 429 part way through.
   managerToken = await signIn();
@@ -52,7 +55,7 @@ afterEach(async () => {
 async function signIn(): Promise<string> {
   const response = await request(app)
     .post('/auth/login')
-    .send({ username: 'manager', password: 'manager' });
+    .send({ username: 'a-manager', password: 'manager-pw' });
   return response.body.token as string;
 }
 
@@ -426,7 +429,7 @@ describe('who can see the ledger', () => {
   it('refuses an operator — the ledger is the manager\'s', async () => {
     const operator = await request(app)
       .post('/auth/login')
-      .send({ username: 'operator', password: 'operator' });
+      .send({ username: 'an-operator', password: 'operator-pw' });
 
     const response = await request(app)
       .get('/api/ledger/customers')

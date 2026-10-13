@@ -1,9 +1,16 @@
 /**
  * Holds the manager's session.
  *
- * The token lives in localStorage so a refresh doesn't sign them out — the
- * dashboard is read-only and the token is short-lived (12h by default), which
- * is the trade the brief's simple-auth design implies (§10).
+ * The token lives in sessionStorage, which is scoped to the one tab and is
+ * thrown away when that tab closes. So a refresh — or following a link, or a
+ * dashboard left open all afternoon — keeps the manager signed in, and
+ * closing the tab signs them out: the next person to open the dashboard on
+ * that PC has to log in.
+ *
+ * NOT localStorage, which is where this used to be. That is shared by every
+ * tab and survives the browser being closed and the machine being restarted,
+ * so a token sat in it until it expired twelve hours later, whether or not
+ * anybody was still meant to be using it.
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -11,6 +18,8 @@ import type { AuthUser } from '@suarza/shared';
 import { api, setAuthToken } from '../lib/api.js';
 import { AuthContext } from '../hooks/use-auth.js';
 
+/* The same key in both storages: only the storage changed, so this is also
+   the key a session from before this change is sitting under. */
 const STORAGE_KEY = 'suarza.manager.session.v1';
 
 interface StoredSession {
@@ -20,8 +29,20 @@ interface StoredSession {
 }
 
 function loadSession(): StoredSession | null {
+  /*
+   * Anything left in localStorage by a build from before this change is a
+   * token that would otherwise sit on the machine until it expired. Clearing
+   * it here means the move to per-tab sessions actually signs those people
+   * out, rather than merely stopping new sessions being stored that way.
+   */
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // A browser that refuses storage has nothing to clear.
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw) as StoredSession;
     // An expired token would only fail on the first request; better to start
@@ -54,9 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(next);
       setAuthToken(next.token);
       try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       } catch {
-        // Private browsing — the session still works for this tab.
+        // Private browsing — the session still works until this tab reloads.
       }
     } finally {
       setIsSigningIn(false);
@@ -67,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setAuthToken(null);
     try {
-      window.localStorage.removeItem(STORAGE_KEY);
+      window.sessionStorage.removeItem(STORAGE_KEY);
     } catch {
       // Nothing to clean up.
     }
