@@ -20,6 +20,7 @@ import { registerSimulatorRoutes } from './routes/simulator.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerCameraRoutes } from './routes/cameras.js';
 import type { SettingsService } from './services/settings-service.js';
+import type { UserRepository } from './db/users.js';
 import type { CatalogueSync } from './sync/catalogue-sync.js';
 import type { CameraClient, CameraView } from './cameras/camera-client.js';
 import type { CaptureService } from './cameras/capture-service.js';
@@ -48,6 +49,12 @@ export interface AgentDeps {
   capture?: CaptureService;
   /** The live panel's video, per camera; absent ones fall back to stills. */
   liveVideo?: Partial<Record<CameraView, LiveVideo>>;
+  /**
+   * Who may change the settings. Absent leaves them unprotected, which is
+   * what the test harness and a developer's own machine want; the real agent
+   * always passes one.
+   */
+  users?: UserRepository;
   /** Explicit path to the Operator PWA build; auto-detected when omitted. */
   operatorWebDir?: string | null;
   /** Tests drive the API directly and have no web build to serve. */

@@ -15,6 +15,8 @@ export type AppErrorCode =
   | 'CANNOT_VOID_COMPLETED'
   | 'SIMULATOR_DISABLED'
   | 'NOT_FOUND'
+  // Changing what this station is set to, without being allowed to.
+  | 'INVALID_CREDENTIALS'
   // Pulling the manager's lists: the operator is watching a button, so these
   // are separated to say whether to check the wiring or the connection.
   | 'CLOUD_NOT_CONFIGURED'
@@ -31,6 +33,9 @@ const STATUS_BY_CODE: Record<AppErrorCode, number> = {
   CANNOT_VOID_COMPLETED: 409,
   SIMULATOR_DISABLED: 404,
   NOT_FOUND: 404,
+  // 401, not 403: the request carried no identity we accept, and the operator
+  // app's answer is to ask for one rather than to say no.
+  INVALID_CREDENTIALS: 401,
   CLOUD_NOT_CONFIGURED: 409,
   // 503, not 500: nothing here is broken, the far end is simply not answering.
   CLOUD_UNREACHABLE: 503,

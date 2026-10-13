@@ -16,6 +16,7 @@ import {
   nowUtc,
   SLIP_PAGE_MM,
   stationSettingsSchema,
+  type FramingUpdate,
   type StationProfile,
   type StationSettings,
 } from '@suarza/shared';
@@ -182,6 +183,28 @@ export class SettingsService {
     this.meta.set(META_KEYS.settingsUpdatedAt, nowUtc());
     for (const listener of this.listeners) listener(result.data);
     return result.data;
+  }
+
+  /**
+   * Change how one or both cameras are framed, and nothing else.
+   *
+   * Reads the current settings and writes them back with the framings
+   * replaced, so a framing save cannot carry anything else with it. That is
+   * what lets its route ask for no password: the operator drags a live
+   * picture while a truck waits, and the worst a forged call can do is
+   * reframe a photograph.
+   *
+   * It does NOT take the whole settings object from the caller. The framer
+   * used to send one, and a client holding a stale copy — a print tab opened
+   * before an alignment was changed — would quietly put the old values back.
+   */
+  updateFraming(input: FramingUpdate): StationSettings {
+    const current = this.get();
+    return this.replace({
+      ...current,
+      ...(input.front_view_frame ? { front_view_frame: input.front_view_frame } : {}),
+      ...(input.side_view_frame ? { side_view_frame: input.side_view_frame } : {}),
+    });
   }
 
   /**

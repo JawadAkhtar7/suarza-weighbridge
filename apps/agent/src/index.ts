@@ -8,9 +8,10 @@
  * (brief §3B, §7.3, §7.5, §11).
  */
 
-import { cameraSettings, cloudSettings } from './deployment.js';
+import { cameraSettings, cloudSettings, settingsLogin } from './deployment.js';
 import { loadConfig } from './config.js';
 import { closeDatabase, openDatabase } from './db/connection.js';
+import { UserRepository } from './db/users.js';
 import { WeighmentRepository } from './db/weighments.js';
 import { AuditRepository } from './db/audit.js';
 import { createWeightReader } from './indicator/index.js';
@@ -35,6 +36,19 @@ async function main(): Promise<void> {
   const cameraConfig = cameraSettings();
 
   const db = openDatabase({ path: config.DATABASE_PATH, verbose: log });
+
+  /*
+   * Who may change this station's settings.
+   *
+   * Seeded only on a station that has no users at all, so the password on a
+   * machine that has been given its own is never reset by a deploy — see
+   * UserRepository.seed.
+   */
+  const users = new UserRepository(db);
+  const login = settingsLogin();
+  if (users.seed(login.username, login.password)) {
+    log(`Created the first settings login: ${login.username}`);
+  }
 
   // Settings live in the database so a print calibration or an edited rate
   // card survives a browser profile being cleared (brief §13-M8).
@@ -173,6 +187,7 @@ async function main(): Promise<void> {
     reader,
     service,
     settings,
+    users,
     cameras,
     capture,
     liveVideo,

@@ -28,11 +28,7 @@ import {
   buildTestPrintStyle,
   toast,
 } from '@suarza/ui';
-import {
-  formatDateTimePkt,
-  formatPKR,
-  type SyncOutcome,
-} from '@suarza/shared';
+import { formatDateTimePkt, formatPKR, type SyncOutcome } from '@suarza/shared';
 import { ListChecks, Loader2, Printer, RefreshCw, RotateCcw } from 'lucide-react';
 import { agentApi, AgentApiError } from '../lib/api.js';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
@@ -275,6 +271,25 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     if (open) setDraft(settings);
   }, [open, settings]);
 
+  /*
+   * The station login, asked for at the moment of saving.
+   *
+   * Held in the form and nowhere else: closing the dialog is the whole of
+   * logging out, so a settings screen left open on the weighing PC cannot be
+   * saved from by whoever walks up next.
+   */
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  /* Never carry a typed password from one opening of the dialog to the next. */
+  useEffect(() => {
+    if (!open) return;
+    setUsername('');
+    setPassword('');
+    setAuthError(null);
+  }, [open]);
+
   // Calibration has to reflect what the operator just typed, not what was last
   // saved — otherwise every test print is one edit behind.
   const testPrint = useReactToPrint({
@@ -284,11 +299,28 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   });
 
   const save = () => {
+    setAuthError(null);
     // The provider owns the toast, because it is the thing that knows whether
-    // the agent actually accepted the save.
-    update(draft);
-    onOpenChange(false);
+    // the agent actually accepted the save. The dialog closes only once it
+    // has: a refused password must not take the operator's edits with it.
+    update(
+      draft,
+      { username, password },
+      {
+        onSuccess: () => onOpenChange(false),
+        onError: (error) => {
+          setPassword('');
+          setAuthError(
+            error instanceof AgentApiError && error.code === 'INVALID_CREDENTIALS'
+              ? error.message
+              : 'Could not save the settings. Please try again.',
+          );
+        },
+      },
+    );
   };
+
+  const canSave = username.trim() !== '' && password !== '' && !isSaving;
 
   const restoreDefaults = () => setDraft(defaultReceiptSettings());
 
@@ -346,14 +378,14 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </div>
 
               {/*
-                * Calibration, seven groups, paper only.
-                *
-                * The pads are pre-printed on one press and overprinted on
-                * another, and they disagree about where the sheet starts —
-                * not by one uniform amount, which is why a single page-wide
-                * nudge was tried and withdrawn. Each group that drifts on its
-                * own gets moved on its own.
-                */}
+               * Calibration, seven groups, paper only.
+               *
+               * The pads are pre-printed on one press and overprinted on
+               * another, and they disagree about where the sheet starts —
+               * not by one uniform amount, which is why a single page-wide
+               * nudge was tried and withdrawn. Each group that drifts on its
+               * own gets moved on its own.
+               */}
               <div className="space-y-3 rounded-md border p-3">
                 <div>
                   <p className="text-sm font-medium">Print alignment</p>
@@ -409,11 +441,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 ))}
 
                 {/*
-                  * The pictures are placed, not nudged: their boxes are
-                  * MEASURED, on one pad, by a sheet of scales printed through
-                  * the same printer — which a ruler against the paper's edge
-                  * cannot do. See MeasureSheet.
-                  */}
+                 * The pictures are placed, not nudged: their boxes are
+                 * MEASURED, on one pad, by a sheet of scales printed through
+                 * the same printer — which a ruler against the paper's edge
+                 * cannot do. See MeasureSheet.
+                 */}
                 <div className="space-y-2 border-t pt-3">
                   <div className="flex flex-wrap items-start gap-2">
                     <div className="min-w-0 flex-1">
@@ -441,10 +473,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {PHOTO_BOX_FIELDS.map(([edge, label]) => (
                           <div key={edge} className="space-y-1">
-                            <Label
-                              htmlFor={`${which}-box-${edge}`}
-                              className="text-xs font-normal"
-                            >
+                            <Label htmlFor={`${which}-box-${edge}`} className="text-xs font-normal">
                               {label}
                             </Label>
                             <NumberInput
@@ -489,11 +518,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             </section>
 
             {/*
-              * No camera framing here. Both pictures are framed by hand on
-              * the live previews (CameraFramer) — zoom and drag — which is
-              * where the operator can see what they are choosing. A number
-              * typed here and checked on a slip afterwards was the old way.
-              */}
+             * No camera framing here. Both pictures are framed by hand on
+             * the live previews (CameraFramer) — zoom and drag — which is
+             * where the operator can see what they are choosing. A number
+             * typed here and checked on a slip afterwards was the old way.
+             */}
 
             <Separator />
 
@@ -537,6 +566,66 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             </section>
           </div>
 
+          {/*
+           * The login, at the foot of the dialog rather than in front of it.
+           *
+           * A password asked for BEFORE the settings open would be a lock on
+           * looking, and the operator has every reason to look — to read
+           * back an alignment, or to check a rate. What is protected is the
+           * change, so the question is asked where the change is made.
+           */}
+          <div className="space-y-3 rounded-md border border-brand/40 bg-brand/5 p-3">
+            <div>
+              <p className="text-sm font-medium">Sign in to save</p>
+              <p className="text-xs text-muted-foreground">
+                Settings change what every slip from this weighbridge shows, so they are saved with
+                a username and password.
+              </p>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="settings-username" className="text-xs font-normal">
+                  Username
+                </Label>
+                <Input
+                  id="settings-username"
+                  autoComplete="off"
+                  placeholder="Username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="settings-password" className="text-xs font-normal">
+                  Password
+                </Label>
+                <Input
+                  id="settings-password"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  /* Enter saves, which is what a password field in front of a
+                     Save button is for. */
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && canSave) {
+                      event.preventDefault();
+                      save();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            {authError && (
+              <p role="alert" className="text-xs font-medium text-destructive">
+                {authError}
+              </p>
+            )}
+          </div>
+
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={restoreDefaults} className="mr-auto">
               <RotateCcw />
@@ -545,7 +634,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="button" variant="brand" onClick={save} disabled={isSaving}>
+            <Button type="button" variant="brand" onClick={save} disabled={!canSave}>
               {isSaving && <Loader2 className="animate-spin" />}
               Save settings
             </Button>

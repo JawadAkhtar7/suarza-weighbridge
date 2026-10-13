@@ -10,6 +10,7 @@
 import type {
   AuditEntry,
   Customer,
+  FramingUpdate,
   StationSettings,
   CompleteWeighmentInput,
   CreateCompletedWeighmentInput,
@@ -20,6 +21,25 @@ import type {
   SyncStatus,
   Weighment,
 } from '@suarza/shared';
+
+export interface SettingsCredentials {
+  username: string;
+  password: string;
+}
+
+/**
+ * `Basic base64(username:password)`.
+ *
+ * Through UTF-8 rather than `btoa` on the raw string: `btoa` throws on any
+ * character above U+00FF, and a password nobody can type is worse than one
+ * nobody can guess.
+ */
+function basicAuth({ username, password }: SettingsCredentials): string {
+  const bytes = new TextEncoder().encode(`${username}:${password}`);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `Basic ${btoa(binary)}`;
+}
 
 export interface AgentWarning {
   code: string;
@@ -119,8 +139,28 @@ export const agentApi = {
 
   getSettings: () => request<StationSettings>('/settings'),
 
-  saveSettings: (settings: StationSettings) =>
-    request<StationSettings>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
+  /**
+   * Save the settings. The agent refuses this without a station login.
+   *
+   * Basic auth: the credentials go on the one request that needs them and are
+   * never stored, so closing the dialog is the whole of logging out.
+   */
+  saveSettings: (settings: StationSettings, credentials: SettingsCredentials) =>
+    request<StationSettings>('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+      headers: { authorization: basicAuth(credentials) },
+    }),
+
+  /**
+   * Reframe one camera's picture. No login: see the agent's
+   * PUT /settings/framing for why this one is open and narrow.
+   */
+  saveFraming: (framing: FramingUpdate) =>
+    request<StationSettings>('/settings/framing', {
+      method: 'PUT',
+      body: JSON.stringify(framing),
+    }),
 
   getSyncStatus: () => request<SyncStatus>('/sync-status'),
 

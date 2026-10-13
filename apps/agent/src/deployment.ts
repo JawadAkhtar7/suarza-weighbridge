@@ -224,3 +224,36 @@ export function cameraSettings(env: NodeJS.ProcessEnv = process.env): CameraSett
     keepDays: number(env['CAPTURE_KEEP_DAYS'], CAPTURE_KEEP_DAYS),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Who may change the settings
+// ---------------------------------------------------------------------------
+
+/**
+ * The first login on a station that has none.
+ *
+ * A SEED, not the password. It is written into the station's own users table
+ * the first time the agent starts, and from then on the table is the authority
+ * — changing these constants does not change the password on a station that
+ * already has one, because a deployment that quietly reset the password on
+ * every restart would be no protection at all.
+ *
+ * In code rather than in a `.env` for the same reason the cloud address is:
+ * the weighbridge PC is hundreds of kilometres away and nobody can walk up to
+ * it to edit a file.
+ */
+export const SETTINGS_USERNAME = 'suarza';
+export const SETTINGS_PASSWORD = 'pakistan1!';
+
+export interface SettingsLogin {
+  username: string;
+  password: string;
+}
+
+/** The seed login, overridable only by a developer's own `.env`. */
+export function settingsLogin(env: NodeJS.ProcessEnv = process.env): SettingsLogin {
+  return {
+    username: env['SETTINGS_USERNAME']?.trim() || SETTINGS_USERNAME,
+    password: env['SETTINGS_PASSWORD']?.trim() || SETTINGS_PASSWORD,
+  };
+}

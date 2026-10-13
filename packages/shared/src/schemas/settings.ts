@@ -180,6 +180,26 @@ export const stationSettingsSchema = z.object({
 
 export type StationSettings = z.infer<typeof stationSettingsSchema>;
 
+/**
+ * A change to the camera framing alone.
+ *
+ * Its own schema because its own route accepts it without a password, and
+ * what makes that safe is that it cannot name anything else. Both views are
+ * optional — the operator drags one picture at a time — but a body naming
+ * neither is a mistake worth reporting rather than a save of nothing.
+ */
+export const framingUpdateSchema = z
+  .object({
+    front_view_frame: frontViewFrameSchema.optional(),
+    side_view_frame: sideViewFrameSchema.optional(),
+  })
+  .strict()
+  .refine((value) => value.front_view_frame !== undefined || value.side_view_frame !== undefined, {
+    message: 'Name at least one view to reframe.',
+  });
+
+export type FramingUpdate = z.infer<typeof framingUpdateSchema>;
+
 export function defaultStationSettings(): StationSettings {
   return stationSettingsSchema.parse({});
 }

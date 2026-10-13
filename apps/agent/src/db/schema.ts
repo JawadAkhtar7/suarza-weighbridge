@@ -212,6 +212,24 @@ MIGRATIONS.push({
   `,
 });
 
+MIGRATIONS.push({
+  version: 7,
+  name: 'users who may change the settings',
+  up: `
+    -- Who is allowed to change this station's settings.
+    --
+    -- No roles and no sessions: one thing is protected, and the question at
+    -- the moment of saving is only whether this person may. See db/users.ts
+    -- for why the password is a scrypt hash rather than the password.
+    CREATE TABLE users (
+      username      TEXT PRIMARY KEY,
+      password_hash TEXT NOT NULL,
+      created_at    TEXT NOT NULL,
+      updated_at    TEXT NOT NULL
+    );
+  `,
+});
+
 export function migrate(db: Database): number {
   const current = db.pragma('user_version', { simple: true }) as number;
   const pending = MIGRATIONS.filter((m) => m.version > current).sort(

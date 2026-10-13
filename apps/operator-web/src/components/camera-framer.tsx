@@ -20,6 +20,7 @@ import {
   DEFAULT_SIDE_VIEW_FRAME,
   VIEW_FRAME_ZOOM,
   viewFrameTransform,
+  type FramingUpdate,
   type ViewFrame,
 } from '@suarza/shared';
 import { Button, VIEW_ASPECT } from '@suarza/ui';
@@ -48,7 +49,14 @@ const VIEWS = {
   },
 } as const satisfies Record<
   'FRONT' | 'SIDE',
-  { key: keyof ReceiptSettings; reset: ViewFrame; resetLabel: string; aspect: number }
+  {
+    /* The framing keys only, not any settings key: this is what the reframe
+       route will accept, and widening it here would let a typo compile. */
+    key: keyof FramingUpdate;
+    reset: ViewFrame;
+    resetLabel: string;
+    aspect: number;
+  }
 >;
 
 /**
@@ -80,7 +88,7 @@ interface CameraFramerProps {
 
 export function CameraFramer({ view, src, alt, onError }: CameraFramerProps) {
   const config = VIEWS[view];
-  const { settings, update, isLoaded } = useReceiptSettings();
+  const { settings, updateFraming, isLoaded } = useReceiptSettings();
   const saved: ViewFrame = settings[config.key] ?? config.reset;
 
   const [frame, setFrame] = useState<ViewFrame>(saved);
@@ -97,8 +105,13 @@ export function CameraFramer({ view, src, alt, onError }: CameraFramerProps) {
     window.clearTimeout(timer.current);
     if (!latest.current.dirty) return;
     latest.current.dirty = false;
-    update({ ...latest.current.settings, [config.key]: latest.current.frame }, { quiet: true });
-  }, [update, config.key]);
+    /* This view's framing alone, rather than the whole settings object with
+       one field changed. The agent merges it into what it already holds, so
+       a stale copy here cannot put an old print alignment back — and it is
+       the one settings write that asks for no password, which it can only be
+       because it carries nothing else. */
+    updateFraming({ [config.key]: latest.current.frame });
+  }, [updateFraming, config.key]);
 
   /* Follow the stored framing — another tab, Restore defaults — unless the
      operator is part-way through changing it here. */
