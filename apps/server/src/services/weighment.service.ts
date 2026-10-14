@@ -2,9 +2,16 @@
 
 import type { FilterQuery } from 'mongoose';
 import type { PaginatedWeighments, Weighment, WeighmentQuery } from '@suarza/shared';
-import { DISPLAY_TIMEZONE, customerKey } from '@suarza/shared';
+import {
+  DEFAULT_FRONT_VIEW_FRAME,
+  DEFAULT_SIDE_VIEW_FRAME,
+  DISPLAY_TIMEZONE,
+  customerKey,
+} from '@suarza/shared';
 import { WeighmentModel, type WeighmentDocument } from '../models/weighment.model.js';
 import { LedgerCustomerModel } from '../models/ledger.model.js';
+import { imagesForWeighments } from './capture.service.js';
+import { cameraFramingForStations } from './station.service.js';
 import { ApiError } from '../errors.js';
 
 /** Regex metacharacters in a customer's name must not become a pattern. */
@@ -94,17 +101,46 @@ export async function listWeighments(query: WeighmentQuery): Promise<PaginatedWe
   // not know about ledger accounts — it works offline and has no ledger — so
   // the link is made here, from the same name+company the ledger matches on.
   const keys = [...new Set(dtos.map((w) => customerKey(w.customer_name, w.customer_company)))];
-  const accounts = await LedgerCustomerModel.find({ match_key: { $in: keys } })
-    .select({ _id: 1, match_key: 1 })
-    .lean();
+
+  /*
+   * The pictures come down with the list, two queries for the whole page.
+   *
+   * Not because the list shows them — it shows none — but because opening a
+   * slip used to mean asking which pictures it had and only then starting to
+   * fetch them. That round trip was half a second of the placeholder, before
+   * the first byte of a real photograph moved. The ids are a hundred bytes a
+   * row and the dialog has them the moment it opens.
+   */
+  const [accounts, images, framings] = await Promise.all([
+    LedgerCustomerModel.find({ match_key: { $in: keys } })
+      .select({ _id: 1, match_key: 1 })
+      .lean(),
+    imagesForWeighments(dtos.map((w) => w.id)),
+    cameraFramingForStations(dtos.map((w) => w.station_id)),
+  ]);
+
   const idByKey = new Map(accounts.map((doc) => [doc.match_key, String(doc._id)]));
+  const defaultFraming = { front: DEFAULT_FRONT_VIEW_FRAME, side: DEFAULT_SIDE_VIEW_FRAME };
 
   return {
-    rows: dtos.map((weighment) => ({
-      ...weighment,
-      customer_id:
-        idByKey.get(customerKey(weighment.customer_name, weighment.customer_company)) ?? null,
-    })),
+    rows: dtos.map((weighment) => {
+      const framing = framings.get(weighment.station_id) ?? defaultFraming;
+      return {
+        ...weighment,
+        customer_id:
+          idByKey.get(customerKey(weighment.customer_name, weighment.customer_company)) ?? null,
+        captures: {
+          // A weighing with no pictures is a pair of nulls, not an absence:
+          // the dialog must be able to tell "this bridge has no cameras" from
+          // "nobody has told me yet", and only the second is worth waiting on.
+          ...(images.get(weighment.id) ?? { front: null, side: null }),
+          front_view_frame: framing.front,
+          side_view_frame: framing.side,
+          /* For a dashboard build that predates front framing. */
+          front_view_zoom: framing.front.zoom,
+        },
+      };
+    }),
     total,
     page: query.page,
     page_size: query.page_size,

@@ -27,15 +27,29 @@ import {
 import type { Weighment } from '@suarza/shared';
 import { ExternalLink, Printer } from 'lucide-react';
 import { api, receiptPageUrl } from '../lib/api.js';
+import type { SlipCaptures } from '@suarza/shared';
 
 interface WeighmentDetailProps {
   weighment: Weighment | null;
+  /**
+   * The slip's two pictures, as the list already knows them.
+   *
+   * Given, the dialog opens with the photographs already being fetched.
+   * Missing — an older server, or a slip reached some other way — it asks for
+   * them itself, which is what it always did.
+   */
+  captures?: SlipCaptures;
   onClose: () => void;
   /** Public origin, so the QR on a printed copy still resolves. */
   receiptBaseUrl: string;
 }
 
-export function WeighmentDetail({ weighment, onClose, receiptBaseUrl }: WeighmentDetailProps) {
+export function WeighmentDetail({
+  weighment,
+  captures: known,
+  onClose,
+  receiptBaseUrl,
+}: WeighmentDetailProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   const print = useReactToPrint({
@@ -60,7 +74,10 @@ export function WeighmentDetail({ weighment, onClose, receiptBaseUrl }: Weighmen
   const captures = useQuery({
     queryKey: ['weighment-captures', weighment?.slip_number],
     queryFn: () => api.weighmentCaptures(weighment!.slip_number),
-    enabled: Boolean(weighment),
+    /* Only when the list did not bring them. Asking anyway would be a request
+       whose answer is already on the screen. */
+    enabled: Boolean(weighment) && !known,
+    initialData: known,
     retry: false,
   });
 
@@ -113,6 +130,10 @@ export function WeighmentDetail({ weighment, onClose, receiptBaseUrl }: Weighmen
               verifyUrl={receiptUrl}
               frontImageUrl={captureUrl(captures.data?.front)}
               sideImageUrl={captureUrl(captures.data?.side)}
+              /* A megabyte each, from the cloud: without this the two boxes
+                 stand empty for a few seconds and read as a slip that has no
+                 photographs. */
+              showPhotoLoading
               /* The weighing bridge's crop, not this browser's: the preview
                  has to match the paper the customer was handed. */
               frontViewFrame={

@@ -2,7 +2,7 @@
 
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { Weighment } from '@suarza/shared';
+import type { WeighmentRow } from '@suarza/shared';
 import { api } from '../lib/api.js';
 import {
   DEFAULT_FILTERS,
@@ -24,7 +24,9 @@ const PAGE_SIZE = 25;
 export function Dashboard() {
   const [filters, setFilters] = useState<DashboardFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Weighment | null>(null);
+  /* The row, not just the weighing: it carries the slip's two capture ids, so
+     the dialog can start fetching the photographs the instant it opens. */
+  const [selected, setSelected] = useState<WeighmentRow | null>(null);
 
   const query = useMemo(() => toQuery(filters), [filters]);
 
@@ -69,6 +71,7 @@ export function Dashboard() {
 
       <WeighmentDetail
         weighment={selected}
+        captures={selected?.captures}
         onClose={() => setSelected(null)}
         receiptBaseUrl={window.location.origin}
       />

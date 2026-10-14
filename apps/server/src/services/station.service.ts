@@ -42,14 +42,20 @@ export interface CameraFraming {
  * existed already shows. A station that reported only a front zoom (written
  * before the front view could be panned) gets that zoom, centred.
  */
-export async function cameraFramingForStation(
-  stationId: string | null | undefined,
-): Promise<CameraFraming> {
-  const defaults = { front: DEFAULT_FRONT_VIEW_FRAME, side: DEFAULT_SIDE_VIEW_FRAME };
-  if (!stationId) return defaults;
-  const station = await StationModel.findById(stationId).lean();
-  if (!station) return defaults;
-
+/**
+ * One station document's framing, with every way it might not have one.
+ *
+ * A station that has never synced since camera framing existed may carry the
+ * older `front_view_zoom` and nothing else; one older still carries neither.
+ * Both are read here rather than at each call site, because "which fallback
+ * applies" is the kind of thing that gets remembered in one place and
+ * forgotten in the other.
+ */
+function framingOf(station: {
+  front_view_frame?: { zoom?: number | null; x?: number | null; y?: number | null } | null;
+  side_view_frame?: { zoom?: number | null; x?: number | null; y?: number | null } | null;
+  front_view_zoom?: number | null;
+}): CameraFraming {
   const read = (
     frame: { zoom?: number | null; x?: number | null; y?: number | null } | null | undefined,
   ) =>
@@ -65,4 +71,33 @@ export async function cameraFramingForStation(
         : DEFAULT_FRONT_VIEW_FRAME),
     side: read(station.side_view_frame) ?? DEFAULT_SIDE_VIEW_FRAME,
   };
+}
+
+/**
+ * The same, for every station a page of weighings came from.
+ *
+ * In practice that is one station and one document, but the list must not
+ * start making a query per row the day a second weighbridge appears.
+ */
+export async function cameraFramingForStations(
+  stationIds: readonly string[],
+): Promise<Map<string, CameraFraming>> {
+  const out = new Map<string, CameraFraming>();
+  const wanted = [...new Set(stationIds.filter(Boolean))];
+  if (wanted.length === 0) return out;
+
+  const stations = await StationModel.find({ _id: { $in: wanted } }).lean();
+  for (const station of stations) {
+    out.set(String(station._id), framingOf(station));
+  }
+  return out;
+}
+
+export async function cameraFramingForStation(
+  stationId: string | null | undefined,
+): Promise<CameraFraming> {
+  const defaults = { front: DEFAULT_FRONT_VIEW_FRAME, side: DEFAULT_SIDE_VIEW_FRAME };
+  if (!stationId) return defaults;
+  const station = await StationModel.findById(stationId).lean();
+  return station ? framingOf(station) : defaults;
 }

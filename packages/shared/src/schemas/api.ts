@@ -118,8 +118,44 @@ export type WeighmentQuery = z.infer<typeof weighmentQuerySchema>;
  * Null when the account does not exist yet — an open ticket posts no charge, so
  * nothing has opened one.
  */
+/**
+ * A weighing's two photographs, and how its station frames them.
+ *
+ * One shape, used in two places on purpose: `GET /weighments/:slip/captures`
+ * returns it, and every row of the weighments list now carries it as well.
+ *
+ * The list carrying it is what makes the dashboard's slip appear with its
+ * pictures already arriving. Opening a slip used to mean a round trip to ask
+ * which pictures it had, and only then could the browser start fetching them
+ * — half a second of staring at the placeholder before the first byte of a
+ * real photograph moved. The ids cost a hundred bytes a row and are already
+ * in hand when the dialog opens.
+ *
+ * The framing travels with the ids rather than from an endpoint of its own:
+ * it is not a fact about the station the manager might browse, it is how to
+ * draw these two images, and sending them apart invites a preview that crops
+ * differently from the slip it previews.
+ */
+export const slipCapturesSchema = z.object({
+  /** Capture ids, for `/captures/:id`. Null where the bridge has no camera. */
+  front: z.string().nullable(),
+  side: z.string().nullable(),
+  front_view_frame: frontViewFrameSchema,
+  side_view_frame: sideViewFrameSchema,
+  /** For a dashboard build that predates front framing. */
+  front_view_zoom: z.number(),
+});
+
+export type SlipCaptures = z.infer<typeof slipCapturesSchema>;
+
 export const weighmentRowSchema = weighmentSchema.extend({
   customer_id: z.string().nullable().default(null),
+  /*
+   * Optional, because a dashboard may be talking to a server that predates
+   * this and a server may be answering a dashboard that does — the dialog
+   * asks for them the old way when they are not here.
+   */
+  captures: slipCapturesSchema.optional(),
 });
 
 export type WeighmentRow = z.infer<typeof weighmentRowSchema>;

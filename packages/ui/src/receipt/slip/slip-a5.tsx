@@ -23,6 +23,7 @@ import {
   SLIP,
   UNIT_MM,
   FONTS,
+  type ImageItem,
   type SlipItem,
   type SlipValues,
   type SlipView,
@@ -102,6 +103,19 @@ export interface SlipA5Props {
    * not about the record. Omitted uses DEFAULT_PHOTO_BOXES_MM.
    */
   paperPhotoBoxes?: Partial<Record<'front' | 'side', PhotoBox>>;
+  /**
+   * Spin a loader in each photograph's box until that photograph arrives.
+   *
+   * Off by default, and never on paper. The camera stills are about a
+   * megabyte each and come from the cloud, so on a dashboard there are a few
+   * seconds where the boxes stand empty — which reads as a slip with no
+   * photographs rather than as a slip still fetching them.
+   *
+   * A host that renders this to static markup must leave it off: with no
+   * JavaScript the picture's own `load` reaches nothing, and the spinner
+   * would be baked into the page for good.
+   */
+  showPhotoLoading?: boolean;
   /** For an on-screen preview; never applied when printing. */
   className?: string;
 }
@@ -121,6 +135,7 @@ export function SlipA5({
   offsetYmm = 0,
   calibration,
   paperPhotoBoxes,
+  showPhotoLoading = false,
   className,
 }: SlipA5Props) {
   const layers = LAYERS[view];
@@ -174,6 +189,9 @@ export function SlipA5({
           frontViewFrame={frontViewFrame}
           sideViewFrame={sideViewFrame}
           logoUrl={logoUrl}
+          /* Never on paper: a sheet goes to the printer once the pictures are
+             there, and a spinner is not something to print. */
+          photoLoading={showPhotoLoading && !onPaper}
           /* `none` is a real answer: the front view never moves. */
           shift={item.group === 'none' ? undefined : shifts?.[item.group ?? 'details']}
         />
@@ -207,6 +225,123 @@ function onPaperGeometry(item: SlipItem, boxes: SlipA5Props['paperPhotoBoxes']):
   };
 }
 
+/** The class the spinner's keyframes are hung on; see PHOTO_LOADING_CSS. */
+const SPINNER_CLASS = 'suarza-slip-photo-spinner';
+
+/**
+ * The keyframes for the spinner, rendered once per slip that wants one.
+ *
+ * Inline rather than in SLIP_PAGE_CSS because this component is drawn in
+ * three apps and server-rendered in a fourth, and only one of them injects
+ * that stylesheet. A rule that travels with the thing it styles cannot be
+ * forgotten by a host that does not know it exists.
+ */
+const PHOTO_LOADING_CSS = `@keyframes ${SPINNER_CLASS} { to { transform: rotate(360deg); } }`;
+
+/**
+ * A camera photograph in its box, and what the box shows until it arrives.
+ *
+ * Its own component because of the hook: `Item` returns early for boxes and
+ * text long before it reaches an image, and a hook behind an early return is
+ * a hook that runs on some renders and not others.
+ *
+ * The wait is worth showing. These are a megabyte each, from a droplet on the
+ * other side of the world, and an empty box for three seconds reads as a slip
+ * with no photographs rather than as a slip still fetching them. A spinner
+ * says which.
+ */
+function PhotoSlot({
+  item,
+  place,
+  src,
+  transform,
+  loading,
+}: {
+  item: ImageItem;
+  /**
+   * Where the box goes, as Item worked it out — including any print
+   * calibration. Recomputing it here from the layout table would quietly drop
+   * the shift that moves the side view on paper.
+   */
+  place: React.CSSProperties;
+  src: string;
+  transform?: string;
+  /** Off for the printed sheet and for the server-rendered public page. */
+  loading: boolean;
+}) {
+  /*
+   * Starts loaded when there is nothing to wait for — the bundled placeholder
+   * on a bridge with no cameras, or a host that does not want the spinner.
+   * Keyed on `src` by the caller, so a second slip opened in the same dialog
+   * starts waiting again rather than inheriting the first one's answer.
+   */
+  const [settled, setSettled] = React.useState(!loading);
+
+  return (
+    <div
+      style={{
+        ...place,
+        width: mm(item.width),
+        height: mm(item.height),
+        overflow: 'hidden',
+        borderRadius: item.radius,
+        lineHeight: 0,
+      }}
+    >
+      <img
+        src={src}
+        alt={item.alt}
+        onLoad={() => setSettled(true)}
+        /* A picture that fails is not a picture that is coming: the spinner
+           has to stop, or it spins for as long as the dialog is open. */
+        onError={() => setSettled(true)}
+        style={{
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          objectFit: item.slot ? 'cover' : undefined,
+          /* Scaled about the centre, so cropping in keeps the middle of the
+             frame — which is where the truck is. */
+          ...(transform ? { transform } : {}),
+        }}
+      />
+
+      {!settled && (
+        <>
+          <style>{PHOTO_LOADING_CSS}</style>
+          <div
+            role="status"
+            aria-label={`${item.alt} — loading`}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              /* Faint, so a photograph that arrives mid-spin does not appear
+                 to brighten as the cover is taken off it. */
+              background: '#f1f4f2',
+            }}
+          >
+            <span
+              style={{
+                display: 'block',
+                width: mm(22),
+                height: mm(22),
+                borderRadius: '50%',
+                border: `${mm(3)} solid #cfd8d2`,
+                borderTopColor: '#1b5e34',
+                boxSizing: 'border-box',
+                animation: `${SPINNER_CLASS} 0.8s linear infinite`,
+              }}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Item({
   item,
   values,
@@ -216,6 +351,7 @@ function Item({
   frontViewFrame,
   sideViewFrame,
   logoUrl,
+  photoLoading,
   shift,
 }: {
   item: SlipItem;
@@ -226,6 +362,7 @@ function Item({
   frontViewFrame?: ViewFrame;
   sideViewFrame?: ViewFrame;
   logoUrl?: string;
+  photoLoading: boolean;
   shift?: { x: number; y: number };
 }) {
   /*
@@ -308,37 +445,25 @@ function Item({
             ? `scale(${item.zoom})`
             : undefined;
 
-    const picture = (
-      <img
-        src={src}
-        alt={item.alt}
-        style={{
-          display: 'block',
-          width: '100%',
-          height: '100%',
-          objectFit: item.slot ? 'cover' : undefined,
-          /* Scaled about the centre, so cropping in keeps the middle of the
-             frame — which is where the truck is. */
-          ...(transform ? { transform } : {}),
-        }}
-      />
-    );
-
     /* The wrapper does the clipping. A transform on the image alone would
-       spill over the slip, because nothing above it has overflow hidden. */
+       spill over the slip, because nothing above it has overflow hidden.
+       PhotoSlot is that wrapper, plus the spinner for the two that are
+       fetched over the network rather than bundled. */
+    const isCamera = item.slot === 'front-view' || item.slot === 'side-view';
     return (
-      <div
-        style={{
-          ...place,
-          width: mm(item.width),
-          height: mm(item.height),
-          overflow: 'hidden',
-          borderRadius: item.radius,
-          lineHeight: 0,
-        }}
-      >
-        {picture}
-      </div>
+      <PhotoSlot
+        /* Remounted when the picture changes, so the new one is waited for
+           rather than inheriting the last one's "arrived". */
+        key={src}
+        item={item}
+        place={place}
+        src={src}
+        transform={transform}
+        /* Only a real photograph is worth waiting for: the bundled
+           placeholder is already here, and a spinner over it would promise
+           something that is never coming. */
+        loading={isCamera && photoLoading && src !== ART.TRUCK_PLACEHOLDER}
+      />
     );
   }
 

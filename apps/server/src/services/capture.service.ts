@@ -102,6 +102,40 @@ export async function imagesForWeighment(weighmentId: string): Promise<SlipImage
   return out;
 }
 
+/**
+ * The same, for a whole page of weighings at once.
+ *
+ * One query rather than one per row: a page of twenty-five rows asking
+ * separately is twenty-five round trips to Atlas in Mumbai, from a droplet in
+ * New York, to answer something the list already knows it will be asked.
+ *
+ * Weighings with no pictures are simply absent from the map; the caller fills
+ * them in as a pair of nulls, which is what a bridge without cameras means.
+ */
+export async function imagesForWeighments(
+  weighmentIds: readonly string[],
+): Promise<Map<string, SlipImages>> {
+  const out = new Map<string, SlipImages>();
+  if (weighmentIds.length === 0) return out;
+
+  const rows = await CaptureModel.find({ weighment_id: { $in: [...weighmentIds] } })
+    .sort({ taken_at: 1 })
+    .lean();
+
+  for (const row of rows) {
+    const id = String(row.weighment_id);
+    const images = out.get(id) ?? { front: null, side: null };
+    // Sorted by when it was taken, so the second pass's picture wins — the
+    // same rule imagesForWeighment follows, and the later one shows the truck
+    // as it left rather than as it arrived.
+    if (row.view === 'FRONT') images.front = String(row._id);
+    if (row.view === 'SIDE') images.side = String(row._id);
+    out.set(id, images);
+  }
+
+  return out;
+}
+
 export async function findCapture(id: string) {
   return CaptureModel.findById(id).lean();
 }
