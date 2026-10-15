@@ -139,29 +139,85 @@ export function WhatsAppShareButton({
   }, [draw]);
 
   /**
+   * Whether a share is still open.
+   *
+   * Chrome refuses a second share while one is outstanding, and it does not
+   * always settle the first: closing the Windows share flyout by clicking
+   * away can leave its promise hanging for good. Without this, one dismissed
+   * dialog makes every later press fail until the page is reloaded — which
+   * is what "it works sometimes" looked like on site.
+   */
+  const sharing = React.useRef(false);
+
+  /**
    * The route with no pasting in it.
    *
    * Called synchronously from the click so the browser still counts it as the
    * operator's own action, which `navigator.share` requires.
+   *
+   * Returns false for "could not even start" — no share sheet on this
+   * machine, or one already open — so the caller can take the other route
+   * rather than leaving the operator with nothing.
    */
-  const shareToApp = (ready: File): boolean => {
-    if (!canShareFile(ready)) return false;
-    void navigator.share({ files: [ready], title: fileName }).catch((error: unknown) => {
-      // Closing the share sheet without choosing is not a failure.
-      if (error instanceof Error && error.name === 'AbortError') return;
-      toast.error('Could not hand the slip to WhatsApp', {
-        description: 'Try again, or use the clipboard: press WhatsApp once more.',
+  const shareToApp = (ready: File, onFailed: () => void): boolean => {
+    if (sharing.current || !canShareFile(ready)) return false;
+
+    sharing.current = true;
+    /* Released on a timer as well as on settling, because a promise that
+       never settles would otherwise disable this button for the shift. */
+    const release = window.setTimeout(() => (sharing.current = false), 60_000);
+    const done = () => {
+      window.clearTimeout(release);
+      sharing.current = false;
+    };
+
+    /* No title: the file name already carries the slip number, and the fewer
+       things a share target has to accept, the fewer ways it refuses. */
+    void navigator
+      .share({ files: [ready] })
+      .then(done)
+      .catch((error: unknown) => {
+        done();
+        // Closing the sheet without choosing is a decision, not a failure.
+        if (error instanceof Error && error.name === 'AbortError') return;
+
+        /*
+         * Anything else and the operator still wants the slip sent. Rather
+         * than an apology they get the other route — copied, with WhatsApp
+         * Web open — which is a worse flow than the share sheet and a far
+         * better one than a dead end.
+         */
+        console.warn('Web Share refused the slip:', error);
+        onFailed();
       });
-    });
+
     return true;
   };
 
-  /** The route through WhatsApp Web: copy, open, paste. */
-  const shareThroughWeb = async (): Promise<void> => {
+  /**
+   * The route through WhatsApp Web: copy, open, paste.
+   *
+   * `sheetRefused` only changes what the operator is told. Arriving here
+   * because Windows would not take the file is worth saying out loud — it is
+   * why they are pasting rather than picking a chat — while arriving here
+   * because the machine has no share sheet at all is simply how this machine
+   * works, and does not need explaining every time.
+   */
+  const shareThroughWeb = async (sheetRefused = false): Promise<void> => {
     const drawn = canvas.current;
     if (!drawn) throw new Error('The slip has not been drawn');
 
     const png = await canvasToFile(drawn, fileName, 'image/png');
+
+    /*
+     * Wait for the window to be ours again before touching the clipboard.
+     *
+     * This route is reached from the share sheet's own refusal, which arrives
+     * while Windows is still closing its flyout. A clipboard write needs this
+     * document focused and fails outright if it is not — so the one path that
+     * exists to rescue a failed share would fail too.
+     */
+    await waitForFocus();
 
     try {
       /*
@@ -180,11 +236,55 @@ export function WhatsAppShareButton({
       return;
     }
 
+    /*
+     * Opening a tab from here is often blocked: the share sheet refused
+     * asynchronously, so the browser no longer sees the operator's press
+     * behind this. The toast then carries a button instead — pressing that
+     * IS a gesture, and the tab opens.
+     */
     const tab = window.open(WHATSAPP_WEB_URL, '_blank');
+    const paste = tab
+      ? 'In WhatsApp, open the chat and press Ctrl+V to attach it.'
+      : 'Open WhatsApp Web, open the chat and press Ctrl+V to attach it.';
+
     toast.success('Slip copied', {
-      description: tab
-        ? 'In WhatsApp, open the chat and press Ctrl+V to attach it.'
-        : 'Open WhatsApp Web, open the chat and press Ctrl+V to attach it.',
+      description: sheetRefused ? `Windows would not pass it to WhatsApp. ${paste}` : paste,
+      ...(tab
+        ? {}
+        : {
+            action: {
+              label: 'Open WhatsApp',
+              onClick: () => window.open(WHATSAPP_WEB_URL, '_blank'),
+            },
+          }),
+    });
+  };
+
+  /**
+   * Resolve once this window has focus again, or shortly regardless.
+   *
+   * Never hangs: a machine where focus does not come back still gets its
+   * clipboard attempt, and a failed one falls through to the download.
+   */
+  const waitForFocus = (): Promise<void> =>
+    document.hasFocus()
+      ? Promise.resolve()
+      : new Promise((resolve) => {
+          const done = () => {
+            window.clearTimeout(timer);
+            window.removeEventListener('focus', done);
+            resolve();
+          };
+          const timer = window.setTimeout(done, 1500);
+          window.addEventListener('focus', done, { once: true });
+        });
+
+  /** Copy and open WhatsApp Web, reporting anything that goes wrong. */
+  const fallBackToWeb = (sheetRefused: boolean) => {
+    void shareThroughWeb(sheetRefused).catch(() => {
+      toast.error('Could not prepare the slip', {
+        description: 'Please try again, or print it and send a photograph.',
+      });
     });
   };
 
@@ -198,7 +298,7 @@ export function WhatsAppShareButton({
      * finished file to answer. Both are only possible when the drawing is
      * already done — which is why it is done in advance.
      */
-    if (drawn && shareToApp(drawn)) return;
+    if (drawn && shareToApp(drawn, () => fallBackToWeb(true))) return;
 
     void (async () => {
       /* Not drawn yet — the window has only just come back, say. It is in
