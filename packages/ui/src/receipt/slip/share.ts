@@ -26,6 +26,7 @@
  */
 
 import * as htmlToImage from 'html-to-image';
+import { PAGE_MM } from './layout.js';
 
 /** Where the operator picks the conversation, when there is no share sheet. */
 export const WHATSAPP_WEB_URL = 'https://web.whatsapp.com';
@@ -48,6 +49,25 @@ const PIXEL_RATIO = 2;
  * is a white sheet that looks like a bug in the slip rather than a race. Both
  * are waited for here so the caller cannot forget.
  */
+/**
+ * The sheet itself, whatever was handed in.
+ *
+ * Callers pass a ref, and a ref points at whatever element happened to be
+ * convenient — a card with padding, a scrolling box narrower than the slip, a
+ * centred column in a wide page. html-to-image sizes its drawing from the
+ * node it is given, so every one of those wrappers is a different way for the
+ * picture to come out cropped or adrift, and a slip sent with its right-hand
+ * column missing is worse than one not sent.
+ *
+ * SlipA5 marks its own root with `data-slip-view`, and that root is exactly
+ * 140 mm by 200 mm with nothing round it. Finding it here means no caller has
+ * to know this, and a future one cannot forget.
+ */
+function sheetWithin(node: HTMLElement): HTMLElement {
+  if (node.matches('[data-slip-view]')) return node;
+  return node.querySelector<HTMLElement>('[data-slip-view]') ?? node;
+}
+
 export async function renderSlipCanvas(node: HTMLElement): Promise<HTMLCanvasElement> {
   /*
    * Refused outright rather than drawn badly. A hidden or unfocused tab has
@@ -63,10 +83,24 @@ export async function renderSlipCanvas(node: HTMLElement): Promise<HTMLCanvasEle
     throw new Error('The window must be in front for the slip to be drawn');
   }
 
-  await waitForContent(node);
+  const sheet = sheetWithin(node);
+  await waitForContent(sheet);
 
   const options = {
     pixelRatio: PIXEL_RATIO,
+    /*
+     * Said rather than inferred. Left to work it out, html-to-image measures
+     * the node as the page has laid it out — inside whatever is scrolling,
+     * centring or clipping it. `offsetWidth` is the element's own box and
+     * ignores any transform an ancestor has applied, which is what the slip
+     * is: 140 mm by 200 mm, wherever it happens to be sitting.
+     */
+    width: sheet.offsetWidth,
+    height: sheet.offsetHeight,
+    /* The clone is drawn on its own, so anything the page did to place it —
+       a centring margin, a preview's scale — has to be undone or it is drawn
+       into the picture as empty space. */
+    style: { margin: '0', transform: 'none', transformOrigin: 'top left' },
     /*
      * NOT cache-busted. The photographs are served immutable and are already
      * in the browser's cache — they are on the screen being looked at — and a
@@ -89,12 +123,28 @@ export async function renderSlipCanvas(node: HTMLElement): Promise<HTMLCanvasEle
    * draws from everything the first warmed up. It costs a few hundred
    * milliseconds, which is paid before the operator clicks anything.
    */
-  await htmlToImage.toCanvas(node, options);
-  const canvas = await htmlToImage.toCanvas(node, options);
+  await htmlToImage.toCanvas(sheet, options);
+  const canvas = await htmlToImage.toCanvas(sheet, options);
 
   // Belt and braces: whatever went wrong, a blank sheet is never the answer.
   if (isBlank(canvas)) throw new Error('The slip came out blank');
+  if (!hasSlipShape(canvas)) throw new Error('The slip came out the wrong shape');
   return canvas;
+}
+
+/**
+ * Whether what came out is the shape of a slip.
+ *
+ * A picture of the right size can still be the wrong picture: measured from a
+ * wrapper rather than the sheet, it comes out with the slip adrift in it and
+ * a column missing off the edge. The paper is 140 by 200, and nothing else
+ * this draws is anywhere near that ratio — so one comparison catches every
+ * version of that mistake, including the next one.
+ */
+export function hasSlipShape(canvas: HTMLCanvasElement): boolean {
+  if (canvas.height === 0) return false;
+  const wanted = PAGE_MM.width / PAGE_MM.height;
+  return Math.abs(canvas.width / canvas.height - wanted) < 0.02;
 }
 
 /**

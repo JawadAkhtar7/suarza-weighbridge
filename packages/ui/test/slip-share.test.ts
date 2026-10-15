@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { isBlank, renderSlipCanvas } from '../src/receipt/slip/share.js';
+import { hasSlipShape, isBlank, renderSlipCanvas } from '../src/receipt/slip/share.js';
 
 /** A canvas that reports whatever pixels the test asks for. */
 function canvasOf(pixel: [number, number, number], size = 64): HTMLCanvasElement {
@@ -54,6 +54,30 @@ describe('isBlank', () => {
       getContext: () => null,
     } as unknown as HTMLCanvasElement;
     expect(isBlank(opaque)).toBe(false);
+  });
+});
+
+describe('hasSlipShape', () => {
+  const shaped = (width: number, height: number) =>
+    ({ width, height }) as unknown as HTMLCanvasElement;
+
+  it('accepts the paper the slip is printed on', () => {
+    // 140 x 200 at two pixels per CSS pixel, which is what the renderer makes.
+    expect(hasSlipShape(shaped(1058, 1512))).toBe(true);
+  });
+
+  it('refuses a picture measured from the wrapper instead of the sheet', () => {
+    /*
+     * The shape of the bug this exists for: drawn from a card that is wider
+     * than the slip, the picture comes out with the slip adrift in it and a
+     * column missing off the right edge. It is not blank and nothing throws,
+     * so without this it would be sent to a customer.
+     */
+    expect(hasSlipShape(shaped(2000, 1512))).toBe(false);
+  });
+
+  it('refuses a picture of nothing', () => {
+    expect(hasSlipShape(shaped(0, 0))).toBe(false);
   });
 });
 

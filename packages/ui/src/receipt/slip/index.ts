@@ -27,6 +27,8 @@ export {
   canShareFile,
   canvasToFile,
   downloadFile,
+  hasSlipShape,
+  isBlank,
   renderSlipCanvas,
   WHATSAPP_WEB_URL,
 } from './share.js';
