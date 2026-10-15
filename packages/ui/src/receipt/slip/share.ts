@@ -49,6 +49,20 @@ const PIXEL_RATIO = 2;
  * are waited for here so the caller cannot forget.
  */
 export async function renderSlipCanvas(node: HTMLElement): Promise<HTMLCanvasElement> {
+  /*
+   * Refused outright rather than drawn badly. A hidden or unfocused tab has
+   * its timers throttled to a crawl by the browser, and html-to-image's
+   * off-screen image never finishes painting: what comes back is a white
+   * sheet with nothing wrong with it that any check could see at the time.
+   *
+   * This is not theoretical. The operator app opens the print tab by itself
+   * the moment a slip is saved, which backgrounds the window a few hundred
+   * milliseconds before this used to run.
+   */
+  if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+    throw new Error('The window must be in front for the slip to be drawn');
+  }
+
   await waitForContent(node);
 
   const options = {
@@ -76,7 +90,40 @@ export async function renderSlipCanvas(node: HTMLElement): Promise<HTMLCanvasEle
    * milliseconds, which is paid before the operator clicks anything.
    */
   await htmlToImage.toCanvas(node, options);
-  return await htmlToImage.toCanvas(node, options);
+  const canvas = await htmlToImage.toCanvas(node, options);
+
+  // Belt and braces: whatever went wrong, a blank sheet is never the answer.
+  if (isBlank(canvas)) throw new Error('The slip came out blank');
+  return canvas;
+}
+
+/**
+ * Whether what came out is a blank sheet.
+ *
+ * Checked on every drawing, because every way this fails fails the same way:
+ * html-to-image copies the element into an off-screen image, and anything
+ * that stops that image being painted — a throttled background tab above
+ * all — yields a canvas of the background colour with no error at all. A
+ * white picture looks like a bug in the slip to whoever receives it, and is
+ * the one outcome worth refusing to send.
+ *
+ * A real slip is about half ink. Sampling every few hundred pixels is plenty
+ * to tell half from none, and costs a millisecond.
+ */
+export function isBlank(canvas: HTMLCanvasElement): boolean {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return false;
+
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+  let ink = 0;
+  let looked = 0;
+  // A prime stride, so a regular pattern in the picture cannot line up with it.
+  for (let i = 0; i < data.length; i += 4 * 37) {
+    looked += 1;
+    if (data[i]! < 240 || data[i + 1]! < 240 || data[i + 2]! < 240) ink += 1;
+  }
+
+  return looked === 0 || ink / looked < 0.01;
 }
 
 /** The canvas as a file WhatsApp will take. */

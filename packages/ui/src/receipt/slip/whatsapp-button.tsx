@@ -68,48 +68,75 @@ export function WhatsAppShareButton({
   const canvas = React.useRef<HTMLCanvasElement | null>(null);
   /** The JPEG, made up front so `canShare` can be asked inside the click. */
   const file = React.useRef<File | null>(null);
-  const [drawing, setDrawing] = React.useState(true);
+  const [ready, setReady] = React.useState(false);
+
+  /**
+   * Draw the slip, and keep both the canvas and the file it makes.
+   *
+   * False when the window is not in front, which is less a failure than a
+   * "not now": the drawing is tried again the moment it is.
+   */
+  const draw = React.useCallback(async (): Promise<boolean> => {
+    const node = target();
+    if (!node) return false;
+
+    try {
+      const drawn = await renderSlipCanvas(node);
+      canvas.current = drawn;
+      file.current = await canvasToFile(drawn, fileName, 'image/jpeg');
+      return true;
+    } catch {
+      canvas.current = null;
+      file.current = null;
+      return false;
+    }
+    // `target` is a fresh closure every render; the slip it points at is what
+    // matters, and that changes with the file name.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileName]);
 
   /*
-   * Drawn shortly after the slip appears, while this tab still has focus.
+   * Drawn as soon as the window is in front, and again whenever it comes back.
    *
-   * Deferred rather than immediate so it does not compete with the print tab
-   * opening and the photographs arriving — the operator is not looking at
-   * this button in the first half second.
+   * Not simply on a timer. The operator app opens the print tab by itself the
+   * moment a slip is saved, so a timer fires in a window that has just been
+   * pushed behind it — where the browser throttles the work to a crawl and
+   * the picture comes out white, with no error anywhere to say so. Coming
+   * back to the weighing window is also exactly what the operator does before
+   * pressing this button.
    */
   React.useEffect(() => {
     let cancelled = false;
     canvas.current = null;
     file.current = null;
-    setDrawing(true);
+    setReady(false);
 
-    const timer = window.setTimeout(() => {
-      const node = target();
-      if (!node) {
-        if (!cancelled) setDrawing(false);
-        return;
-      }
+    let timer = 0;
+    const attempt = () => {
+      if (cancelled || file.current) return;
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
 
-      void renderSlipCanvas(node)
-        .then(async (drawn) => {
-          if (cancelled) return;
-          canvas.current = drawn;
-          file.current = await canvasToFile(drawn, fileName, 'image/jpeg');
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          if (!cancelled) setDrawing(false);
+      window.clearTimeout(timer);
+      /* A short wait so this does not compete with the print tab opening and
+         the photographs arriving; nobody looks at this button first. */
+      timer = window.setTimeout(() => {
+        void draw().then((done) => {
+          if (!cancelled && done) setReady(true);
         });
-    }, 600);
+      }, 400);
+    };
+
+    attempt();
+    document.addEventListener('visibilitychange', attempt);
+    window.addEventListener('focus', attempt);
 
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', attempt);
+      window.removeEventListener('focus', attempt);
     };
-    // `target` is a fresh closure every render; the slip it points at is what
-    // matters, and that changes with the file name.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileName]);
+  }, [draw]);
 
   /**
    * The route with no pasting in it.
@@ -162,18 +189,30 @@ export function WhatsAppShareButton({
   };
 
   const send = () => {
-    const ready = file.current;
+    const drawn = file.current;
 
-    if (ready && shareToApp(ready)) return;
+    /*
+     * The route with no pasting, decided HERE, inside the click itself:
+     * `navigator.share` only runs while the browser still counts the
+     * operator's press as the reason for it, and `canShare` needs the
+     * finished file to answer. Both are only possible when the drawing is
+     * already done — which is why it is done in advance.
+     */
+    if (drawn && shareToApp(drawn)) return;
 
-    if (!canvas.current) {
-      toast.error('The slip is not ready yet', {
-        description: 'Give it a moment and press WhatsApp again.',
-      });
-      return;
-    }
-
-    void shareThroughWeb().catch(() => {
+    void (async () => {
+      /* Not drawn yet — the window has only just come back, say. It is in
+         front now, because they just pressed a button on it, so this is the
+         moment to draw. */
+      if (!canvas.current && !(await draw())) {
+        toast.error('Could not prepare the slip', {
+          description: 'Keep this window in front and press WhatsApp again.',
+        });
+        return;
+      }
+      setReady(true);
+      await shareThroughWeb();
+    })().catch(() => {
       toast.error('Could not prepare the slip', {
         description: 'Please try again, or print it and send a photograph.',
       });
@@ -181,9 +220,14 @@ export function WhatsAppShareButton({
   };
 
   return (
-    <Button type="button" variant={variant} onClick={send} disabled={disabled || drawing} {...rest}>
+    <Button type="button" variant={variant} onClick={send} disabled={disabled} {...rest}>
       <WhatsAppGlyph className="h-4 w-4" />
-      {drawing ? 'Preparing…' : children}
+      {children}
+      {/* Never disabled: if the slip is not drawn yet the press draws it,
+          with the window in front by definition. Said only to a screen
+          reader, because a label that flickers between two words on a button
+          an operator is about to press is worse than one that does not. */}
+      {!ready && <span className="sr-only">(preparing)</span>}
     </Button>
   );
 }
