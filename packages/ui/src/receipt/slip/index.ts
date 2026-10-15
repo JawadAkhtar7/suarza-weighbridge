@@ -23,3 +23,12 @@ export {
 export type { SlipValuesOptions } from './values.js';
 export { CANVAS, PAGE_MM, UNIT_MM, COLOURS, FONTS, SLIP, LAYERS, VIEW_ASPECT } from './layout.js';
 export type { SlipView, SlipItem, Layer, ValueField, SlipValues } from './layout.js';
+export {
+  canShareFile,
+  canvasToFile,
+  downloadFile,
+  renderSlipCanvas,
+  WHATSAPP_WEB_URL,
+} from './share.js';
+export { WhatsAppShareButton } from './whatsapp-button.js';
+export type { WhatsAppShareButtonProps } from './whatsapp-button.js';

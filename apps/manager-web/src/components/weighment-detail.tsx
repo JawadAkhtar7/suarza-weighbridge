@@ -22,6 +22,7 @@ import {
   DialogTitle,
   SlipA5,
   SLIP_PAGE_CSS,
+  WhatsAppShareButton,
   slipValues,
 } from '@suarza/ui';
 import type { Weighment } from '@suarza/shared';
@@ -118,6 +119,12 @@ export function WeighmentDetail({
               Open slip page
             </a>
           </Button>
+          {/* The same element the print button renders from, so what is sent
+              is the slip on screen rather than a second drawing of it. */}
+          <WhatsAppShareButton
+            target={() => contentRef.current}
+            fileName={`Weight-Bridge-Slip-${weighment.slip_number}`}
+          />
         </div>
 
         {/* Scaled down to fit the dialog; the print above is unaffected, since
