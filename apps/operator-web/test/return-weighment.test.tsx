@@ -177,9 +177,14 @@ describe('completing the second weighing', () => {
     await fetchSlip(user);
     await user.click(await screen.findByRole('button', { name: /complete weighing/i }));
 
-    // The on-screen notice specifically — the toast says the same thing, and
-    // matching either would not prove the record was actually re-fetched.
-    expect(await screen.findByText(/this slip is already completed/i)).toBeInTheDocument();
+    /*
+     * The screen itself, not a message about it. The banner that used to say
+     * this was removed — the state is already plain from what the screen
+     * offers — so what proves the record was re-fetched is that there is no
+     * longer a weighing to complete, only a receipt to reprint.
+     */
+    expect(await screen.findByRole('button', { name: /reprint receipt/i })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /complete weighing/i })).not.toBeInTheDocument();
   });
 });
 
@@ -199,16 +204,15 @@ describe('a slip that is already completed', () => {
     const { user } = renderFlow();
     await fetchSlip(user);
 
-    expect(await screen.findByText(/this slip is already completed/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /reprint receipt/i })).toBeEnabled();
     expect(screen.queryByRole('button', { name: /complete weighing/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /reprint receipt/i })).toBeEnabled();
   });
 
   it('cannot be voided once completed', async () => {
     const { user } = renderFlow();
     await fetchSlip(user);
 
-    await screen.findByText(/this slip is already completed/i);
+    await screen.findByRole('button', { name: /reprint receipt/i });
     expect(screen.queryByRole('button', { name: /void ticket/i })).not.toBeInTheDocument();
   });
 });

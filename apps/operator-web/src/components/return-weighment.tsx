@@ -30,7 +30,7 @@ import {
   type PaymentStatus,
   type Weighment,
 } from '@suarza/shared';
-import { Ban, CircleCheck, Loader2, Printer, RotateCcw, Save, TriangleAlert } from 'lucide-react';
+import { Ban, CircleCheck, Loader2, Printer, RotateCcw, Save } from 'lucide-react';
 import { agentApi, AgentApiError, printPageUrl, type WeighmentResponse } from '../lib/api.js';
 import { SlipSearch } from './slip-search.js';
 import { RecentWeighments } from './recent-weighments.js';
@@ -117,12 +117,11 @@ export function ReturnWeighment({
     mutationFn: (slip: string) => agentApi.getWeighment(slip),
     onSuccess: (response) => {
       onClearCapture();
+      /* No toast for a slip that is already completed. The screen it opens on
+         says so plainly — the weighing is filled in, the capture is gone and
+         the reprint is the only button left — and a warning on top of that is
+         something to dismiss rather than something to read. */
       loadRecord(response);
-      if (response.weighment.status === 'COMPLETED') {
-        toast.warning(`Slip ${response.weighment.slip_number} is already completed`, {
-          description: 'You can reprint the receipt instead.',
-        });
-      }
     },
     onError: (error) => {
       if (error instanceof AgentApiError && error.code === 'SLIP_NOT_FOUND') {
@@ -256,15 +255,6 @@ export function ReturnWeighment({
   return (
     <div className="space-y-4">
       {justCompleted && <CompletedBanner weighment={weighment} />}
-
-      {weighment.status === 'COMPLETED' && !justCompleted && (
-        <Notice
-          tone="warning"
-          icon={<TriangleAlert className="h-5 w-5" />}
-          title="This slip is already completed"
-          body="It cannot be weighed again. Reprint the receipt if the driver needs another copy."
-        />
-      )}
 
       {weighment.status === 'VOID' && (
         <Notice
