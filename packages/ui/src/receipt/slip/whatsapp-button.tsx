@@ -96,14 +96,20 @@ export function WhatsAppShareButton({
   }, [fileName]);
 
   /*
-   * Drawn as soon as the window is in front, and again whenever it comes back.
+   * Drawn as soon as the window is in front, and kept trying until it is.
    *
-   * Not simply on a timer. The operator app opens the print tab by itself the
-   * moment a slip is saved, so a timer fires in a window that has just been
-   * pushed behind it — where the browser throttles the work to a crawl and
-   * the picture comes out white, with no error anywhere to say so. Coming
-   * back to the weighing window is also exactly what the operator does before
-   * pressing this button.
+   * KEEPING TRYING is the point. Drawing needs this window in front, and the
+   * minutes after a slip is saved are full of reasons it is not: the app
+   * opens the print tab by itself, the print dialog takes the focus from
+   * that, a driver asks something and the operator alt-tabs. Attempting only
+   * when focus returns sounds equivalent and is not — a single attempt that
+   * lands in one of those gaps leaves the slip undrawn, and nothing tries
+   * again until the operator happens to leave the window and come back.
+   *
+   * That was the whole bug: with nothing drawn, pressing the button could not
+   * offer the share sheet — handing a file to WhatsApp needs the finished
+   * file inside the click itself — so it quietly took the clipboard route
+   * instead. Which looked, from the outside, exactly like Windows refusing.
    */
   React.useEffect(() => {
     let cancelled = false;
@@ -112,21 +118,37 @@ export function WhatsAppShareButton({
     setReady(false);
 
     let timer = 0;
+    let attempts = 0;
+
     const attempt = () => {
       if (cancelled || file.current) return;
-      if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
 
       window.clearTimeout(timer);
-      /* A short wait so this does not compete with the print tab opening and
-         the photographs arriving; nobody looks at this button first. */
-      timer = window.setTimeout(() => {
-        void draw().then((done) => {
-          if (!cancelled && done) setReady(true);
-        });
-      }, 400);
+      /* The first wait is longer: nobody looks at this button in the half
+         second after a save, and the photographs are still arriving. */
+      timer = window.setTimeout(
+        () => {
+          if (cancelled || file.current) return;
+          attempts += 1;
+
+          void draw().then((done) => {
+            if (cancelled) return;
+            if (done) {
+              setReady(true);
+              return;
+            }
+            // Not in front, or not ready. Try again, for a while.
+            if (attempts < 40) attempt();
+          });
+        },
+        attempts === 0 ? 400 : 1500,
+      );
     };
 
     attempt();
+    /* Still worth listening: coming back to the window is the likeliest
+       moment for an attempt to succeed, and waiting out the interval would
+       be a second and a half of the button being the lesser thing. */
     document.addEventListener('visibilitychange', attempt);
     window.addEventListener('focus', attempt);
 
@@ -159,7 +181,7 @@ export function WhatsAppShareButton({
    * machine, or one already open — so the caller can take the other route
    * rather than leaving the operator with nothing.
    */
-  const shareToApp = (ready: File, onFailed: () => void): boolean => {
+  const shareToApp = (ready: File, onFailed: (reason: string) => void): boolean => {
     if (sharing.current || !canShareFile(ready)) return false;
 
     sharing.current = true;
@@ -188,7 +210,7 @@ export function WhatsAppShareButton({
          * better one than a dead end.
          */
         console.warn('Web Share refused the slip:', error);
-        onFailed();
+        onFailed(error instanceof Error ? error.name : 'unknown');
       });
 
     return true;
@@ -203,7 +225,7 @@ export function WhatsAppShareButton({
    * because the machine has no share sheet at all is simply how this machine
    * works, and does not need explaining every time.
    */
-  const shareThroughWeb = async (sheetRefused = false): Promise<void> => {
+  const shareThroughWeb = async (sheetRefused = ''): Promise<void> => {
     const drawn = canvas.current;
     if (!drawn) throw new Error('The slip has not been drawn');
 
@@ -248,7 +270,9 @@ export function WhatsAppShareButton({
       : 'Open WhatsApp Web, open the chat and press Ctrl+V to attach it.';
 
     toast.success('Slip copied', {
-      description: sheetRefused ? `Windows would not pass it to WhatsApp. ${paste}` : paste,
+      description: sheetRefused
+        ? `Windows would not pass it to WhatsApp (${sheetRefused}). ${paste}`
+        : paste,
       ...(tab
         ? {}
         : {
@@ -280,7 +304,7 @@ export function WhatsAppShareButton({
         });
 
   /** Copy and open WhatsApp Web, reporting anything that goes wrong. */
-  const fallBackToWeb = (sheetRefused: boolean) => {
+  const fallBackToWeb = (sheetRefused: string) => {
     void shareThroughWeb(sheetRefused).catch(() => {
       toast.error('Could not prepare the slip', {
         description: 'Please try again, or print it and send a photograph.',
@@ -298,19 +322,38 @@ export function WhatsAppShareButton({
      * finished file to answer. Both are only possible when the drawing is
      * already done — which is why it is done in advance.
      */
-    if (drawn && shareToApp(drawn, () => fallBackToWeb(true))) return;
+    if (drawn && shareToApp(drawn, (reason) => fallBackToWeb(reason))) return;
 
     void (async () => {
-      /* Not drawn yet — the window has only just come back, say. It is in
-         front now, because they just pressed a button on it, so this is the
-         moment to draw. */
-      if (!canvas.current && !(await draw())) {
+      /*
+       * Not drawn yet. The window is in front now — they just pressed a
+       * button on it — so this is the moment.
+       */
+      if (!file.current && !(await draw())) {
         toast.error('Could not prepare the slip', {
           description: 'Keep this window in front and press WhatsApp again.',
         });
         return;
       }
       setReady(true);
+
+      /*
+       * Now drawn, but too late for the share sheet: `navigator.share` only
+       * runs while the browser still sees the operator's press behind it,
+       * and that is long gone by the time a slip has been drawn.
+       *
+       * So on a machine that CAN share, say so and let them press again,
+       * rather than silently taking the lesser route and leaving them
+       * wondering why Windows never asked which app. One press, once.
+       */
+      const drawnNow = file.current;
+      if (drawnNow && canShareFile(drawnNow)) {
+        toast.info('Slip ready', {
+          description: 'Press WhatsApp again to choose the chats to send it to.',
+        });
+        return;
+      }
+
       await shareThroughWeb();
     })().catch(() => {
       toast.error('Could not prepare the slip', {
