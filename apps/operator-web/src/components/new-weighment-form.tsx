@@ -113,6 +113,15 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
   const [firstIsManual, setFirstIsManual] = useState(false);
   const [secondIsManual, setSecondIsManual] = useState(false);
   const [sourceSlip, setSourceSlip] = useState<string | null>(null);
+  /**
+   * Whether the slip the figures came from has photographs to carry over.
+   *
+   * Null until it has been asked. Worth asking before the save rather than
+   * after the printing: this flow photographs nothing — there is no truck on
+   * the bridge — so a source slip with no pictures makes a slip with no
+   * pictures, and that is better known at the window than at the printer.
+   */
+  const [sourceHasPhotos, setSourceHasPhotos] = useState<boolean | null>(null);
   const [slipError, setSlipError] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('PAID');
   const [amountEdited, setAmountEdited] = useState(false);
@@ -148,6 +157,17 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
     onSuccess: ({ weighment }) => {
       setSourceSlip(weighment.slip_number);
       setSlipError(null);
+
+      /*
+       * The pictures, asked for separately and never waited on. The slip is
+       * filled in the moment the weighing arrives; whether it also has
+       * photographs is a line of reassurance that can land a beat later.
+       */
+      setSourceHasPhotos(null);
+      void agentApi
+        .slipCaptures(weighment.slip_number)
+        .then((found) => setSourceHasPhotos(Boolean(found.front ?? found.side)))
+        .catch(() => setSourceHasPhotos(false));
 
       form.reset({
         customer_name: weighment.customer_name,
@@ -188,6 +208,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
     },
     onError: (error) => {
       setSourceSlip(null);
+      setSourceHasPhotos(null);
       setSlipError(
         error instanceof AgentApiError && error.status === 404
           ? 'No weighment found with that slip number.'
@@ -223,6 +244,16 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
           second_weight_kg: parseAmount(repeatSecondWeight),
           second_weight_src: secondIsManual ? 'MANUAL' : 'SERIAL',
           payment_status: paymentStatus,
+          /*
+           * The photographs come off the slip the figures came off.
+           *
+           * Nothing is on the bridge in this flow — both weights were read
+           * from a slip in the driver's hand — so photographing the yard now
+           * would put an empty plate, or somebody else's lorry, onto this
+           * slip. The honest picture is the one taken when this truck was
+           * last weighed.
+           */
+          copy_captures_from_slip: sourceSlip ?? undefined,
         });
       }
 
@@ -239,6 +270,9 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
           second_weight_kg: captured.kg,
           second_weight_src: captured.source,
           payment_status: paymentStatus,
+          /* The pictures taken when the weight was, not when Save was
+             pressed: by now the truck has often pulled off the bridge. */
+          capture_id: captured.captureId ?? undefined,
         });
       }
 
@@ -246,6 +280,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
         ...details,
         first_weight_kg: captured.kg,
         first_weight_src: captured.source,
+        capture_id: captured.captureId ?? undefined,
       });
     },
     onSuccess: (response) => {
@@ -405,7 +440,13 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
             {sourceSlip && (
               <p className="text-sm text-muted-foreground">
                 Filled from slip <span className="tabular font-semibold">{sourceSlip}</span>. Both
-                weights can be corrected below; saving issues a new slip.
+                weights can be corrected below; saving issues a new slip.{' '}
+                {sourceHasPhotos === true && 'Its photographs will be carried over.'}
+                {sourceHasPhotos === false && (
+                  <span className="font-medium text-brand">
+                    It has no photographs, so this slip will print without them.
+                  </span>
+                )}
               </p>
             )}
           </div>

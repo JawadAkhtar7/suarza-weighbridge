@@ -46,6 +46,13 @@ export interface CreateResult {
   warnings: Warning[];
 }
 
+export interface WeighedPhotoSources {
+  /** A token for pictures taken when the operator captured the weight. */
+  captureId?: string | null;
+  /** An earlier slip whose pictures this weighing carries instead. */
+  copyFromSlip?: string | null;
+}
+
 export interface WeighmentServiceOptions {
   stationId: string;
   /**
@@ -62,7 +69,11 @@ export interface WeighmentServiceOptions {
    * milliseconds on a good day and times out on a bad one, and neither may
    * hold a database write open or delay the operator at the window.
    */
-  onWeighed?: (weighment: Weighment, pass: 'FIRST' | 'SECOND') => void;
+  onWeighed?: (
+    weighment: Weighment,
+    pass: 'FIRST' | 'SECOND',
+    sources: WeighedPhotoSources,
+  ) => void;
 }
 
 export class WeighmentService {
@@ -189,7 +200,7 @@ export class WeighmentService {
     })();
 
     this.notifyChanged();
-    this.notifyWeighed(weighment, 'FIRST');
+    this.notifyWeighed(weighment, 'FIRST', { captureId: input.capture_id });
     return { weighment, warnings };
   }
 
@@ -333,7 +344,10 @@ export class WeighmentService {
     })();
 
     this.notifyChanged();
-    this.notifyWeighed(weighment, 'SECOND');
+    this.notifyWeighed(weighment, 'SECOND', {
+      captureId: input.capture_id,
+      copyFromSlip: input.copy_captures_from_slip,
+    });
     return { weighment, warnings };
   }
 
@@ -430,7 +444,7 @@ export class WeighmentService {
     })();
 
     this.notifyChanged();
-    this.notifyWeighed(result, 'SECOND');
+    this.notifyWeighed(result, 'SECOND', { captureId: input.capture_id });
     return result;
   }
 
@@ -548,9 +562,13 @@ export class WeighmentService {
     return this.weighments.findById(record.id)!;
   }
 
-  private notifyWeighed(weighment: Weighment, pass: 'FIRST' | 'SECOND'): void {
+  private notifyWeighed(
+    weighment: Weighment,
+    pass: 'FIRST' | 'SECOND',
+    sources: WeighedPhotoSources = {},
+  ): void {
     try {
-      this.options.onWeighed?.(weighment, pass);
+      this.options.onWeighed?.(weighment, pass, sources);
     } catch {
       // Same rule as notifyChanged: a picture that could not be taken must
       // never turn a saved weighing into a failed request.

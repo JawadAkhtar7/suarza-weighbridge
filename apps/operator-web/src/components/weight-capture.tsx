@@ -9,7 +9,7 @@
  *     is always offered instead and is flagged in the record and audit log
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Badge,
   Button,
@@ -26,11 +26,20 @@ import { Camera, Check, Keyboard, RotateCcw, X } from 'lucide-react';
 import type { LiveWeightResult } from '../hooks/use-live-weight.js';
 import { canCapture, requiresConfirmation } from '../lib/indicator-state.js';
 import { useHotkeys } from '../hooks/use-hotkeys.js';
+import { agentApi } from '../lib/api.js';
 import { HOTKEYS } from '../lib/constants.js';
 
 export interface CapturedWeight {
   kg: number;
   source: 'SERIAL' | 'MANUAL';
+  /**
+   * The photographs taken at this moment, waiting for the save to claim them.
+   *
+   * Null on a station with no cameras, and on the rare occasion the agent
+   * could not be asked. Neither stops a weighing: the slip falls back to the
+   * placeholder, as it did before any of this existed.
+   */
+  captureId?: string | null;
 }
 
 interface WeightCaptureProps {
@@ -44,6 +53,25 @@ interface WeightCaptureProps {
 
 type Mode = 'idle' | 'confirming' | 'manual';
 
+/**
+ * Photograph the bridge at this instant, and come back with the token.
+ *
+ * Awaited, because the agent answers before the cameras do — it hands back a
+ * token and takes the pictures in the background — so this costs a few
+ * milliseconds over the loopback and nothing more.
+ *
+ * Null on any failure at all. A weighing has never depended on a photograph
+ * and must not start now: an operator with a truck on the plate and a camera
+ * that will not answer needs the weight captured, not an error.
+ */
+async function photographNow(): Promise<string | null> {
+  try {
+    return (await agentApi.captureNow()).capture_id;
+  } catch {
+    return null;
+  }
+}
+
 export function WeightCapture({
   live,
   captured,
@@ -54,9 +82,32 @@ export function WeightCapture({
   const passLabel = pass === 'first' ? 'First' : 'Second';
   const [mode, setMode] = useState<Mode>('idle');
   const [pendingKg, setPendingKg] = useState(0);
+  /**
+   * The photographs taken when Capture was clicked, while this reading is
+   * being confirmed.
+   *
+   * Taken at the click rather than at the confirmation, because the click is
+   * when the operator looked at the bridge. Confirming can take several
+   * seconds — the whole point of the step is that somebody checks the
+   * indicator's own display — and the truck does not wait.
+   */
+  const pendingCaptureId = useRef<string | null>(null);
   const [manualValue, setManualValue] = useState('');
 
   const captureAllowed = canCapture(live.state);
+
+  /**
+   * Hand the weight up, with its photographs' token once it arrives.
+   *
+   * The weight goes up FIRST and the token follows a moment later, so the
+   * screen never waits on the agent: the operator sees the captured figure
+   * immediately, which is what they clicked for.
+   */
+  const capturePhotographsAnd = async (weight: CapturedWeight) => {
+    onCapture(weight);
+    const captureId = await photographNow();
+    if (captureId) onCapture({ ...weight, captureId });
+  };
 
   const handleCapture = () => {
     if (!captureAllowed) {
@@ -75,19 +126,33 @@ export function WeightCapture({
     if (requiresConfirmation(live.state)) {
       setPendingKg(snapshot);
       setMode('confirming');
+      pendingCaptureId.current = null;
+      void photographNow().then((id) => {
+        pendingCaptureId.current = id;
+      });
       return;
     }
 
-    onCapture({ kg: snapshot, source: 'SERIAL' });
+    void capturePhotographsAnd({ kg: snapshot, source: 'SERIAL' });
     toast.success(`Captured ${formatKg(snapshot)}`);
   };
 
   useHotkeys({ [HOTKEYS.capture]: handleCapture }, mode === 'idle' && !captured);
 
   const confirmPending = () => {
-    onCapture({ kg: pendingKg, source: 'SERIAL' });
+    /* Already photographed, when Capture was clicked. */
+    onCapture({ kg: pendingKg, source: 'SERIAL', captureId: pendingCaptureId.current });
+    pendingCaptureId.current = null;
     setMode('idle');
     toast.success(`Captured ${formatKg(pendingKg)}`);
+  };
+
+  /** Abandon a reading being confirmed, and the photographs taken with it. */
+  const cancelPending = () => {
+    const id = pendingCaptureId.current;
+    pendingCaptureId.current = null;
+    if (id) void agentApi.discardCapture(id).catch(() => undefined);
+    setMode('idle');
   };
 
   const applyManual = () => {
@@ -96,7 +161,10 @@ export function WeightCapture({
       toast.error('Enter a valid weight in kilograms');
       return;
     }
-    onCapture({ kg, source: 'MANUAL' });
+    /* A typed weight is photographed too: the truck is on the bridge either
+       way, and which of the two the figure came from is a separate question
+       the slip already answers with its MANUAL marker. */
+    void capturePhotographsAnd({ kg, source: 'MANUAL' });
     setMode('idle');
     setManualValue('');
     // Said out loud because it is permanent: manual weights are flagged on the
@@ -149,7 +217,7 @@ export function WeightCapture({
               <Check />
               Confirm
             </Button>
-            <Button variant="outline" onClick={() => setMode('idle')} className="flex-1">
+            <Button variant="outline" onClick={cancelPending} className="flex-1">
               <X />
               Cancel
             </Button>

@@ -14,7 +14,17 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { Button, Card, CardContent, CardHeader, CardTitle, SlipA5, slipValues, toast } from '@suarza/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  SlipA5,
+  WhatsAppShareButton,
+  slipValues,
+  toast,
+} from '@suarza/ui';
 import type { Weighment } from '@suarza/shared';
 import { Printer } from 'lucide-react';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
@@ -38,6 +48,9 @@ interface ReceiptPanelProps {
 export function ReceiptPanel({ weighment, variant, title, autoPrint = false }: ReceiptPanelProps) {
   const { settings } = useReceiptSettings();
   const autoOpenedFor = useRef<string | null>(null);
+  /* The slip itself, for WhatsApp: the picture sent is drawn from this very
+     element, so it is the preview the operator just looked at. */
+  const slipRef = useRef<HTMLDivElement>(null);
 
   const openPrintTab = () => {
     const tab = window.open(printPageUrl(weighment.slip_number, variant), '_blank');
@@ -87,6 +100,12 @@ export function ReceiptPanel({ weighment, variant, title, autoPrint = false }: R
             Print
           </Button>
 
+          {/* The customer's copy, without the paper. The slip drawn below is
+              what gets sent, so it cannot disagree with what was printed. */}
+          <WhatsAppShareButton
+            target={() => slipRef.current}
+            fileName={`Weight-Bridge-Slip-${weighment.slip_number}`}
+          />
         </div>
       </CardHeader>
 
@@ -95,17 +114,21 @@ export function ReceiptPanel({ weighment, variant, title, autoPrint = false }: R
           {/* The same slip the print tab renders and the QR page serves, scaled
               to fit the card. One rendering, so a preview cannot promise
               something the paper does not deliver. */}
-          <SlipA5
-            view="soft"
-            values={slipValues({ weighment })}
-            verifyUrl={receiptUrl ?? undefined}
-            frontImageUrl={
-              captures.data?.front ? captureImageUrl(captures.data.front) : undefined
-            }
-            sideImageUrl={captures.data?.side ? captureImageUrl(captures.data.side) : undefined}
-            frontViewFrame={settings.front_view_frame}
-            sideViewFrame={settings.side_view_frame}
-          />
+          {/* The ref is on the sheet, not on the card around it: what goes to
+              WhatsApp is the slip, not the grey panel it is sitting in. */}
+          <div ref={slipRef}>
+            <SlipA5
+              view="soft"
+              values={slipValues({ weighment })}
+              verifyUrl={receiptUrl ?? undefined}
+              frontImageUrl={
+                captures.data?.front ? captureImageUrl(captures.data.front) : undefined
+              }
+              sideImageUrl={captures.data?.side ? captureImageUrl(captures.data.side) : undefined}
+              frontViewFrame={settings.front_view_frame}
+              sideViewFrame={settings.side_view_frame}
+            />
+          </div>
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground">

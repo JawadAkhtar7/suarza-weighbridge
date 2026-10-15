@@ -1,8 +1,24 @@
 /** The capture UX, driven the way an operator drives it. */
 
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+/*
+ * The agent is mocked because capturing a weight now photographs the bridge
+ * at that instant — see PendingCaptureStore. Unmocked, every test here would
+ * make a real request from jsdom and quietly fall back to "no cameras",
+ * which is the one case that proves nothing.
+ */
+vi.mock('../src/lib/api.js', async () => {
+  const actual = await vi.importActual<typeof import('../src/lib/api.js')>('../src/lib/api.js');
+  return {
+    ...actual,
+    agentApi: { captureNow: vi.fn(), discardCapture: vi.fn() },
+  };
+});
+
+import { agentApi } from '../src/lib/api.js';
 import { WeightCapture } from '../src/components/weight-capture.js';
 import type { LiveWeightResult } from '../src/hooks/use-live-weight.js';
 import type { IndicatorState } from '../src/lib/indicator-state.js';
@@ -13,6 +29,14 @@ const live = (state: IndicatorState, weightKg = 12_340): LiveWeightResult => ({
   simulated: false,
   indicatorError: null,
   agentReachable: state !== 'AGENT_DOWN',
+});
+
+const mocked = vi.mocked(agentApi);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocked.captureNow.mockResolvedValue({ capture_id: 'held-1' });
+  mocked.discardCapture.mockResolvedValue({ discarded: true });
 });
 
 function setup(state: IndicatorState, weightKg = 12_340) {
@@ -33,15 +57,52 @@ describe('capturing a stable reading', () => {
   it('captures the exact reading in one click', async () => {
     const { onCapture, user } = setup('STABLE', 12_340);
     await user.click(screen.getByRole('button', { name: /capture weight/i }));
-    expect(onCapture).toHaveBeenCalledWith({ kg: 12_340, source: 'SERIAL' });
+    expect(onCapture).toHaveBeenCalledWith(expect.objectContaining({ kg: 12_340, source: 'SERIAL' }));
   });
 
   it('freezes the value shown at the moment of the click', async () => {
     // The captured number must be the snapshot, not whatever streams next.
     const { onCapture, user } = setup('STABLE', 8000);
     await user.click(screen.getByRole('button', { name: /capture weight/i }));
-    expect(onCapture).toHaveBeenCalledWith({ kg: 8000, source: 'SERIAL' });
-    expect(onCapture).toHaveBeenCalledTimes(1);
+
+    /*
+     * The weight is reported twice on purpose — once immediately, once when
+     * the photographs' token comes back — so this checks the value on every
+     * call rather than counting them. A second number here would mean the
+     * capture had been read again from a live reading that has moved on,
+     * which is the thing this test exists to catch.
+     */
+    await waitFor(() => expect(onCapture.mock.calls.length).toBeGreaterThan(0));
+    for (const [weight] of onCapture.mock.calls) {
+      expect(weight).toMatchObject({ kg: 8000, source: 'SERIAL' });
+    }
+  });
+
+  it('photographs the bridge at the moment of the capture, and carries the token', async () => {
+    /*
+     * The reason any of this is asynchronous. The cameras used to fire when
+     * the weighing was SAVED — a plate, a product and a customer later, by
+     * which time the truck has usually pulled off the bridge.
+     */
+    const { onCapture, user } = setup('STABLE', 8000);
+    await user.click(screen.getByRole('button', { name: /capture weight/i }));
+
+    expect(mocked.captureNow).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(onCapture).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kg: 8000, captureId: 'held-1' }),
+      ),
+    );
+  });
+
+  it('still captures the weight when the cameras cannot be asked', async () => {
+    // A weighing has never depended on a photograph and must not start now.
+    mocked.captureNow.mockRejectedValue(new Error('no agent'));
+
+    const { onCapture, user } = setup('STABLE', 8000);
+    await user.click(screen.getByRole('button', { name: /capture weight/i }));
+
+    expect(onCapture).toHaveBeenCalledWith(expect.objectContaining({ kg: 8000 }));
   });
 });
 
@@ -66,7 +127,9 @@ describe('capturing when the indicator reports no stability flag', () => {
     expect(screen.getByText(/confirm this weight/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /^confirm$/i }));
-    expect(onCapture).toHaveBeenCalledWith({ kg: 9500, source: 'SERIAL' });
+    expect(onCapture).toHaveBeenCalledWith(
+      expect.objectContaining({ kg: 9500, source: 'SERIAL' }),
+    );
   });
 
   it('captures nothing if the operator cancels', async () => {
@@ -85,7 +148,7 @@ describe('manual fallback', () => {
     await user.type(screen.getByLabelText(/weight in kilograms/i), '7250');
     await user.click(screen.getByRole('button', { name: /use this weight/i }));
 
-    expect(onCapture).toHaveBeenCalledWith({ kg: 7250, source: 'MANUAL' });
+    expect(onCapture).toHaveBeenCalledWith(expect.objectContaining({ kg: 7250, source: 'MANUAL' }));
   });
 
   it('rejects a value that is not a weight', async () => {

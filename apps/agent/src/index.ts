@@ -12,6 +12,7 @@ import { cameraSettings, cloudSettings, settingsLogin } from './deployment.js';
 import { loadConfig } from './config.js';
 import { closeDatabase, openDatabase } from './db/connection.js';
 import { UserRepository } from './db/users.js';
+import { PendingCaptureStore } from './cameras/pending-captures.js';
 import { WeighmentRepository } from './db/weighments.js';
 import { AuditRepository } from './db/audit.js';
 import { createWeightReader } from './indicator/index.js';
@@ -84,9 +85,20 @@ async function main(): Promise<void> {
     onLog: (level, message) => log(`[camera:${level}] ${message}`),
   });
 
+  /*
+   * Photographs are taken when the weight is, not when the weighing is saved
+   * — by then the truck has often pulled off the bridge. This holds them in
+   * between; see PendingCaptureStore.
+   */
+  const pendingCaptures = new PendingCaptureStore({
+    cameras,
+    onLog: (level, message) => log(`[camera:${level}] ${message}`),
+  });
+
   const capture = new CaptureService({
     db,
     cameras,
+    pending: pendingCaptures,
     directory: cameraConfig.capturePath,
     keepDays: cameraConfig.keepDays,
     onLog: (level, message) => log(`[camera:${level}] ${message}`),
@@ -175,7 +187,7 @@ async function main(): Promise<void> {
     onChange: () => syncWorker?.requestSync(),
     // Not awaited: the operator is at the window and the record is already
     // safe. The picture catches up on its own.
-    onWeighed: (weighment, pass) => void capture.capture(weighment, pass),
+    onWeighed: (weighment, pass, sources) => void capture.capture(weighment, pass, sources),
   });
 
   const reader = createWeightReader(config, {
@@ -189,6 +201,7 @@ async function main(): Promise<void> {
     settings,
     users,
     cameras,
+    pendingCaptures,
     capture,
     liveVideo,
     catalogueSync,

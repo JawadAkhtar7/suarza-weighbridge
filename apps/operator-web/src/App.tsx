@@ -24,7 +24,7 @@ import { CameraPanel } from './components/camera-panel.js';
 import { SettingsPanel } from './components/settings-panel.js';
 import { ModeSwitch, type WeighingMode } from './components/mode-switch.js';
 import { useLiveWeight, useSyncStatus } from './hooks/use-live-weight.js';
-import type { AgentWarning } from './lib/api.js';
+import { agentApi, type AgentWarning } from './lib/api.js';
 
 export function App() {
   const live = useLiveWeight();
@@ -32,6 +32,23 @@ export function App() {
 
   const [mode, setMode] = useState<WeighingMode>('first');
   const [captured, setCaptured] = useState<CapturedWeight | null>(null);
+
+  /**
+   * Let go of the weight, and of the photographs taken with it.
+   *
+   * Housekeeping rather than correctness — the agent forgets a token by
+   * itself after ten minutes — but a busy morning of abandoned forms would
+   * otherwise push a live token out of a store full of dead ones.
+   *
+   * Reads the current capture through the setter rather than closing over it,
+   * so this can be called from anywhere without going stale.
+   */
+  const clearCaptured = useCallback(() => {
+    setCaptured((current) => {
+      if (current?.captureId) void agentApi.discardCapture(current.captureId).catch(() => undefined);
+      return null;
+    });
+  }, []);
   const [saved, setSaved] = useState<Weighment | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /* The pass-two net, reported up by ReturnWeighment so it can be shown in
@@ -49,7 +66,7 @@ export function App() {
     if (next === mode) return;
     // A captured weight belongs to the pass it was taken for; carrying it
     // across modes is how a first weight ends up recorded as a second one.
-    setCaptured(null);
+    clearCaptured();
     setSaved(null);
     setSecondNet(null);
     setMode(next);
@@ -57,6 +74,8 @@ export function App() {
 
   const handleSaved = (weighment: Weighment, warnings: AgentWarning[]) => {
     setSaved(weighment);
+    /* The save has already quoted the token; the agent dropped it when it
+       claimed the pictures, so this only clears the screen. */
     setCaptured(null);
 
     toast.success(`Saved — slip ${weighment.slip_number}`, {
@@ -141,7 +160,7 @@ export function App() {
                 live={live}
                 captured={captured}
                 onCapture={setCaptured}
-                onClear={() => setCaptured(null)}
+                onClear={clearCaptured}
                 pass={mode === 'first' ? 'first' : 'second'}
               />
             )}
@@ -167,7 +186,7 @@ export function App() {
             {mode === 'second' ? (
               <ReturnWeighment
                 captured={captured}
-                onClearCapture={() => setCaptured(null)}
+                onClearCapture={clearCaptured}
                 onNetChange={reportSecondNet}
               />
             ) : saved ? (

@@ -24,6 +24,7 @@ import type { UserRepository } from './db/users.js';
 import type { CatalogueSync } from './sync/catalogue-sync.js';
 import type { CameraClient, CameraView } from './cameras/camera-client.js';
 import type { CaptureService } from './cameras/capture-service.js';
+import type { PendingCaptureStore } from './cameras/pending-captures.js';
 import type { LiveVideo } from './cameras/live-video.js';
 import { registerOperatorWeb, resolveOperatorWebDir } from './static.js';
 
@@ -47,6 +48,8 @@ export interface AgentDeps {
   /** Absent when the .env names no cameras; slips then print the placeholder. */
   cameras?: CameraClient;
   capture?: CaptureService;
+  /** Pictures taken at the moment of capture, waiting for their save. */
+  pendingCaptures?: PendingCaptureStore;
   /** The live panel's video, per camera; absent ones fall back to stills. */
   liveVideo?: Partial<Record<CameraView, LiveVideo>>;
   /**

@@ -28,7 +28,7 @@ function parseView(raw: string): CameraView | null {
 }
 
 export function registerCameraRoutes(app: FastifyInstance, deps: AgentDeps): void {
-  const { capture, cameras } = deps;
+  const { capture, cameras, pendingCaptures } = deps;
 
   /** What the operator screen asks before drawing anything. */
   app.get('/cameras', () => ({
@@ -36,6 +36,41 @@ export function registerCameraRoutes(app: FastifyInstance, deps: AgentDeps): voi
     views: cameras?.configuredViews() ?? [],
     live_fps: cameraSettings().liveFps,
   }));
+
+  /**
+   * Photograph the bridge NOW, and hold it for the save that follows.
+   *
+   * Called the moment the operator captures a weight — off the indicator or
+   * typed by hand — because that is when the truck is on the plate. The save
+   * comes a minute later, after a plate and a product and a customer have
+   * been typed, by which time the bridge is often empty or holding the next
+   * lorry.
+   *
+   * Answers at once with a token rather than waiting for two cameras: the
+   * operator clicked a button and the screen has to respond. The pictures
+   * arrive in the background and the save collects them.
+   *
+   * `capture_id: null` means this station has no cameras. The operator app
+   * carries on and the slip prints the placeholder, exactly as before — a
+   * weighing must never depend on a photograph.
+   */
+  app.post('/camera/capture', (request) => {
+    const id = pendingCaptures?.start() ?? null;
+    if (id) request.log.info({ capture_id: id }, 'Photographing the bridge for the next save');
+    return { capture_id: id };
+  });
+
+  /**
+   * Let go of pictures the operator will not be saving — a cleared capture.
+   *
+   * Housekeeping, not correctness: the store forgets a token by itself after
+   * ten minutes. Doing it when we know keeps a busy morning from pushing a
+   * live token out of a store full of abandoned ones.
+   */
+  app.delete<{ Params: { id: string } }>('/camera/capture/:id', (request) => {
+    pendingCaptures?.discard(request.params.id);
+    return { discarded: true };
+  });
 
   /**
    * A stored still, by id. This is what the slip's <img> points at.

@@ -19,7 +19,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, SlipA5, SLIP_PAGE_CSS, slipValues } from '@suarza/ui';
+import { Button, SlipA5, SLIP_PAGE_CSS, WhatsAppShareButton, slipValues } from '@suarza/ui';
 import { Loader2, Printer, X } from 'lucide-react';
 import { agentApi, captureImageUrl } from '../lib/api.js';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
@@ -46,6 +46,9 @@ export function parsePrintRequest(url: URL): PrintRequest | null {
 export function PrintReceiptPage({ request }: { request: PrintRequest }) {
   const { settings, isLoaded } = useReceiptSettings();
   const printedOnce = useRef(false);
+  /* The on-screen slip, which is what WhatsApp sends: the whole design, not
+     the values-only sheet the printer gets. */
+  const slipRef = useRef<HTMLDivElement>(null);
 
   /*
    * A deadline on waiting for the camera stills.
@@ -192,13 +195,19 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
             <Printer className="h-4 w-4" />
             Print
           </Button>
+          {/* The slip drawn below — the whole design, as the customer's copy
+              looks — rather than the values-only sheet that reaches paper. */}
+          <WhatsAppShareButton
+            target={() => slipRef.current}
+            fileName={`Weight-Bridge-Slip-${request.slipNumber}`}
+          />
           <Button variant="ghost" className="ml-auto" onClick={() => window.close()}>
             <X className="h-4 w-4" />
             Close
           </Button>
         </div>
 
-        <div className="mx-auto w-[140mm] bg-white shadow-sm">
+        <div ref={slipRef} className="mx-auto w-[140mm] bg-white shadow-sm">
           <SlipA5
             view="soft"
             values={values}

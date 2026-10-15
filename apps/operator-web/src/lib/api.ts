@@ -200,6 +200,25 @@ export const agentApi = {
 
   cameraStatus: () => request<CameraStatus>('/cameras'),
 
+  /**
+   * Photograph the bridge now and hold it for the save that follows.
+   *
+   * Called the instant a weight is captured, because that is when the truck
+   * is on the plate — by the time the form is filled in and saved it has
+   * usually gone. Answers immediately with a token; the cameras are still
+   * working when it returns.
+   *
+   * `capture_id: null` means this station has no cameras, which is not an
+   * error: the weighing carries on and the slip prints the placeholder.
+   */
+  captureNow: () => request<{ capture_id: string | null }>('/camera/capture', { method: 'POST' }),
+
+  /** Let go of held pictures the operator has cleared. Housekeeping only. */
+  discardCapture: (id: string) =>
+    request<{ discarded: boolean }>(`/camera/capture/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
   slipCaptures: (slip: string) =>
     request<SlipCaptures>(`/weighments/${encodeURIComponent(slip)}/captures`),
 

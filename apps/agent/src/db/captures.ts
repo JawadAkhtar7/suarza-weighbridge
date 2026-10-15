@@ -68,6 +68,20 @@ export class CaptureRepository {
       .all(weighmentId) as CaptureRow[];
   }
 
+  /**
+   * Every picture filed against a slip number.
+   *
+   * By slip rather than by weighment id, because the one caller that wants
+   * this — the fourth-weight flow copying an earlier slip's photographs onto
+   * a new one — has the number off the paper in the driver's hand and nothing
+   * else.
+   */
+  forSlipNumber(slipNumber: string): CaptureRow[] {
+    return this.db
+      .prepare(`SELECT * FROM captures WHERE slip_number = ? ORDER BY taken_at`)
+      .all(slipNumber) as CaptureRow[];
+  }
+
   byId(id: string): CaptureRow | undefined {
     return this.db.prepare(`SELECT * FROM captures WHERE id = ?`).get(id) as
       | CaptureRow

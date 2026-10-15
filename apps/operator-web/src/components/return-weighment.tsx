@@ -147,6 +147,10 @@ export function ReturnWeighment({
       return agentApi.completeWeighment(record.weighment.slip_number, {
         second_weight_kg: captured.kg,
         second_weight_src: captured.source,
+        /* The pictures taken when the weight was, not when Complete was
+           pressed: the loaded truck is on the bridge at the first moment and
+           usually gone by the second. */
+        capture_id: captured.captureId ?? undefined,
         amount_charged: parseAmount(amount),
         payment_status: settlement,
         operator_username: DEFAULT_OPERATOR_USERNAME,

@@ -187,6 +187,23 @@ export const completedWeighmentSchema = weighmentSchema.superRefine((w, ctx) => 
 // Request DTOs — what the operator app actually sends.
 // ---------------------------------------------------------------------------
 
+/**
+ * The photographs taken when the weight was captured, waiting to be filed.
+ *
+ * The cameras used to fire when the weighing was SAVED, which is a different
+ * moment entirely: the operator captures a weight, then types a plate, a
+ * product, a customer and an amount, and by the time they press Save the
+ * truck has often pulled off the bridge. The pictures showed the next truck,
+ * or an empty plate.
+ *
+ * So the agent now photographs the truck the instant the weight is taken and
+ * holds the result against this token, which the save hands back. An id the
+ * agent no longer knows — it restarted, or the operator left the form open
+ * past the holding time — is not an error: it falls back to photographing
+ * whatever is there now, which is exactly what used to happen.
+ */
+const captureToken = z.string().trim().max(64).optional();
+
 /** POST /weighments — pass 1. The agent mints id, slip number and timestamps. */
 export const createWeighmentSchema = z.object({
   /**
@@ -223,6 +240,7 @@ export const createWeighmentSchema = z.object({
   first_weight_src: weightSourceSchema.default('SERIAL'),
   amount_charged: z.number().finite().min(0).default(0),
   operator_username: z.string().trim().min(1).max(64).default('operator'),
+  capture_id: captureToken,
 });
 
 export type CreateWeighmentInput = z.infer<typeof createWeighmentSchema>;
@@ -238,6 +256,7 @@ export const completeWeighmentSchema = z.object({
   /** Identity fields stay locked after pass 1; only these may be corrected. */
   product: z.string().trim().min(1).max(120).optional(),
   container_number: optionalUpperIdentifier,
+  capture_id: captureToken,
 });
 
 export type CompleteWeighmentInput = z.infer<typeof completeWeighmentSchema>;
@@ -259,6 +278,18 @@ export const createCompletedWeighmentSchema = createWeighmentSchema.extend({
   second_weight_src: weightSourceSchema.default('SERIAL'),
   /** Decided at the same moment here, since there is no second visit. */
   payment_status: paymentStatusSchema.default('PAID'),
+  /**
+   * Take this slip's photographs from an earlier slip instead of the cameras.
+   *
+   * For the fourth-weight flow, where both figures come off a slip the driver
+   * is holding and no truck is on the bridge at all. Photographing the yard
+   * at that moment would put a picture of nothing, or of somebody else's
+   * lorry, onto the new slip; the honest picture is the one taken when this
+   * truck was last weighed, so that is the one copied across.
+   *
+   * The second pass's pictures are preferred — the loaded truck, as it left.
+   */
+  copy_captures_from_slip: z.string().trim().max(32).optional(),
 });
 
 export type CreateCompletedWeighmentInput = z.infer<typeof createCompletedWeighmentSchema>;
