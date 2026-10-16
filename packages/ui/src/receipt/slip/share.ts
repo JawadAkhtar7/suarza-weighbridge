@@ -1,23 +1,18 @@
 /**
  * Sending a slip to WhatsApp from the app that just printed it.
  *
- * TWO WAYS, and which one the operator gets depends on the machine:
+ * ONE WAY: `navigator.share` hands the picture to Windows, which asks which
+ * app gets it, and WhatsApp then asks which chats. There used to be a second
+ * — clipboard and WhatsApp Web, for a machine that cannot share — and it was
+ * taken out at the client's request: silently doing a different job when the
+ * first one refused made an occasional refusal look like random behaviour,
+ * and the operator would rather be told.
  *
- *   share sheet   `navigator.share` hands the picture to the system, which
- *                 offers WhatsApp among the apps that accept one. WhatsApp
- *                 then asks which chats to send it to. This is the version
- *                 with no pasting in it, and it needs WhatsApp installed on
- *                 the PC — a browser cannot hand a file to a web page.
- *
- *   clipboard     Failing that, the slip goes on the clipboard and WhatsApp
- *                 Web opens: pick the chat, press Ctrl+V. WhatsApp Web takes
- *                 the paste exactly as if the file had been dragged in.
- *
- * WHAT NEITHER CAN DO: open WhatsApp Web with the file already attached.
- * There is no URL and no API for it — `wa.me` and `web.whatsapp.com/send`
- * carry text and a phone number, never a picture — and no page may put a file
- * into another site's composer. The share sheet is the only route that skips
- * the paste, and it goes through the installed app rather than the website.
+ * WHAT NOTHING CAN DO: open WhatsApp with the file already attached, or
+ * choose WhatsApp in the Windows dialog on the operator's behalf. There is no
+ * URL and no API for either — `wa.me` and `web.whatsapp.com/send` carry text
+ * and a phone number, never a picture — and no page may reach into the
+ * system's own dialog.
  *
  * The picture is the slip the screen is already showing, drawn into a canvas
  * — the same markup, the same artwork, the same Urdu. A second renderer could
@@ -27,9 +22,6 @@
 
 import * as htmlToImage from 'html-to-image';
 import { PAGE_MM } from './layout.js';
-
-/** Where the operator picks the conversation, when there is no share sheet. */
-export const WHATSAPP_WEB_URL = 'https://web.whatsapp.com';
 
 /**
  * How many image pixels per CSS pixel.
@@ -229,18 +221,4 @@ async function waitForContent(node: HTMLElement): Promise<void> {
   );
 
   await Promise.race([Promise.all([fonts, ...images]).then(() => undefined), deadline]);
-}
-
-/** Save the file, for a browser that will neither share nor copy it. */
-export function downloadFile(file: File): void {
-  const url = URL.createObjectURL(file);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = file.name;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  // Long enough for the browser to have read it; short enough not to keep a
-  // few megabytes alive for the rest of the shift.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
