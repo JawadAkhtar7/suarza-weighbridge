@@ -1,17 +1,30 @@
 /** Manager queries over the synced records (brief §9, §13-M5). */
 
 import type { FilterQuery } from 'mongoose';
-import type { PaginatedWeighments, Weighment, WeighmentQuery } from '@suarza/shared';
+import type { PaginatedWeighments, ShiftTimings, Weighment, WeighmentQuery } from '@suarza/shared';
 import {
   DEFAULT_FRONT_VIEW_FRAME,
   DEFAULT_SIDE_VIEW_FRAME,
   DISPLAY_TIMEZONE,
   customerKey,
+  shiftAt,
 } from '@suarza/shared';
 import { WeighmentModel, type WeighmentDocument } from '../models/weighment.model.js';
 import { LedgerCustomerModel } from '../models/ledger.model.js';
 import { imagesForWeighments } from './capture.service.js';
 import { cameraFramingForStations } from './station.service.js';
+import { operatorNamesByShift, shiftTimings } from './roster.service.js';
+
+/**
+ * How many records a shift filter will sort through.
+ *
+ * The filter cannot be pushed into Mongo — see listWeighments — so the
+ * matching records are read and divided here. The dashboard filters by date
+ * as well and a weighbridge does a few dozen trucks a day, so this is a
+ * ceiling nobody reaches in practice; it is here so that a year-wide query
+ * cannot ask a 1 GB droplet to sort a hundred thousand records in memory.
+ */
+const SHIFT_SCAN_LIMIT = 5_000;
 import { ApiError } from '../errors.js';
 
 /** Regex metacharacters in a customer's name must not become a pattern. */
@@ -86,6 +99,40 @@ export async function listWeighments(query: WeighmentQuery): Promise<PaginatedWe
   const filter = buildFilter(query);
   const skip = (query.page - 1) * query.page_size;
 
+  /*
+   * A shift is a range of hours at the bridge, not a field on the record, so
+   * it cannot be put into the Mongo filter: a night shift crosses midnight,
+   * the hours are the manager's to change, and the bridge keeps a different
+   * clock from this server. See shiftAt.
+   *
+   * So the page is sliced after the shift is worked out, which means reading
+   * the matching records rather than one page of them. Bounded on purpose:
+   * the dashboard filters by date as well, and a weighbridge does a few dozen
+   * trucks a day. The cap is what stops a year-wide query being asked to sort
+   * a hundred thousand records in memory.
+   */
+  const timings = query.shift ? await shiftTimings() : null;
+
+  if (timings) {
+    const matching = await WeighmentModel.find(filter)
+      .sort({ [query.sort_by]: query.sort_dir === 'asc' ? 1 : -1 })
+      .limit(SHIFT_SCAN_LIMIT)
+      .lean();
+
+    const inShift = matching.filter(
+      (row) => shiftAt(new Date(row.first_weight_at), timings) === query.shift,
+    );
+
+    return annotate(
+      inShift
+        .slice(skip, skip + query.page_size)
+        .map((row) => toDto(row as WeighmentDocument & { _id: string })),
+      inShift.length,
+      query,
+      timings,
+    );
+  }
+
   const [rows, total] = await Promise.all([
     WeighmentModel.find(filter)
       .sort({ [query.sort_by]: query.sort_dir === 'asc' ? 1 : -1 })
@@ -95,8 +142,27 @@ export async function listWeighments(query: WeighmentQuery): Promise<PaginatedWe
     WeighmentModel.countDocuments(filter),
   ]);
 
-  const dtos = rows.map((row) => toDto(row as WeighmentDocument & { _id: string }));
+  return annotate(
+    rows.map((row) => toDto(row as WeighmentDocument & { _id: string })),
+    total,
+    query,
+    null,
+  );
+}
 
+/**
+ * Everything a row needs that is not on the weighment itself.
+ *
+ * Its own function because two paths arrive here — one page read from Mongo,
+ * or one page sliced out of a shift — and the ledger account, the pictures
+ * and the shift all have to be attached the same way whichever did.
+ */
+async function annotate(
+  dtos: Weighment[],
+  total: number,
+  query: WeighmentQuery,
+  timings: ShiftTimings | null,
+): Promise<PaginatedWeighments> {
   // One query for the whole page rather than one per row. The weighbridge does
   // not know about ledger accounts — it works offline and has no ledger — so
   // the link is made here, from the same name+company the ledger matches on.
@@ -111,12 +177,14 @@ export async function listWeighments(query: WeighmentQuery): Promise<PaginatedWe
    * the first byte of a real photograph moved. The ids are a hundred bytes a
    * row and the dialog has them the moment it opens.
    */
-  const [accounts, images, framings] = await Promise.all([
+  const [accounts, images, framings, hours, names] = await Promise.all([
     LedgerCustomerModel.find({ match_key: { $in: keys } })
       .select({ _id: 1, match_key: 1 })
       .lean(),
     imagesForWeighments(dtos.map((w) => w.id)),
     cameraFramingForStations(dtos.map((w) => w.station_id)),
+    timings ? Promise.resolve(timings) : shiftTimings(),
+    operatorNamesByShift(),
   ]);
 
   const idByKey = new Map(accounts.map((doc) => [doc.match_key, String(doc._id)]));
@@ -125,10 +193,19 @@ export async function listWeighments(query: WeighmentQuery): Promise<PaginatedWe
   return {
     rows: dtos.map((weighment) => {
       const framing = framings.get(weighment.station_id) ?? defaultFraming;
+      /* Worked out, not stored: the hours are the manager's to change and
+         every past record must re-read correctly when they do. */
+      const shift = shiftAt(new Date(weighment.first_weight_at), hours);
+
       return {
         ...weighment,
         customer_id:
           idByKey.get(customerKey(weighment.customer_name, weighment.customer_company)) ?? null,
+        shift,
+        /* Whoever holds that shift NOW — the weighbridge has one login used by
+           whoever is at the window, so there is nothing on the record itself
+           to name. Null when nobody is rostered to it. */
+        operator_name: names[shift],
         captures: {
           // A weighing with no pictures is a pair of nulls, not an absence:
           // the dialog must be able to tell "this bridge has no cameras" from

@@ -11,6 +11,7 @@ import type { AuditEntry, IngestResponse, StationProfile, Weighment } from '@sua
 import { WeighmentModel } from '../models/weighment.model.js';
 import { AuditModel } from '../models/audit.model.js';
 import { StationModel } from '../models/station.model.js';
+import { deletedIdsAmong } from './delete-weighment.service.js';
 import { postWeighmentCharges } from './ledger.service.js';
 
 /** Fields that come from the agent, with dates parsed for Mongo. */
@@ -142,8 +143,27 @@ export async function ingest(
       existing.map((doc) => [String(doc._id), new Date(doc.updated_at).getTime()]),
     );
 
+    /*
+     * Weighings the manager has deleted never come back.
+     *
+     * The bridge still holds its own copy and re-sends whenever one changes —
+     * a second weighing, a void, a reprint — and every write below is an
+     * upsert. Without this, a slip deleted in the morning would reappear the
+     * first time anything touched it at the bridge.
+     */
+    const deleted = await deletedIdsAmong(weighments.map((w) => w.id));
+
     const operations = [];
     for (const weighment of weighments) {
+      if (deleted.has(weighment.id)) {
+        /* Accepted, not rejected: the agent must stop offering it. Rejecting
+           would have it retry this record for ever, and it is not wrong —
+           it simply no longer exists here. */
+        skippedIds.push(weighment.id);
+        acceptedIds.push(weighment.id);
+        continue;
+      }
+
       const stored = storedUpdatedAt.get(weighment.id);
       const incoming = new Date(weighment.updated_at).getTime();
 

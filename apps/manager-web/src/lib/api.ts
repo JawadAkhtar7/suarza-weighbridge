@@ -8,6 +8,10 @@
 import type {
   Analytics,
   CreateCustomerInput,
+  CreateOperatorInput,
+  Operator,
+  Roster,
+  ShiftTimings,
   CustomerRecord,
   VehicleTypeRecord,
   CreateLedgerEntryInput,
@@ -124,9 +128,34 @@ export const api = {
       /* Absent from a server that predates front framing: fall back to the zoom. */
       front_view_frame?: ViewFrame;
       side_view_frame?: ViewFrame;
-    }>(
-      `/weighments/${encodeURIComponent(slip)}/captures`,
-    ),
+    }>(`/weighments/${encodeURIComponent(slip)}/captures`),
+
+  /**
+   * Delete a weighing and everything joined to it.
+   *
+   * Admin only on the server; the button is hidden for anyone else so a
+   * manager is not offered something that will be refused.
+   */
+  deleteWeighment: (slip: string) =>
+    request<{
+      slip_number: string;
+      audit_entries: number;
+      ledger_entries: number;
+      photographs: number;
+    }>(`/weighments/${encodeURIComponent(slip)}`, { method: 'DELETE' }),
+
+  // --- The roster -----------------------------------------------------------
+
+  roster: () => request<Roster>('/operators'),
+
+  setOperator: (input: CreateOperatorInput) =>
+    request<Operator>('/operators', { method: 'POST', body: JSON.stringify(input) }),
+
+  removeOperator: (id: string) =>
+    request<void>(`/operators/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  setShiftTimings: (timings: ShiftTimings) =>
+    request<ShiftTimings>('/shift-timings', { method: 'PUT', body: JSON.stringify(timings) }),
 
   analytics: (query: Partial<WeighmentQuery>) =>
     request<Analytics>(`/analytics?${toQueryString(query)}`),

@@ -18,6 +18,7 @@ import { LedgerPage } from './pages/ledger-page.js';
 import { LedgerCustomerPage } from './pages/ledger-customer-page.js';
 import { CustomersPage } from './pages/customers-page.js';
 import { VehicleTypesPage } from './pages/vehicle-types-page.js';
+import { OperatorsPage } from './pages/operators-page.js';
 
 function NoAccess() {
   const { user, signOut } = useAuth();
@@ -58,6 +59,10 @@ export function App() {
           {canSeeLedger && <Route path="ledger/:customerId" element={<LedgerCustomerPage />} />}
           {canSeeLedger && <Route path="customers" element={<CustomersPage />} />}
           {canSeeLedger && <Route path="vehicle-types" element={<VehicleTypesPage />} />}
+          {/* Readable by anyone who can see the dashboard — the filters on it
+              need the roster — and editable only by an administrator, which
+              the page enforces and the server enforces again. */}
+          <Route path="operators" element={<OperatorsPage />} />
           {/* Anything else is a mistyped or stale URL; the dashboard is the
               safe landing place. */}
           <Route path="*" element={<Navigate to="/" replace />} />

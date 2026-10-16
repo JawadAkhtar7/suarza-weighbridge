@@ -17,6 +17,7 @@ import {
   customerKey,
   newId,
   signedAmount,
+  shiftAt,
   type CreateLedgerEntryInput,
   type LedgerCustomer,
   type LedgerDirection,
@@ -28,6 +29,7 @@ import {
 } from '@suarza/shared';
 import mongoose from 'mongoose';
 import { LedgerCustomerModel, LedgerEntryModel } from '../models/ledger.model.js';
+import { operatorNamesByShift, shiftTimings } from './roster.service.js';
 import type { LedgerEntryDocument } from '../models/ledger.model.js';
 import { ApiError } from '../errors.js';
 
@@ -64,7 +66,9 @@ function toEntry(doc: LedgerEntryDocument): LedgerEntry {
  * One aggregation for every customer asked about, rather than one query each:
  * the list page shows 25 customers and would otherwise fire 25 round trips.
  */
-async function totalsFor(customerIds: string[]): Promise<
+async function totalsFor(
+  customerIds: string[],
+): Promise<
   Map<
     string,
     { balance: number; charged: number; paid: number; count: number; lastAt: Date | null }
@@ -212,20 +216,39 @@ export async function getCustomer(id: string): Promise<LedgerCustomer> {
  * nothing, so the running balance steps over them.
  */
 export async function listEntries(customerId: string): Promise<LedgerEntryWithBalance[]> {
-  const docs = await LedgerEntryModel.find({ customer_id: customerId })
-    .sort({ at: 1, created_at: 1 })
-    .lean();
+  const [docs, timings, names] = await Promise.all([
+    LedgerEntryModel.find({ customer_id: customerId }).sort({ at: 1, created_at: 1 }).lean(),
+    shiftTimings(),
+    operatorNamesByShift(),
+  ]);
 
+  /*
+   * The running balance is computed over EVERY entry, and the shift is only
+   * attached afterwards. Filtering first and then adding up would print a
+   * statement whose balance column never reaches the customer's real balance
+   * — a ledger that does not foot is worse than one that cannot be filtered.
+   * So the filtering happens on the screen, over rows that already know what
+   * the balance was at each point.
+   */
   let balance = 0;
   return docs.map((doc) => {
     const entry = toEntry(doc as LedgerEntryDocument);
     if (!entry.voided) balance = round2(balance + signedAmount(entry.direction, entry.amount_pkr));
-    return { ...entry, balance_after_pkr: balance };
+
+    const shift = shiftAt(new Date(entry.at), timings);
+    return {
+      ...entry,
+      balance_after_pkr: balance,
+      shift,
+      operator_name: names[shift],
+    };
   });
 }
 
 export async function summary(): Promise<LedgerSummary> {
-  const ids = (await LedgerCustomerModel.find().select({ _id: 1 }).lean()).map((d) => String(d._id));
+  const ids = (await LedgerCustomerModel.find().select({ _id: 1 }).lean()).map((d) =>
+    String(d._id),
+  );
   const totals = await totalsFor(ids);
 
   let receivable = 0;
@@ -389,15 +412,18 @@ export async function postWeighmentCharges(weighments: Weighment[]): Promise<num
     // payment that cleared it. The balance nets to zero, which is the point —
     // a customer who paid cash must not appear in "total owed to you" — while
     // the statement still shows every weighing they have ever had.
-    const wanted: { kind: 'WEIGHING' | 'PAYMENT'; direction: LedgerDirection; note: string | null }[] =
-      chargeable
-        ? weighment.payment_status === 'PAID'
-          ? [
-              { kind: 'WEIGHING', direction: 'DEBIT', note: null },
-              { kind: 'PAYMENT', direction: 'CREDIT', note: 'Paid at the weighbridge' },
-            ]
-          : [{ kind: 'WEIGHING', direction: 'DEBIT', note: null }]
-        : [];
+    const wanted: {
+      kind: 'WEIGHING' | 'PAYMENT';
+      direction: LedgerDirection;
+      note: string | null;
+    }[] = chargeable
+      ? weighment.payment_status === 'PAID'
+        ? [
+            { kind: 'WEIGHING', direction: 'DEBIT', note: null },
+            { kind: 'PAYMENT', direction: 'CREDIT', note: 'Paid at the weighbridge' },
+          ]
+        : [{ kind: 'WEIGHING', direction: 'DEBIT', note: null }]
+      : [];
 
     const existing = await LedgerEntryModel.find({ weighment_id: weighment.id });
 

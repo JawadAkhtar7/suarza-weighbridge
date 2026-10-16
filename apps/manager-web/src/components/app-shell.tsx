@@ -20,6 +20,7 @@ import {
   Menu,
   PanelLeft,
   Truck,
+  UserCog,
   Users,
   X,
 } from 'lucide-react';
@@ -47,6 +48,7 @@ const NAV: NavItem[] = [
   { to: '/ledger', label: 'Ledger', description: 'Customer accounts', icon: BookOpen },
   { to: '/customers', label: 'Customers', description: 'Names and companies', icon: Users },
   { to: '/vehicle-types', label: 'Vehicle types', description: 'Rates per vehicle', icon: Truck },
+  { to: '/operators', label: 'Operators', description: 'Who is on which shift', icon: UserCog },
 ];
 
 /**
@@ -61,13 +63,7 @@ function readCollapsed(): boolean {
   }
 }
 
-function NavItems({
-  collapsed,
-  onNavigate,
-}: {
-  collapsed: boolean;
-  onNavigate?: () => void;
-}) {
+function NavItems({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   return (
     <nav className="flex flex-col gap-1">
       {NAV.map(({ to, label, description, icon: Icon, end }) => (
@@ -145,9 +141,7 @@ function SidebarBody({
         {!collapsed && user && (
           <div className="mb-2 rounded-lg bg-muted/60 px-3 py-2">
             <p className="truncate text-sm font-medium leading-tight">{user.display_name}</p>
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              {user.role}
-            </p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{user.role}</p>
           </div>
         )}
 

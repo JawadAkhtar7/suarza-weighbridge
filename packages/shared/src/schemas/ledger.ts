@@ -20,6 +20,7 @@
  */
 
 import { z } from 'zod';
+import { SHIFTS } from '../constants/shifts.js';
 
 /**
  * Which way an entry moves the balance.
@@ -183,6 +184,15 @@ export type LedgerEntry = z.infer<typeof ledgerEntrySchema>;
 /** An entry plus the balance as it stood after it — what a statement shows. */
 export const ledgerEntryWithBalanceSchema = ledgerEntrySchema.extend({
   balance_after_pkr: z.number(),
+  /**
+   * Which shift this entry's own time falls in, and who is on it.
+   *
+   * Optional, because a dashboard may be reading an older server. The balance
+   * is computed over every entry regardless of any filtering, so a statement
+   * filtered to one shift still foots to the real balance.
+   */
+  shift: z.enum(SHIFTS).optional(),
+  operator_name: z.string().nullable().optional(),
 });
 
 export type LedgerEntryWithBalance = z.infer<typeof ledgerEntryWithBalanceSchema>;

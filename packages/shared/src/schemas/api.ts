@@ -5,6 +5,7 @@ import { vehicleTypeSchema, weighmentSchema } from './weighment.js';
 import { auditEntrySchema } from './audit.js';
 import { WEIGHMENT_STATUSES, USER_ROLES } from '../constants/domain.js';
 import { FRONT_VIEW_ZOOM } from '../constants/paper.js';
+import { SHIFTS } from '../constants/shifts.js';
 import { frontViewFrameSchema, sideViewFrameSchema } from './settings.js';
 
 /**
@@ -99,6 +100,14 @@ export const weighmentQuerySchema = dateRangeSchema.extend({
   vehicle_type: vehicleTypeSchema.optional(),
   status: z.enum(WEIGHMENT_STATUSES).optional(),
   slip_number: z.string().trim().max(32).optional(),
+  /**
+   * Which shift's weighings to show.
+   *
+   * Filtered on the clock rather than on a stored label: a weighing records
+   * when it happened and the shift is worked out from that, so correcting a
+   * shift's hours re-reads every past record correctly. See shiftAt.
+   */
+  shift: z.enum(SHIFTS).optional(),
   page: z.coerce.number().int().min(1).default(1),
   page_size: z.coerce.number().int().min(1).max(200).default(25),
   sort_by: z
@@ -150,6 +159,9 @@ export type SlipCaptures = z.infer<typeof slipCapturesSchema>;
 
 export const weighmentRowSchema = weighmentSchema.extend({
   customer_id: z.string().nullable().default(null),
+  /** Which shift this weighing fell in, and who was on it. */
+  shift: z.enum(SHIFTS).optional(),
+  operator_name: z.string().nullable().optional(),
   /*
    * Optional, because a dashboard may be talking to a server that predates
    * this and a server may be answering a dashboard that does — the dialog
@@ -227,3 +239,52 @@ export const apiErrorSchema = z.object({
 });
 
 export type ApiError = z.infer<typeof apiErrorSchema>;
+
+// ---------------------------------------------------------------------------
+// Operators and shifts — the manager's roster (client request, October 2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * One person on one shift.
+ *
+ * Not a login. The weighbridge has a single operator account used by whoever
+ * is at the window; this is the manager's note of who that is, so a day's
+ * takings can be read back against a name.
+ */
+export const operatorSchema = z.object({
+  id: z.string(),
+  name: z.string().trim().min(1).max(80),
+  shift: z.enum(SHIFTS),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+});
+
+export type Operator = z.infer<typeof operatorSchema>;
+
+export const createOperatorSchema = z.object({
+  name: z.string().trim().min(1, 'Give the operator a name').max(80),
+  shift: z.enum(SHIFTS),
+});
+
+export type CreateOperatorInput = z.infer<typeof createOperatorSchema>;
+
+/**
+ * When each shift begins, as minutes from midnight.
+ *
+ * Two numbers, not four: the shifts divide the day between them and each runs
+ * until the other starts. See DEFAULT_SHIFT_START_MINUTES for why a gap or an
+ * overlap must not be expressible.
+ */
+export const shiftTimingsSchema = z.object({
+  MORNING: z.number().int().min(0).max(1439),
+  NIGHT: z.number().int().min(0).max(1439),
+});
+
+export type ShiftTimings = z.infer<typeof shiftTimingsSchema>;
+
+export const rosterSchema = z.object({
+  operators: z.array(operatorSchema),
+  shift_timings: shiftTimingsSchema,
+});
+
+export type Roster = z.infer<typeof rosterSchema>;

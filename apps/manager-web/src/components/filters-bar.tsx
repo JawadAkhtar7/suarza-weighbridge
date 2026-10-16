@@ -21,7 +21,14 @@ import {
   SelectValue,
   cn,
 } from '@suarza/ui';
-import { VEHICLE_TYPE_DEFS, formatDatePkt, type VehicleType } from '@suarza/shared';
+import {
+  SHIFTS,
+  SHIFT_LABELS,
+  VEHICLE_TYPE_DEFS,
+  formatDatePkt,
+  type Shift,
+  type VehicleType,
+} from '@suarza/shared';
 import { CalendarDays, X } from 'lucide-react';
 import { QUICK_RANGES, RANGE_LABELS, resolveRange, type RangeKey } from '../lib/date-ranges.js';
 import { FilterAutocomplete } from './filter-autocomplete.js';
@@ -33,6 +40,8 @@ export interface DashboardFilters {
   customerName: string;
   customerCompany: string;
   vehicleType: VehicleType | 'all';
+  /** Which shift's weighings, by the hours the manager has set. */
+  shift: Shift | 'all';
 }
 
 export const DEFAULT_FILTERS: DashboardFilters = {
@@ -40,6 +49,7 @@ export const DEFAULT_FILTERS: DashboardFilters = {
   customerName: '',
   customerCompany: '',
   vehicleType: 'all',
+  shift: 'all',
 };
 
 /** Turns the UI state into the query the API understands. */
@@ -50,6 +60,7 @@ export function toQuery(filters: DashboardFilters) {
     customer_name: filters.customerName.trim() || undefined,
     customer_company: filters.customerCompany.trim() || undefined,
     vehicle_type: filters.vehicleType === 'all' ? undefined : filters.vehicleType,
+    shift: filters.shift === 'all' ? undefined : filters.shift,
   };
 }
 
@@ -69,7 +80,10 @@ export function FiltersBar({ filters, onChange }: FiltersBarProps) {
       ? `${formatDatePkt(filters.customFrom)} – ${formatDatePkt(filters.customTo)}`
       : RANGE_LABELS.custom;
 
-  const hasTextFilters = filters.customerName !== '' || filters.customerCompany !== '';
+  /* The Clear button hides when there is nothing to clear; a shift chosen
+     counts, or clearing it would be the one filter with no way back. */
+  const hasTextFilters =
+    filters.customerName !== '' || filters.customerCompany !== '' || filters.shift !== 'all';
 
   return (
     <div className="space-y-3">
@@ -143,11 +157,35 @@ export function FiltersBar({ filters, onChange }: FiltersBarProps) {
           </Select>
         </div>
 
+        <div className="space-y-1.5">
+          <Label htmlFor="shift-filter" className="text-xs font-normal">
+            Shift
+          </Label>
+          <Select
+            value={filters.shift}
+            onValueChange={(value) => set({ shift: value as Shift | 'all' })}
+          >
+            <SelectTrigger id="shift-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Both shifts</SelectItem>
+              {SHIFTS.map((shift) => (
+                <SelectItem key={shift} value={shift}>
+                  {SHIFT_LABELS[shift]} shift
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className={cn('flex items-end', !hasTextFilters && 'hidden lg:flex lg:invisible')}>
           <Button
             type="button"
             variant="ghost"
-            onClick={() => set({ customerName: '', customerCompany: '', vehicleType: 'all' })}
+            onClick={() =>
+              set({ customerName: '', customerCompany: '', vehicleType: 'all', shift: 'all' })
+            }
           >
             <X className="h-4 w-4" />
             Clear

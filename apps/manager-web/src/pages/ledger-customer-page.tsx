@@ -23,6 +23,11 @@ import {
   Input,
   Label,
   NumberInput,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Skeleton,
   Table,
   TableBody,
@@ -38,12 +43,15 @@ import {
 } from '@suarza/ui';
 import {
   LEDGER_KIND_LABELS,
+  SHIFTS,
+  SHIFT_LABELS,
   balanceLabel,
   balanceState,
   formatDateTimePkt,
   formatPKR,
   type LedgerDirection,
   type LedgerEntryWithBalance,
+  type Shift,
 } from '@suarza/shared';
 import { ArrowLeft, Ban, Banknote, Download, SlidersHorizontal } from 'lucide-react';
 import { api, ApiError } from '../lib/api.js';
@@ -120,9 +128,7 @@ function EntryDialog({
         <div className="space-y-3">
           {!isPayment && (
             <div className="space-y-2">
-              <Label className="flex items-baseline gap-2">
-                Which way?
-              </Label>
+              <Label className="flex items-baseline gap-2">Which way?</Label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -221,9 +227,7 @@ function VoidDialog({
     <Dialog open={entry !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-baseline gap-2">
-            Void this entry
-          </DialogTitle>
+          <DialogTitle className="flex items-baseline gap-2">Void this entry</DialogTitle>
         </DialogHeader>
 
         <p className="text-sm text-muted-foreground">
@@ -288,6 +292,8 @@ export function LedgerCustomerPage() {
     pageStyle: LEDGER_REPORT_PAGE_CSS,
   });
 
+  const [shiftFilter, setShiftFilter] = useState<Shift | 'all'>('all');
+
   const account = useQuery({
     queryKey: ['ledger', 'customer', customerId],
     queryFn: () => api.ledgerCustomer(customerId),
@@ -317,7 +323,19 @@ export function LedgerCustomerPage() {
     );
   }
 
-  const { customer, entries } = account.data;
+  const { customer, entries: allEntries } = account.data;
+
+  /*
+   * Filtered here rather than on the server, deliberately.
+   *
+   * The balance column is a running total over EVERY entry, so the server
+   * computes it across the lot and attaches each row's shift afterwards.
+   * Filtering before that would print a statement whose balance never reaches
+   * the customer's real balance, and a ledger that does not foot is worse
+   * than one that cannot be filtered.
+   */
+  const entries =
+    shiftFilter === 'all' ? allEntries : allEntries.filter((entry) => entry.shift === shiftFilter);
   const state = balanceState(customer.balance_pkr);
 
   return (
@@ -341,7 +359,7 @@ export function LedgerCustomerPage() {
             </p>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="flex items-baseline gap-1">
-                ID 
+                ID
                 <CustomerId id={customer.id} className="text-foreground" />
               </span>
             </p>
@@ -382,9 +400,7 @@ export function LedgerCustomerPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">
-              Debit 
-            </p>
+            <p className="text-xs text-muted-foreground">Debit</p>
             <p className="tabular mt-1 text-lg font-semibold">
               {formatPKR(customer.total_charged_pkr)}
             </p>
@@ -392,9 +408,7 @@ export function LedgerCustomerPage() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">
-              Credit 
-            </p>
+            <p className="text-xs text-muted-foreground">Credit</p>
             <p className="tabular mt-1 text-lg font-semibold">
               {formatPKR(customer.total_paid_pkr)}
             </p>
@@ -402,9 +416,7 @@ export function LedgerCustomerPage() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">
-              Entries 
-            </p>
+            <p className="text-xs text-muted-foreground">Entries</p>
             <p className="tabular mt-1 text-lg font-semibold">{customer.entry_count}</p>
           </CardContent>
         </Card>
@@ -412,39 +424,61 @@ export function LedgerCustomerPage() {
 
       <Card>
         <CardContent className="p-5">
-          <h2 className="mb-3 flex items-baseline gap-2 text-sm font-semibold">
-            Statement
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-baseline gap-2 text-sm font-semibold">Statement</h2>
+
+            {/* The balance still runs over the whole account; this only
+                chooses which of those rows are shown. */}
+            <Select
+              value={shiftFilter}
+              onValueChange={(value) => setShiftFilter(value as Shift | 'all')}
+            >
+              <SelectTrigger className="w-[11rem]" aria-label="Filter by shift">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Both shifts</SelectItem>
+                {SHIFTS.map((shift) => (
+                  <SelectItem key={shift} value={shift}>
+                    {SHIFT_LABELS[shift]} shift
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {entries.length === 0 ? (
             <div className="py-10 text-center">
-              <p className="text-sm font-medium">
-              Nothing on this account yet 
-            </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Charges appear as weighings are completed.
-              </p>
+              {allEntries.length > 0 ? (
+                <>
+                  <p className="text-sm font-medium">
+                    Nothing on the {SHIFT_LABELS[shiftFilter as Shift].toLowerCase()} shift
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    This account has {allEntries.length} entr
+                    {allEntries.length === 1 ? 'y' : 'ies'} on the other shift.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium">Nothing on this account yet</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Charges appear as weighings are completed.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>
-                      Date 
-                    </TableHead>
-                    <TableHead>
-                      Detail 
-                    </TableHead>
-                    <TableHead className="text-right">
-                      Debit 
-                    </TableHead>
-                    <TableHead className="text-right">
-                      Credit 
-                    </TableHead>
-                    <TableHead className="text-right">
-                      Balance 
-                    </TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Shift</TableHead>
+                    <TableHead>Detail</TableHead>
+                    <TableHead className="text-right">Debit</TableHead>
+                    <TableHead className="text-right">Credit</TableHead>
+                    <TableHead className="text-right">Balance</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -455,6 +489,19 @@ export function LedgerCustomerPage() {
                         {formatDateTimePkt(entry.at)}
                       </TableCell>
 
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {entry.shift ? (
+                          <>
+                            <div>{SHIFT_LABELS[entry.shift]}</div>
+                            <div className="text-muted-foreground">
+                              {entry.operator_name ?? 'nobody rostered'}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{LEDGER_KIND_LABELS[entry.kind]}</span>
@@ -463,11 +510,7 @@ export function LedgerCustomerPage() {
                               {entry.slip_number}
                             </Badge>
                           )}
-                          {entry.voided && (
-                            <Badge variant="destructive">
-                              Voided 
-                            </Badge>
-                          )}
+                          {entry.voided && <Badge variant="destructive">Voided</Badge>}
                         </div>
                         {entry.note && (
                           <p className="mt-0.5 text-xs text-muted-foreground">{entry.note}</p>
@@ -531,13 +574,13 @@ export function LedgerCustomerPage() {
       <VoidDialog customerId={customerId} entry={voiding} onClose={() => setVoiding(null)} />
 
       {/*
-        * What "Download report" sends to the printer.
-        *
-        * Kept mounted and parked off-screen rather than rendered on click:
-        * react-to-print copies a live DOM node, so it has to exist before the
-        * button is pressed. Moved with `left`, not `display: none` — a hidden
-        * subtree has no layout, and the printer would be handed a blank page.
-        */}
+       * What "Download report" sends to the printer.
+       *
+       * Kept mounted and parked off-screen rather than rendered on click:
+       * react-to-print copies a live DOM node, so it has to exist before the
+       * button is pressed. Moved with `left`, not `display: none` — a hidden
+       * subtree has no layout, and the printer would be handed a blank page.
+       */}
       <div
         aria-hidden
         className="pointer-events-none fixed top-0 h-0 overflow-hidden"

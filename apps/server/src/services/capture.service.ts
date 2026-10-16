@@ -90,9 +90,7 @@ export interface SlipImages {
  * shows the only pictures there are.
  */
 export async function imagesForWeighment(weighmentId: string): Promise<SlipImages> {
-  const rows = await CaptureModel.find({ weighment_id: weighmentId })
-    .sort({ taken_at: 1 })
-    .lean();
+  const rows = await CaptureModel.find({ weighment_id: weighmentId }).sort({ taken_at: 1 }).lean();
 
   const out: SlipImages = { front: null, side: null };
   for (const row of rows) {
@@ -158,6 +156,28 @@ export async function captureFileExists(relative: string): Promise<boolean> {
  * the entire reason the paths start with the year. Returns how many index
  * rows went with it.
  */
+/**
+ * Delete every photograph of one weighing, files and all.
+ *
+ * The files go first. A row without its file is a 404 the slip page already
+ * handles; a file without its row is a few hundred kilobytes nothing will
+ * ever look at or clean up, because the prune works from the rows.
+ */
+export async function removeCapturesFor(weighmentId: string): Promise<number> {
+  const rows = await CaptureModel.find({ weighment_id: weighmentId }).lean();
+  if (rows.length === 0) return 0;
+
+  for (const row of rows) {
+    const absolute = resolveCapturePath(row.path);
+    // A file already gone — pruned, or a disk restored without it — is the
+    // ordinary case rather than a failure.
+    if (absolute) await rm(absolute, { force: true });
+  }
+
+  await CaptureModel.deleteMany({ weighment_id: weighmentId });
+  return rows.length;
+}
+
 export async function pruneCaptureYear(year: number): Promise<number> {
   const folder = resolveCapturePath(String(year));
   if (!folder) return 0;

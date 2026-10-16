@@ -1,13 +1,20 @@
 /** Manager dashboard data (brief §9, §13-M5). */
 
 import { Router } from 'express';
-import { weighmentQuerySchema } from '@suarza/shared';
+import { createOperatorSchema, shiftTimingsSchema, weighmentQuerySchema } from '@suarza/shared';
 import { z } from 'zod';
 import { requireAuth, requireCapability } from '../middleware/auth.js';
 import { imagesForWeighment } from '../services/capture.service.js';
 import { cameraFramingForStation } from '../services/station.service.js';
 import { listWeighments, requireBySlip, suggestValues } from '../services/weighment.service.js';
 import { getAnalytics } from '../services/analytics.service.js';
+import { deleteWeighmentBySlip } from '../services/delete-weighment.service.js';
+import {
+  listRoster,
+  removeOperator,
+  setOperator,
+  setShiftTimings,
+} from '../services/roster.service.js';
 import { parse } from './helpers.js';
 
 export function managerRouter(jwtSecret: string): Router {
@@ -53,6 +60,67 @@ export function managerRouter(jwtSecret: string): Router {
       front_view_zoom: framing.front.zoom,
     });
   });
+
+  /**
+   * Delete a weighing, and everything joined to it.
+   *
+   * ADMIN only, not every manager: this removes a record of money taken, and
+   * the capability that already means "may change how the yard is set up" is
+   * the right bar for it.
+   *
+   * See delete-weighment.service.ts for what goes and for the one thing kept
+   * — the id, so the bridge cannot sync it back.
+   */
+  router.delete<{ slip: string }>(
+    '/weighments/:slip',
+    requireAuth(jwtSecret),
+    requireCapability('settings'),
+    async (req, res) => {
+      const summary = await deleteWeighmentBySlip(req.params.slip, req.user?.username ?? 'unknown');
+      res.json(summary);
+    },
+  );
+
+  // --- The roster: who is on which shift ------------------------------------
+
+  /** Read by the dashboard's filter as well as the Operators screen. */
+  router.get('/operators', ...guard, async (_req, res) => {
+    res.json(await listRoster());
+  });
+
+  /**
+   * Put somebody on a shift. Replaces whoever was on it — a yard runs one
+   * person per shift, and naming a second plainly means the first has left.
+   */
+  router.post(
+    '/operators',
+    requireAuth(jwtSecret),
+    requireCapability('settings'),
+    async (req, res) => {
+      const input = parse(createOperatorSchema, req.body);
+      res.status(201).json(await setOperator(input));
+    },
+  );
+
+  router.delete<{ id: string }>(
+    '/operators/:id',
+    requireAuth(jwtSecret),
+    requireCapability('settings'),
+    async (req, res) => {
+      await removeOperator(req.params.id);
+      res.status(204).end();
+    },
+  );
+
+  router.put(
+    '/shift-timings',
+    requireAuth(jwtSecret),
+    requireCapability('settings'),
+    async (req, res) => {
+      const input = parse(shiftTimingsSchema, req.body);
+      res.json(await setShiftTimings(input));
+    },
+  );
 
   /** Typeahead for the dashboard's customer and company filters. */
   const suggestQuerySchema = z.object({

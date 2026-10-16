@@ -146,11 +146,18 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
   const vehicleType = form.watch('vehicle_type') as VehicleType;
 
   /*
-   * Fetch an earlier slip and fill the whole form from it.
+   * Fetch an earlier slip and fill the form from it.
    *
    * Deliberately fills the WEIGHTS as well as the details: the point of this
    * flow is that the truck's empty and loaded figures are already known, so
    * re-typing them is both slower and a chance to mistype. They stay editable.
+   *
+   * The customer's details are filled only where the field is still empty.
+   * Both ways of starting a repeat weighing — searching the customer, or
+   * fetching the slip — are offered side by side now, and either may come
+   * first; whichever did, a slip fetched afterwards must not quietly rewrite
+   * a customer the operator has already chosen. The weights always come from
+   * the slip, because that is the one thing only the slip knows.
    */
   const lookup = useMutation({
     mutationFn: (slip: string) => agentApi.getWeighment(slip),
@@ -169,19 +176,63 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
         .then((found) => setSourceHasPhotos(Boolean(found.front ?? found.side)))
         .catch(() => setSourceHasPhotos(false));
 
-      form.reset({
-        customer_name: weighment.customer_name,
-        customer_company: weighment.customer_company,
-        customer_phone: weighment.customer_phone ?? '',
-        vehicle_type: weighment.vehicle_type as VehicleType,
-        vehicle_plate: weighment.vehicle_plate,
-        container_number: weighment.container_number ?? '',
-        product: weighment.product,
-        amount_charged: weighment.amount_charged,
-      });
-      // The rate is the one that slip was charged, not today's card, so the
-      // amount must not be overwritten when settings next arrive.
-      setAmountEdited(true);
+      /*
+       * Snapshot FIRST, for the same reason applyCustomer does: deciding what
+       * to fill while already filling would let an earlier write make a later
+       * field look like something the operator had typed.
+       */
+      const blank = (
+        field:
+          | 'customer_name'
+          | 'customer_company'
+          | 'customer_phone'
+          | 'vehicle_plate'
+          | 'container_number'
+          | 'product',
+      ) => String(form.getValues(field) ?? '').trim() === '';
+
+      const wasEmpty = {
+        name: blank('customer_name'),
+        company: blank('customer_company'),
+        phone: blank('customer_phone'),
+        plate: blank('vehicle_plate'),
+        container: blank('container_number'),
+        product: blank('product'),
+      };
+
+      const fill = (
+        field:
+          | 'customer_name'
+          | 'customer_company'
+          | 'customer_phone'
+          | 'vehicle_plate'
+          | 'container_number'
+          | 'product',
+        value: string,
+        empty: boolean,
+      ) => {
+        if (empty && value) form.setValue(field, value, { shouldValidate: true });
+      };
+
+      fill('customer_name', weighment.customer_name, wasEmpty.name);
+      fill('customer_company', weighment.customer_company, wasEmpty.company);
+      fill('customer_phone', weighment.customer_phone ?? '', wasEmpty.phone);
+      fill('container_number', weighment.container_number ?? '', wasEmpty.container);
+      fill('product', weighment.product, wasEmpty.product);
+
+      /* The truck and its rate move together, and only when no truck has been
+         named: a plate already in the form must not be contradicted by a
+         vehicle type from the slip it did not come from. */
+      if (wasEmpty.plate && weighment.vehicle_plate) {
+        form.setValue('vehicle_plate', weighment.vehicle_plate, { shouldValidate: true });
+        form.setValue('vehicle_type', weighment.vehicle_type as VehicleType, {
+          shouldValidate: true,
+        });
+        form.setValue('amount_charged', weighment.amount_charged);
+        // The rate is the one that slip was charged, not today's card, so the
+        // amount must not be overwritten when settings next arrive.
+        setAmountEdited(true);
+      }
 
       setKnownFirstWeight(String(weighment.first_weight_kg));
       setRepeatSecondWeight(
@@ -221,7 +272,6 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
-
       const details = {
         ...createWeighmentSchema
           .omit({ first_weight_kg: true, first_weight_src: true, operator_username: true })
@@ -342,7 +392,9 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
       }
       if (!captureSatisfied) {
         toast.error(
-          isSingleVisit ? 'Capture the loaded weight before saving' : 'Capture the first weight before saving',
+          isSingleVisit
+            ? 'Capture the loaded weight before saving'
+            : 'Capture the first weight before saving',
         );
         return;
       }
@@ -421,13 +473,13 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
     <Card>
       <CardContent className="pt-6">
         {/*
-          * Outside the form below, deliberately.
-          *
-          * SlipSearch carries a form of its own, and a form inside a form is
-          * invalid HTML: pressing Enter in the slip box submitted the OUTER
-          * form, so the browser navigated — the page appeared to reload and
-          * the typed slip number vanished.
-          */}
+         * Outside the form below, deliberately.
+         *
+         * SlipSearch carries a form of its own, and a form inside a form is
+         * invalid HTML: pressing Enter in the slip box submitted the OUTER
+         * form, so the browser navigated — the page appeared to reload and
+         * the typed slip number vanished.
+         */}
         {isRepeat && (
           <div className="mb-5 space-y-2">
             <SlipSearch
@@ -454,14 +506,14 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
         <form onSubmit={submit} className="space-y-5" noValidate>
           {/*
-            * First on the screen, because it is first in the conversation: the
-            * driver says the number while he is still at the window, before
-            * anyone has typed a name or driven onto the bridge.
-            *
-            * Big, like the capture readout it stands in for — this figure goes
-            * onto a slip and into a net weight, and a mistyped digit here is a
-            * wrong invoice.
-            */}
+           * First on the screen, because it is first in the conversation: the
+           * driver says the number while he is still at the window, before
+           * anyone has typed a name or driven onto the bridge.
+           *
+           * Big, like the capture readout it stands in for — this figure goes
+           * onto a slip and into a net weight, and a mistyped digit here is a
+           * wrong invoice.
+           */}
           {isSingleVisit && (
             <div className="space-y-2 rounded-lg border-2 border-brand/40 bg-brand/5 p-4">
               <Label htmlFor="known-first-weight" className="sr-only">
@@ -524,7 +576,11 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
             </>
           )}
 
-          {!isRepeat && <CustomerPicker onPick={applyCustomer} />}
+          {/* Offered in the repeat flow too. The driver's slip gives the
+              weights; the customer may still be quicker to find by name or
+              plate than by hunting for an old slip number, and the two fill
+              different halves of this form. */}
+          <CustomerPicker onPick={applyCustomer} />
 
           {/* Below the search box, not above it. Sitting above, it read as a
               heading the search field belonged under, so operators typed the
@@ -621,11 +677,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               />
             </Field>
 
-            <Field
-              htmlFor="customer_phone"
-              label="Phone"
-              error={errors.customer_phone?.message}
-            >
+            <Field htmlFor="customer_phone" label="Phone" error={errors.customer_phone?.message}>
               <Input
                 id="customer_phone"
                 {...form.register('customer_phone')}
@@ -658,10 +710,10 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
           </div>
 
           {/*
-            * Settled here, because there is no second visit to settle it at.
-            * The same two choices the return screen offers, and the same rule:
-            * an account needs a name to charge it to.
-            */}
+           * Settled here, because there is no second visit to settle it at.
+           * The same two choices the return screen offers, and the same rule:
+           * an account needs a name to charge it to.
+           */}
           {(isSingleVisit || isRepeat) && (
             <div className="space-y-2 border-t pt-5">
               <Label>Payment</Label>
@@ -742,9 +794,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
           )}
 
           {isRepeat && !sourceSlip && (
-            <p className="text-sm text-muted-foreground">
-              Fetch an earlier slip to fill this in.
-            </p>
+            <p className="text-sm text-muted-foreground">Fetch an earlier slip to fill this in.</p>
           )}
         </form>
       </CardContent>
@@ -772,24 +822,24 @@ function Field({ htmlFor, label, error, hint, required, markClass, children }: F
   return (
     <div className="space-y-2">
       {/*
-        * Visually hidden, deliberately not deleted.
-        *
-        * The name of each box now lives in its placeholder, which keeps the
-        * form from being half labels. But a placeholder is not a label: it
-        * vanishes the moment the operator types, and a screen reader reading
-        * a box with no label can only say "edit text". This keeps the name
-        * attached to the control, and keeps clicking it focusing the box.
-        */}
+       * Visually hidden, deliberately not deleted.
+       *
+       * The name of each box now lives in its placeholder, which keeps the
+       * form from being half labels. But a placeholder is not a label: it
+       * vanishes the moment the operator types, and a screen reader reading
+       * a box with no label can only say "edit text". This keeps the name
+       * attached to the control, and keeps clicking it focusing the box.
+       */}
       <Label htmlFor={htmlFor} className="sr-only">
         {label}
-        {required && <span>{' '}(required)</span>}
+        {required && <span> (required)</span>}
       </Label>
       {/*
-        * Required is marked, optional is not. Saying "(optional)" on six of
-        * eight boxes made the exception the rule and put the most words on
-        * the fields that matter least. The asterisk is decorative here — the
-        * hidden label already tells a screen reader which fields are needed.
-        */}
+       * Required is marked, optional is not. Saying "(optional)" on six of
+       * eight boxes made the exception the rule and put the most words on
+       * the fields that matter least. The asterisk is decorative here — the
+       * hidden label already tells a screen reader which fields are needed.
+       */}
       <div className="relative">
         {children}
         {required && (

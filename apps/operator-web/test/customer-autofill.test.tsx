@@ -23,14 +23,18 @@ vi.mock('../src/lib/api.js', async () => {
       ...actual.agentApi,
       searchCustomers: vi.fn(),
       createWeighment: vi.fn(),
+      createCompletedWeighment: vi.fn(),
       getSettings: vi.fn(),
+      /* The repeat flow fetches a slip and asks whether it has photographs. */
+      getWeighment: vi.fn(),
+      slipCaptures: vi.fn(),
     },
   };
 });
 
 import { agentApi } from '../src/lib/api.js';
 import { NewWeighmentForm } from '../src/components/new-weighment-form.js';
-import { renderWithQuery } from './utils.js';
+import { renderWithQuery, weighment as aWeighment } from './utils.js';
 
 const mocked = vi.mocked(agentApi);
 
@@ -182,5 +186,73 @@ describe('a customer who has never been here', () => {
 
     await user.type(field(/customer name/i), 'Brand New Customer');
     expect(field(/customer name/i).value).toBe('Brand New Customer');
+  });
+});
+
+/** The repeat flow, where both ways of filling the form are offered. */
+function setupRepeat() {
+  mocked.searchCustomers.mockResolvedValue({ customers: [customer()] });
+  mocked.slipCaptures.mockResolvedValue({ front: null, side: null });
+  mocked.getSettings.mockRejectedValue(new Error('settings unavailable in this test'));
+  renderWithQuery(<NewWeighmentForm captured={null} onSaved={vi.fn()} flow="fourth" />);
+  return userEvent.setup();
+}
+
+describe('the fourth-weight flow fills from two places at once', () => {
+  /*
+   * Both ways of starting a repeat weighing are offered side by side: search
+   * the customer, or fetch the slip the driver is holding. Either may come
+   * first, and they fill different halves of the form — so neither may
+   * overwrite what the other has already put in.
+   */
+  const slip = {
+    weighment: aWeighment({
+      slip_number: '20261',
+      customer_name: 'Ali Raza',
+      customer_company: 'Raza Traders',
+      vehicle_plate: 'LES-1234',
+      product: 'Cement',
+      first_weight_kg: 8000,
+      second_weight_kg: 20_000,
+      status: 'COMPLETED',
+    }),
+    net: { kg: 12_000, ton: 12, maund: 300 },
+  };
+
+  it('offers the customer search, which the first-weight flow always had', () => {
+    setupRepeat();
+    expect(screen.getByLabelText(/search customer/i)).toBeInTheDocument();
+  });
+
+  it('fills the customer from a fetched slip when nothing has been typed', async () => {
+    mocked.getWeighment.mockResolvedValue(slip);
+    const user = setupRepeat();
+
+    await user.type(screen.getByLabelText(/slip number/i), '1{Enter}');
+
+    await waitFor(() => expect(field(/customer name/i).value).toBe('Ali Raza'));
+    expect(field(/number plate/i).value).toBe('LES-1234');
+  });
+
+  it('leaves a customer already chosen alone when a slip is fetched after', async () => {
+    /*
+     * The interference this exists to prevent. The operator finds the
+     * customer, then fetches the slip for the weights — and the slip's own
+     * customer, which may be an older spelling or a different company, must
+     * not quietly replace the one just chosen.
+     */
+    mocked.getWeighment.mockResolvedValue(slip);
+    const user = setupRepeat();
+
+    await user.type(field(/customer name/i), 'Someone Else');
+    await user.type(field(/number plate/i), 'ABC-999');
+
+    await user.type(screen.getByLabelText(/slip number/i), '1{Enter}');
+    // More than one element mentions the slip once it is fetched; any of them
+    // appearing means the fetch has landed, which is all this waits for.
+    await waitFor(() => expect(screen.getAllByText(/filled from slip/i).length).toBeGreaterThan(0));
+
+    expect(field(/customer name/i).value).toBe('Someone Else');
+    expect(field(/number plate/i).value).toBe('ABC-999');
   });
 });

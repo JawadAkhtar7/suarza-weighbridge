@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@suarza/ui';
 import {
+  SHIFT_LABELS,
   formatDateTimePkt,
   formatKg,
   formatPKR,
@@ -28,7 +29,7 @@ import {
   type WeighmentRow,
   type WeighmentStatus,
 } from '@suarza/shared';
-import { ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, Trash2 } from 'lucide-react';
 import { MD_BREAKPOINT, useMediaQuery } from '../hooks/use-media-query.js';
 import { CustomerId } from './ledger-bits.js';
 
@@ -45,6 +46,8 @@ interface SalesTableProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   onSelect: (weighment: WeighmentRow) => void;
+  /** Absent for anyone who may not delete; the column then does not appear. */
+  onDelete?: (weighment: WeighmentRow) => void;
 }
 
 export function SalesTable({
@@ -54,6 +57,7 @@ export function SalesTable({
   pageSize,
   onPageChange,
   onSelect,
+  onDelete,
 }: SalesTableProps) {
   const columns: ColumnDef<WeighmentRow>[] = [
     {
@@ -122,6 +126,25 @@ export function SalesTable({
       ),
     },
     {
+      id: 'shift',
+      header: 'Shift',
+      cell: ({ row }) => {
+        const shift = row.original.shift;
+        if (!shift) return <span className="text-muted-foreground">—</span>;
+        return (
+          <div className="whitespace-nowrap">
+            <div className="text-sm">{SHIFT_LABELS[shift]}</div>
+            {/* The name is whoever holds that shift now: the bridge has one
+                login, used by whoever is at the window, so there is nothing on
+                the record itself to name. */}
+            <div className="text-xs text-muted-foreground">
+              {row.original.operator_name ?? 'nobody rostered'}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => (
@@ -145,6 +168,28 @@ export function SalesTable({
         </Button>
       ),
     },
+    ...(onDelete
+      ? [
+          {
+            id: 'delete',
+            header: '',
+            cell: ({ row }: { row: { original: WeighmentRow } }) => (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete(row.original);
+                }}
+                aria-label={`Delete slip ${row.original.slip_number}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            ),
+          } as ColumnDef<WeighmentRow>,
+        ]
+      : []),
   ];
 
   // Rendered conditionally rather than hidden with CSS: showing both and
@@ -201,7 +246,9 @@ export function SalesTable({
                   <div className="flex items-baseline justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
-                        {row.customer_name || <span className="text-muted-foreground">No name</span>}
+                        {row.customer_name || (
+                          <span className="text-muted-foreground">No name</span>
+                        )}
                       </p>
                       {row.customer_company && (
                         <p className="truncate text-xs text-muted-foreground">
