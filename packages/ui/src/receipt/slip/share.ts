@@ -1,18 +1,29 @@
 /**
  * Sending a slip to WhatsApp from the app that just printed it.
  *
- * ONE WAY: `navigator.share` hands the picture to Windows, which asks which
- * app gets it, and WhatsApp then asks which chats. There used to be a second
- * — clipboard and WhatsApp Web, for a machine that cannot share — and it was
- * taken out at the client's request: silently doing a different job when the
- * first one refused made an occasional refusal look like random behaviour,
- * and the operator would rather be told.
+ * THE WAY IT WORKS: the slip goes on the clipboard and WhatsApp Desktop is
+ * launched by its own protocol link. The operator picks a chat and presses
+ * Ctrl+V. One keystroke, and in exchange it is the same every single time.
  *
- * WHAT NOTHING CAN DO: open WhatsApp with the file already attached, or
- * choose WhatsApp in the Windows dialog on the operator's behalf. There is no
- * URL and no API for either — `wa.me` and `web.whatsapp.com/send` carry text
- * and a phone number, never a picture — and no page may reach into the
- * system's own dialog.
+ * `navigator.share` was tried first and abandoned. It needs no pasting, but
+ * on this machine the first share of each session does not open the Windows
+ * chooser at all: the system spins for the best part of a minute, fails with
+ * `AbortError: Share Error`, holds Chrome's own share lock throughout — so
+ * every press meanwhile earns `InvalidStateError` — and only then does the
+ * next press work. None of that is reachable from a page: the warm-up needs
+ * a real share call, a share call needs a press, and a second call inside
+ * one press is refused. An operator with a driver at the window cannot be
+ * given a button that behaves differently the first time.
+ *
+ * WHAT NOTHING CAN DO: open WhatsApp with the file already attached. There is
+ * no URL and no API for it — `wa.me`, `api.whatsapp.com/send`,
+ * `web.whatsapp.com/send` and `whatsapp://send` all carry text and a phone
+ * number, never a picture — and no page may put a file into another app's
+ * composer. The clipboard is as close as a browser gets.
+ *
+ * The paste does not consume it, which is the quiet virtue of this route: one
+ * press, then Ctrl+V into as many chats and groups as the slip needs to go
+ * to. It stays until something else is copied.
  *
  * The picture is the slip the screen is already showing, drawn into a canvas
  * — the same markup, the same artwork, the same Urdu. A second renderer could
@@ -185,13 +196,58 @@ export async function canvasToFile(
   return new File([blob], `${fileName}.${extension}`, { type });
 }
 
-/** Whether this machine can hand a file to another app. */
-export function canShareFile(file: File): boolean {
-  return (
-    typeof navigator.share === 'function' &&
-    typeof navigator.canShare === 'function' &&
-    navigator.canShare({ files: [file] })
-  );
+/**
+ * WhatsApp Desktop's own protocol link.
+ *
+ * `whatsapp://` rather than any of the http ones: those open the website, or
+ * ask the browser to decide, and this machine has the app and wants it. No
+ * query at all — a `text=` would prefill a message the operator did not type,
+ * and the picture is going in by paste anyway.
+ */
+export const WHATSAPP_APP_URL = 'whatsapp://send';
+
+/**
+ * Put the picture on the clipboard.
+ *
+ * The blob is handed to `ClipboardItem` as a PROMISE rather than awaited
+ * first: browsers tie a clipboard write to the click that caused it, and
+ * drawing or encoding takes long enough to lose that claim. The promise form
+ * is what the API provides for exactly this.
+ *
+ * PNG, because Chrome's clipboard takes `image/png` and nothing else.
+ */
+export async function copyImageToClipboard(blob: Promise<Blob> | Blob): Promise<void> {
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+}
+
+/** Open WhatsApp Desktop. Silent if the app is not installed. */
+export function openWhatsAppApp(): void {
+  /*
+   * Through a link rather than by setting `location`. An unregistered scheme
+   * assigned to `location` can leave Chrome showing an error page where the
+   * weighing screen was; a click on an anchor that nothing handles simply
+   * does nothing, which is the right failure for a button beside a till.
+   */
+  const link = document.createElement('a');
+  link.href = WHATSAPP_APP_URL;
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+/** Save the file, for a machine whose clipboard refuses pictures. */
+export function downloadFile(file: File): void {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Long enough for the browser to have read it; short enough not to keep a
+  // few megabytes alive for the rest of the shift.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /**

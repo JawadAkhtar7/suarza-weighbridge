@@ -10,7 +10,13 @@
  */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { hasSlipShape, isBlank, renderSlipCanvas } from '../src/receipt/slip/share.js';
+import {
+  hasSlipShape,
+  isBlank,
+  openWhatsAppApp,
+  renderSlipCanvas,
+  WHATSAPP_APP_URL,
+} from '../src/receipt/slip/share.js';
 
 /** A canvas that reports whatever pixels the test asks for. */
 function canvasOf(pixel: [number, number, number], size = 64): HTMLCanvasElement {
@@ -91,5 +97,37 @@ describe('renderSlipCanvas', () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     await expect(renderSlipCanvas(document.createElement('div'))).rejects.toThrow(/in front/i);
+  });
+});
+
+describe('openWhatsAppApp', () => {
+  it("launches the desktop app's own protocol, not a web address", () => {
+    /*
+     * The distinction this whole route rests on. `wa.me`,
+     * `api.whatsapp.com/send` and `web.whatsapp.com/send` all end up in a
+     * browser — which is where the slip is NOT, since it is on the clipboard
+     * and the app is what takes a paste. Only `whatsapp://` reaches the
+     * installed app directly.
+     */
+    const clicked: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicked.push(this.getAttribute('href') ?? '');
+    });
+
+    openWhatsAppApp();
+
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(clicked).toEqual([WHATSAPP_APP_URL]);
+    expect(WHATSAPP_APP_URL.startsWith('whatsapp://')).toBe(true);
+  });
+
+  it('leaves nothing behind in the page', () => {
+    // A link left in the document would be a stray focus stop on a screen an
+    // operator drives with the keyboard.
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    openWhatsAppApp();
+    expect(document.querySelectorAll('a[href^="whatsapp:"]')).toHaveLength(0);
   });
 });

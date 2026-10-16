@@ -1,26 +1,29 @@
 /**
- * "WhatsApp" — the slip, sent from the app that just printed it.
+ * "WhatsApp" — the slip on the clipboard, WhatsApp Desktop open beside it.
  *
- * The picture is drawn BEFORE the button is pressed, a moment after the slip
- * appears, and three things depend on that:
+ * Press it, pick a chat, press Ctrl+V. The paste does not consume the
+ * clipboard, so the same press covers as many chats and groups as the slip
+ * needs to reach.
  *
- *   it is instant     the click has nothing to wait for
- *   it is not blank   drawing happens while this tab is the focused one.
- *                     Drawing it after a new tab had been opened put the work
- *                     in a background tab, where Chrome throttles timers to a
- *                     crawl: the picture came out white and the new tab sat
- *                     on about:blank until the operator clicked back.
- *   it can share      `navigator.canShare` needs the finished file to answer,
- *                     and the answer has to be known inside the click itself
+ * This replaced `navigator.share`, which needs no pasting and could not be
+ * relied on: see share.ts for the Windows behaviour that made the first press
+ * of every session a minute of nothing. One keystroke, every time, beats no
+ * keystroke most of the time — especially with a driver at the window.
  *
- * See share.ts for what the two routes out are and why neither can attach a
- * file to WhatsApp Web for you.
+ * The picture is still drawn before the button is pressed, and still checked
+ * before it is used; that part was hard-won and none of it changed.
  */
 
 import * as React from 'react';
 import { Button, type ButtonProps } from '../../components/ui/button.js';
 import { toast } from '../../components/ui/sonner.js';
-import { canShareFile, canvasToFile, renderSlipCanvas } from './share.js';
+import {
+  canvasToFile,
+  copyImageToClipboard,
+  downloadFile,
+  openWhatsAppApp,
+  renderSlipCanvas,
+} from './share.js';
 
 /**
  * WhatsApp's own glyph, drawn rather than fetched.
@@ -155,178 +158,86 @@ export function WhatsAppShareButton({
   }, [draw]);
 
   /**
-   * The share we are waiting on, if any, by attempt number.
+   * The press, in one place so the draw-then-send path can repeat it.
    *
-   * Numbered rather than a flag because a hung attempt has to be told apart
-   * from the one after it. On this machine the FIRST share of a session does
-   * not open a dialog at all: Windows spins — the cursor goes busy — for the
-   * best part of a minute and then fails with `AbortError: Share Error`, and
-   * the very next press opens the dialog at once. Whatever is cold in the
-   * system's share stack, the first call warms it.
-   *
-   * So a hung attempt is given up on quickly and the operator invited to
-   * press again, which works. When the abandoned one finally does fail, its
-   * number no longer matches and it is allowed to die quietly rather than
-   * throwing an error over a slip that has since gone.
-   */
-  const sharing = React.useRef(0);
-  const attempts = React.useRef(0);
-  /** Re-rendered while a share is outstanding, so the button can say so. */
-  const [waiting, setWaiting] = React.useState(false);
-
-  /**
-   * The press, in one place so a failed attempt can offer to repeat it.
-   *
-   * Held in a ref because the retry lives inside a toast raised by this very
-   * function: pressing that button is a fresh gesture, which is the only way
-   * `navigator.share` can be called again — a retry on a timer would be
-   * refused for having no press behind it.
+   * A ref because `send` refers to itself: a first press that finds nothing
+   * drawn draws it and then carries on, rather than making the operator press
+   * twice for the first slip of a session.
    */
   const sendRef = React.useRef<() => void>(() => undefined);
 
   /**
-   * Hand the slip to Windows, which asks the operator which app gets it.
+   * Copy the slip and open WhatsApp.
    *
-   * ONE ROUTE, and no fallback. Copying to the clipboard or opening WhatsApp
-   * Web instead is a different job the operator did not ask for, and doing it
-   * silently is what made an occasional refusal look like random behaviour.
-   * If this cannot be done, it says so and offers to try again.
-   *
-   * Every refusal below is reported with the name the browser gave it. There
-   * are several quite different reasons Chrome says no on Windows, they are
-   * indistinguishable from the outside, and the one that mattered could not
-   * be caught by somebody opening the console while it happened.
+   * The order matters: a clipboard write needs this document focused, and
+   * launching WhatsApp takes the focus away. Copy first, then launch.
    */
   const send = () => {
-    const drawn = file.current;
+    const drawn = canvas.current;
 
     if (!drawn) {
       /* Not drawn yet. The window is in front now — they just pressed a
-         button on it — so draw, then let them press again: `share` only runs
-         while the browser still sees that press, and it is long gone by the
-         time a slip has been drawn. */
+         button on it — so draw, and carry straight on once it is there. */
       void draw().then((done) => {
-        if (done) {
-          setReady(true);
-          toast.info('Slip ready', {
-            description: 'Press WhatsApp again to choose where it goes.',
-          });
-        } else {
+        if (!done) {
           toast.error('Could not draw the slip', {
             description: 'Keep this window in front and press WhatsApp again.',
           });
+          return;
         }
+        setReady(true);
+        sendRef.current();
       });
       return;
     }
-
-    if (sharing.current) {
-      /*
-       * Chrome holds a lock of its own for as long as a share is outstanding
-       * and refuses any other with `InvalidStateError: An earlier share has
-       * not yet completed`. So pressing again here cannot work, whatever the
-       * button looks like, and inviting it was worse than saying nothing.
-       */
-      toast.info('Windows is still working on it', {
-        description: 'The first one can take a minute. It will say when it is ready.',
-      });
-      return;
-    }
-
-    if (!canShareFile(drawn)) {
-      /* Chrome itself says this machine cannot pass a file to another app —
-         no WhatsApp, no Mail, nothing. Worth saying plainly rather than
-         quietly doing something else. */
-      toast.error('This PC cannot pass files to other apps', {
-        description: 'Chrome reports no file sharing on this machine.',
-        duration: 20_000,
-      });
-      return;
-    }
-
-    const attempt = (attempts.current += 1);
-    sharing.current = attempt;
-    setWaiting(true);
 
     /*
-     * Waited out, not given up on.
-     *
-     * Abandoning the wait early was tried and made things worse: Chrome's own
-     * lock is still held by the outstanding call, so the press it invited
-     * failed with `InvalidStateError` every time. There is nothing to do with
-     * a hung share but wait for it to fail — after which the next one works.
-     *
-     * The timer is only a backstop against a promise that never settles at
-     * all, which would otherwise leave the button saying "waiting" for ever.
+     * Encoded and copied in one step, the blob handed over as a promise.
+     * Browsers tie a clipboard write to the click behind it, and awaiting the
+     * encoding first is long enough to lose that claim.
      */
-    const backstop = window.setTimeout(() => {
-      if (sharing.current !== attempt) return;
-      sharing.current = 0;
-      setWaiting(false);
-    }, 120_000);
-
-    const settled = () => {
-      window.clearTimeout(backstop);
-      if (sharing.current === attempt) {
-        sharing.current = 0;
-        setWaiting(false);
-      }
-    };
-
-    /* No title and no text: the file name carries the slip number, and the
-       fewer things a share target has to accept, the fewer ways it refuses. */
-    void navigator
-      .share({ files: [drawn] })
-      .then(settled)
-      .catch((error: unknown) => {
-        settled();
-
-        const name = error instanceof Error ? error.name : 'unknown';
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn('Web Share refused the slip:', name, message, error);
-
-        if (attempt !== attempts.current) return;
-
-        /*
-         * Chrome reports a cancelled dialog and a broken one under the SAME
-         * name — AbortError — and only the message tells them apart. A
-         * dismissed dialog is a decision and says nothing; anything else
-         * belongs on the screen.
-         */
-        if (name === 'AbortError' && !/internal|error|fail/i.test(message)) return;
-
-        /*
-         * Not an apology: an invitation.
-         *
-         * A failure here is almost always the cold first call, and the next
-         * attempt opens the dialog at once — the lock this one was holding is
-         * released by its own failure. So the operator is told it is ready
-         * and given a button, which is also the gesture `navigator.share`
-         * needs: a retry on a timer would be refused for having no press
-         * behind it.
-         */
-        toast.warning('Windows is ready now', {
-          description: `Press Send to choose the app (first try: ${name}).`,
-          duration: Number.POSITIVE_INFINITY,
-          action: { label: 'Send', onClick: () => sendRef.current() },
+    void copyImageToClipboard(canvasToFile(drawn, fileName, 'image/png'))
+      .then(() => {
+        openWhatsAppApp();
+        toast.success('Slip copied — WhatsApp opening', {
+          description:
+            'Pick a chat and press Ctrl+V. It stays copied, so you can paste it into as many chats as you like.',
+          duration: 12_000,
         });
+      })
+      .catch((error: unknown) => {
+        console.warn('Could not copy the slip:', error);
+
+        /*
+         * The one fallback left, and it is not a different errand: the file
+         * goes to Downloads and WhatsApp still opens, so the operator drags
+         * it in rather than pasting. Said plainly, because it is a different
+         * set of keystrokes from the one they were expecting.
+         */
+        void canvasToFile(drawn, fileName, 'image/png')
+          .then((png) => {
+            downloadFile(png);
+            openWhatsAppApp();
+            toast.warning('Slip downloaded instead', {
+              description:
+                'This PC would not let the page copy a picture. Drag the downloaded file into the chat.',
+              duration: 20_000,
+            });
+          })
+          .catch(() => {
+            toast.error('Could not prepare the slip', {
+              description: 'Please try again, or print it and send a photograph.',
+            });
+          });
       });
   };
 
   sendRef.current = send;
 
   return (
-    <Button
-      type="button"
-      variant={variant}
-      onClick={send}
-      /* Nothing can be shared while Chrome holds its lock, so the button says
-         so rather than letting a press earn an InvalidStateError. */
-      disabled={disabled || waiting}
-      {...rest}
-    >
+    <Button type="button" variant={variant} onClick={send} disabled={disabled} {...rest}>
       <WhatsAppGlyph className="h-4 w-4" />
-      {waiting ? 'Waiting for Windows…' : children}
+      {children}
       {/* Never disabled: if the slip is not drawn yet the press draws it,
           with the window in front by definition. Said only to a screen
           reader, because a label that flickers between two words on a button
