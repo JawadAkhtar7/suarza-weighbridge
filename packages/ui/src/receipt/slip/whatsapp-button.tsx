@@ -155,15 +155,24 @@ export function WhatsAppShareButton({
   }, [draw]);
 
   /**
-   * Whether a share is still open.
+   * The share we are waiting on, if any, by attempt number.
    *
-   * Chrome refuses a second share while one is outstanding, and it does not
-   * always settle the first: closing the Windows flyout by clicking away can
-   * leave its promise hanging for good. Released when it settles and after a
-   * minute regardless, so one dismissed dialog cannot disable the button for
-   * the rest of the shift.
+   * Numbered rather than a flag because a hung attempt has to be told apart
+   * from the one after it. On this machine the FIRST share of a session does
+   * not open a dialog at all: Windows spins — the cursor goes busy — for the
+   * best part of a minute and then fails with `AbortError: Share Error`, and
+   * the very next press opens the dialog at once. Whatever is cold in the
+   * system's share stack, the first call warms it.
+   *
+   * So a hung attempt is given up on quickly and the operator invited to
+   * press again, which works. When the abandoned one finally does fail, its
+   * number no longer matches and it is allowed to die quietly rather than
+   * throwing an error over a slip that has since gone.
    */
-  const sharing = React.useRef(false);
+  const sharing = React.useRef(0);
+  const attempts = React.useRef(0);
+  /** The attempt we stopped waiting for; its eventual failure is not news. */
+  const abandoned = React.useRef(0);
 
   /**
    * The press, in one place so a failed attempt can offer to repeat it.
@@ -212,8 +221,8 @@ export function WhatsAppShareButton({
     }
 
     if (sharing.current) {
-      toast.info('A share is already open', {
-        description: 'Finish or close the Windows dialog, then press again.',
+      toast.info('Windows has not answered yet', {
+        description: 'Give it a moment — if no dialog appears, press again.',
       });
       return;
     }
@@ -229,11 +238,30 @@ export function WhatsAppShareButton({
       return;
     }
 
-    sharing.current = true;
-    const release = window.setTimeout(() => (sharing.current = false), 60_000);
+    const attempt = (attempts.current += 1);
+    sharing.current = attempt;
+
+    /*
+     * Given up on after a few seconds, not a minute.
+     *
+     * A share that is going to work puts its dialog up at once. One that is
+     * still silent after this is the cold first call, and the useful thing
+     * then is another press — which this frees the button for, and says so.
+     */
+    const giveUp = window.setTimeout(() => {
+      if (sharing.current !== attempt) return;
+      sharing.current = 0;
+      abandoned.current = attempt;
+      toast.info('Windows is being slow', {
+        description: 'Press WhatsApp again — the second try opens it.',
+        duration: 15_000,
+        action: { label: 'Try again', onClick: () => sendRef.current() },
+      });
+    }, 3_000);
+
     const settled = () => {
-      window.clearTimeout(release);
-      sharing.current = false;
+      window.clearTimeout(giveUp);
+      if (sharing.current === attempt) sharing.current = 0;
     };
 
     /* No title and no text: the file name carries the slip number, and the
@@ -247,6 +275,13 @@ export function WhatsAppShareButton({
         const name = error instanceof Error ? error.name : 'unknown';
         const message = error instanceof Error ? error.message : String(error);
         console.warn('Web Share refused the slip:', name, message, error);
+
+        /*
+         * Already given up on — the operator has been told to press again,
+         * and very likely has. Whether they did or not, this one's failure
+         * was reported the moment we stopped waiting for it.
+         */
+        if (attempt === abandoned.current || attempt !== attempts.current) return;
 
         /*
          * Chrome reports a cancelled dialog and a broken one under the SAME
