@@ -171,8 +171,8 @@ export function WhatsAppShareButton({
    */
   const sharing = React.useRef(0);
   const attempts = React.useRef(0);
-  /** The attempt we stopped waiting for; its eventual failure is not news. */
-  const abandoned = React.useRef(0);
+  /** Re-rendered while a share is outstanding, so the button can say so. */
+  const [waiting, setWaiting] = React.useState(false);
 
   /**
    * The press, in one place so a failed attempt can offer to repeat it.
@@ -221,8 +221,14 @@ export function WhatsAppShareButton({
     }
 
     if (sharing.current) {
-      toast.info('Windows has not answered yet', {
-        description: 'Give it a moment — if no dialog appears, press again.',
+      /*
+       * Chrome holds a lock of its own for as long as a share is outstanding
+       * and refuses any other with `InvalidStateError: An earlier share has
+       * not yet completed`. So pressing again here cannot work, whatever the
+       * button looks like, and inviting it was worse than saying nothing.
+       */
+      toast.info('Windows is still working on it', {
+        description: 'The first one can take a minute. It will say when it is ready.',
       });
       return;
     }
@@ -240,28 +246,31 @@ export function WhatsAppShareButton({
 
     const attempt = (attempts.current += 1);
     sharing.current = attempt;
+    setWaiting(true);
 
     /*
-     * Given up on after a few seconds, not a minute.
+     * Waited out, not given up on.
      *
-     * A share that is going to work puts its dialog up at once. One that is
-     * still silent after this is the cold first call, and the useful thing
-     * then is another press — which this frees the button for, and says so.
+     * Abandoning the wait early was tried and made things worse: Chrome's own
+     * lock is still held by the outstanding call, so the press it invited
+     * failed with `InvalidStateError` every time. There is nothing to do with
+     * a hung share but wait for it to fail — after which the next one works.
+     *
+     * The timer is only a backstop against a promise that never settles at
+     * all, which would otherwise leave the button saying "waiting" for ever.
      */
-    const giveUp = window.setTimeout(() => {
+    const backstop = window.setTimeout(() => {
       if (sharing.current !== attempt) return;
       sharing.current = 0;
-      abandoned.current = attempt;
-      toast.info('Windows is being slow', {
-        description: 'Press WhatsApp again — the second try opens it.',
-        duration: 15_000,
-        action: { label: 'Try again', onClick: () => sendRef.current() },
-      });
-    }, 3_000);
+      setWaiting(false);
+    }, 120_000);
 
     const settled = () => {
-      window.clearTimeout(giveUp);
-      if (sharing.current === attempt) sharing.current = 0;
+      window.clearTimeout(backstop);
+      if (sharing.current === attempt) {
+        sharing.current = 0;
+        setWaiting(false);
+      }
     };
 
     /* No title and no text: the file name carries the slip number, and the
@@ -276,12 +285,7 @@ export function WhatsAppShareButton({
         const message = error instanceof Error ? error.message : String(error);
         console.warn('Web Share refused the slip:', name, message, error);
 
-        /*
-         * Already given up on — the operator has been told to press again,
-         * and very likely has. Whether they did or not, this one's failure
-         * was reported the moment we stopped waiting for it.
-         */
-        if (attempt === abandoned.current || attempt !== attempts.current) return;
+        if (attempt !== attempts.current) return;
 
         /*
          * Chrome reports a cancelled dialog and a broken one under the SAME
@@ -291,10 +295,20 @@ export function WhatsAppShareButton({
          */
         if (name === 'AbortError' && !/internal|error|fail/i.test(message)) return;
 
-        toast.error(`WhatsApp did not take the slip (${name})`, {
-          description: message || 'Windows gave no reason.',
-          duration: 30_000,
-          action: { label: 'Try again', onClick: () => sendRef.current() },
+        /*
+         * Not an apology: an invitation.
+         *
+         * A failure here is almost always the cold first call, and the next
+         * attempt opens the dialog at once — the lock this one was holding is
+         * released by its own failure. So the operator is told it is ready
+         * and given a button, which is also the gesture `navigator.share`
+         * needs: a retry on a timer would be refused for having no press
+         * behind it.
+         */
+        toast.warning('Windows is ready now', {
+          description: `Press Send to choose the app (first try: ${name}).`,
+          duration: Number.POSITIVE_INFINITY,
+          action: { label: 'Send', onClick: () => sendRef.current() },
         });
       });
   };
@@ -302,9 +316,17 @@ export function WhatsAppShareButton({
   sendRef.current = send;
 
   return (
-    <Button type="button" variant={variant} onClick={send} disabled={disabled} {...rest}>
+    <Button
+      type="button"
+      variant={variant}
+      onClick={send}
+      /* Nothing can be shared while Chrome holds its lock, so the button says
+         so rather than letting a press earn an InvalidStateError. */
+      disabled={disabled || waiting}
+      {...rest}
+    >
       <WhatsAppGlyph className="h-4 w-4" />
-      {children}
+      {waiting ? 'Waiting for Windows…' : children}
       {/* Never disabled: if the slip is not drawn yet the press draws it,
           with the window in front by definition. Said only to a screen
           reader, because a label that flickers between two words on a button
