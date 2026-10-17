@@ -9,6 +9,7 @@
 
 import type {
   AuditEntry,
+  OperatorSession,
   Customer,
   FramingUpdate,
   StationSettings,
@@ -75,12 +76,39 @@ export class AgentApiError extends Error {
   }
 }
 
+/**
+ * The shift in progress, held here so every call can carry it.
+ *
+ * A module variable rather than something threaded through each caller: the
+ * token identifies the person at the window, not the request, and there is
+ * exactly one of them per browser.
+ */
+let shiftToken: string | null = null;
+let shiftUsername: string | null = null;
+
+export function setShiftToken(token: string | null, username?: string | null): void {
+  shiftToken = token;
+  shiftUsername = token ? (username ?? shiftUsername) : null;
+}
+
+/**
+ * Who is at the window, for stamping onto the records they save.
+ *
+ * Null when nobody is signed in — a bridge with no accounts yet — and the
+ * callers fall back to the single shared username the app used before
+ * anybody signed in at all.
+ */
+export function signedInUsername(): string | null {
+  return shiftUsername;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
       ...init,
       headers: {
+        ...(shiftToken ? { authorization: `Bearer ${shiftToken}` } : {}),
         // Only when there IS a body. Fastify refuses an empty body that claims
         // to be JSON — so a POST that carries nothing, like the sync buttons,
         // was rejected before it reached its handler.
@@ -169,12 +197,39 @@ export const agentApi = {
   getVehicleTypes: () =>
     request<{
       vehicle_types: { key: string; label: string; rate_pkr: number }[];
-      last_synced_at: { customers: string | null; vehicle_types: string | null };
+      last_synced_at: {
+        customers: string | null;
+        vehicle_types: string | null;
+        operators?: string | null;
+      };
     }>('/vehicle-types'),
 
   syncCustomers: () => request<SyncOutcome>('/sync/customers', { method: 'POST' }),
 
   syncVehicleTypes: () => request<SyncOutcome>('/sync/vehicle-types', { method: 'POST' }),
+
+  /** The operator accounts, so a shift can start with the link down. */
+  syncOperators: () => request<SyncOutcome>('/sync/operators', { method: 'POST' }),
+
+  // --- Starting and ending a shift -----------------------------------------
+
+  /**
+   * Whether this bridge signs anybody in, and who is signed in now.
+   *
+   * `required` is false on a bridge that has never pulled the accounts down.
+   * The screen then lets the operator straight through rather than locking
+   * the yard out of weighing until somebody can be telephoned.
+   */
+  operatorAuth: () =>
+    request<{ required: boolean; session: OperatorSession | null }>('/operator/auth'),
+
+  startShift: (username: string, password: string) =>
+    request<{ session: OperatorSession }>('/operator/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+
+  endShift: () => request<{ ended: boolean }>('/operator/auth/logout', { method: 'POST' }),
 
   createWeighment: (input: CreateWeighmentInput) =>
     request<CreateWeighmentResponse>('/weighments', {

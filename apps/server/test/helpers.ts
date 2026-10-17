@@ -13,8 +13,9 @@ import { loadConfig, type ServerConfig } from '../src/config.js';
 import { WeighmentModel } from '../src/models/weighment.model.js';
 import { StationModel } from '../src/models/station.model.js';
 import { OperatorModel, ShiftTimingsModel } from '../src/models/operator.model.js';
-import { DeletedWeighmentModel } from '../src/models/deleted-weighment.model.js';
+import { ManagerVoidModel } from '../src/models/manager-void.model.js';
 import { AuditModel } from '../src/models/audit.model.js';
+import { LogModel } from '../src/models/log.model.js';
 import { UserModel } from '../src/models/user.model.js';
 import { newId, nowUtc, type UserRole, type Weighment } from '@suarza/shared';
 import bcrypt from 'bcryptjs';
@@ -55,9 +56,12 @@ export async function clearDatabase(): Promise<void> {
        labelling the next test's records. */
     OperatorModel.deleteMany({}),
     ShiftTimingsModel.deleteMany({}),
-    /* And a tombstone would keep the next test's weighing out of the
-       database entirely, which is a confusing way to fail. */
-    DeletedWeighmentModel.deleteMany({}),
+    /* And a manager's void would hold the next test's weighing at VOID
+       however it arrived, which is a confusing way to fail. */
+    ManagerVoidModel.deleteMany({}),
+    /* The log is append-only in the application and would otherwise carry
+       one test's voids into the next test's page of entries. */
+    LogModel.deleteMany({}),
   ]);
 }
 

@@ -47,8 +47,21 @@ export interface CaptureUpload {
   body: Buffer;
 }
 
+/** A shift starting or ending, on its way to the manager's log. */
+export interface OperatorLogUpload {
+  id: string;
+  kind: 'SHIFT_START' | 'SHIFT_END';
+  at: string;
+  username: string;
+  name: string;
+  slot: 'MORNING' | 'NIGHT' | 'ADMIN';
+  detail: string | null;
+}
+
 export interface CloudClient {
   ingest(weighments: Weighment[], auditEntries: AuditEntry[]): Promise<IngestResponse>;
+  /** Resolves with the ids the cloud has recorded; throws CloudError otherwise. */
+  pushOperatorLogs(entries: OperatorLogUpload[]): Promise<string[]>;
   /** Resolves when the cloud has the picture; throws CloudError otherwise. */
   uploadCapture(capture: CaptureUpload): Promise<void>;
   ping(): Promise<boolean>;
@@ -102,6 +115,37 @@ export function createCloudClient(options: CloudClientOptions): CloudClient {
       }
 
       return (await response.json()) as IngestResponse;
+    },
+
+    /**
+     * Send the shift events.
+     *
+     * One request for the batch, unlike the pictures: these are a few dozen
+     * bytes each, they carry their own ids, and the cloud upserts them — so
+     * a batch delivered twice records one shift rather than two.
+     */
+    async pushOperatorLogs(entries) {
+      if (entries.length === 0) return [];
+
+      let response: Response;
+      try {
+        response = await post('/api/sync/operator-logs', { entries });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new CloudError(`Cannot reach the cloud: ${message}`, null, false);
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new CloudError(
+          `Cloud rejected the shift log (${response.status}): ${text.slice(0, 200)}`,
+          response.status,
+          true,
+        );
+      }
+
+      const body = (await response.json()) as { accepted?: string[] };
+      return body.accepted ?? entries.map((entry) => entry.id);
     },
 
     /**

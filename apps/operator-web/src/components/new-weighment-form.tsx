@@ -34,7 +34,7 @@ import {
   type Weighment,
 } from '@suarza/shared';
 import { Loader2, Save } from 'lucide-react';
-import { agentApi, AgentApiError, type AgentWarning } from '../lib/api.js';
+import { agentApi, AgentApiError, signedInUsername, type AgentWarning } from '../lib/api.js';
 import type { CapturedWeight } from './weight-capture.js';
 import { CustomerPicker } from './customer-picker.js';
 import { SlipSearch } from './slip-search.js';
@@ -277,7 +277,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
           .omit({ first_weight_kg: true, first_weight_src: true, operator_username: true })
           .parse(values),
         vehicle_type_label: vehicleTypes.labelFor(values.vehicle_type),
-        operator_username: DEFAULT_OPERATOR_USERNAME,
+        operator_username: signedInUsername() ?? DEFAULT_OPERATOR_USERNAME,
       };
 
       if (isRepeat) {

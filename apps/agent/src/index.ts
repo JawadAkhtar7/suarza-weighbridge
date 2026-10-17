@@ -12,6 +12,7 @@ import { cameraSettings, cloudSettings, settingsLogin } from './deployment.js';
 import { loadConfig } from './config.js';
 import { closeDatabase, openDatabase } from './db/connection.js';
 import { UserRepository } from './db/users.js';
+import { OperatorRepository } from './db/operators.js';
 import { PendingCaptureStore } from './cameras/pending-captures.js';
 import { WeighmentRepository } from './db/weighments.js';
 import { AuditRepository } from './db/audit.js';
@@ -50,6 +51,11 @@ async function main(): Promise<void> {
   if (users.seed(login.username, login.password)) {
     log(`Created the first settings login: ${login.username}`);
   }
+
+  /* The operator accounts the manager keeps, and the shift somebody is in
+     the middle of. The accounts arrive with the other lists; this machine
+     only ever compares against them — see db/operators.ts. */
+  const operators = new OperatorRepository(db);
 
   // Settings live in the database so a print calibration or an edited rate
   // card survives a browser profile being cleared (brief §13-M8).
@@ -143,6 +149,10 @@ async function main(): Promise<void> {
     syncWorker = new SyncWorker({
       weighments: new WeighmentRepository(db),
       audit: new AuditRepository(db),
+      operatorLogs: {
+        unsynced: (limit) => operators.unsyncedLogs(limit),
+        markSynced: (ids) => operators.markLogsSynced(ids),
+      },
       client: createCloudClient({
         baseUrl: cloud.url,
         apiKey: cloud.apiKey,
@@ -200,6 +210,10 @@ async function main(): Promise<void> {
     service,
     settings,
     users,
+    operators,
+    // A shift starting is worth telling the manager about now, not at the
+    // next five-minute tick.
+    onOperatorLog: () => syncWorker?.requestSync(),
     cameras,
     pendingCaptures,
     capture,

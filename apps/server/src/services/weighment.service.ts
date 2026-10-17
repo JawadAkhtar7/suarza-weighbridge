@@ -1,7 +1,13 @@
 /** Manager queries over the synced records (brief §9, §13-M5). */
 
 import type { FilterQuery } from 'mongoose';
-import type { PaginatedWeighments, ShiftTimings, Weighment, WeighmentQuery } from '@suarza/shared';
+import type {
+  PaginatedWeighments,
+  Shift,
+  ShiftTimings,
+  Weighment,
+  WeighmentQuery,
+} from '@suarza/shared';
 import {
   DEFAULT_FRONT_VIEW_FRAME,
   DEFAULT_SIDE_VIEW_FRAME,
@@ -13,18 +19,8 @@ import { WeighmentModel, type WeighmentDocument } from '../models/weighment.mode
 import { LedgerCustomerModel } from '../models/ledger.model.js';
 import { imagesForWeighments } from './capture.service.js';
 import { cameraFramingForStations } from './station.service.js';
-import { operatorNamesByShift, shiftTimings } from './roster.service.js';
+import { operatorNamesByShift, operatorNamesByUsername, shiftTimings } from './roster.service.js';
 
-/**
- * How many records a shift filter will sort through.
- *
- * The filter cannot be pushed into Mongo — see listWeighments — so the
- * matching records are read and divided here. The dashboard filters by date
- * as well and a weighbridge does a few dozen trucks a day, so this is a
- * ceiling nobody reaches in practice; it is here so that a year-wide query
- * cannot ask a 1 GB droplet to sort a hundred thousand records in memory.
- */
-const SHIFT_SCAN_LIMIT = 5_000;
 import { ApiError } from '../errors.js';
 
 /** Regex metacharacters in a customer's name must not become a pattern. */
@@ -95,43 +91,73 @@ export function buildFilter(query: WeighmentQuery): FilterQuery<WeighmentDocumen
   return filter;
 }
 
-export async function listWeighments(query: WeighmentQuery): Promise<PaginatedWeighments> {
-  const filter = buildFilter(query);
-  const skip = (query.page - 1) * query.page_size;
+/**
+ * "Was this weighed during that shift?", asked of Mongo rather than of Node.
+ *
+ * A shift is a range of hours at the BRIDGE, not a field on the record: the
+ * night shift crosses midnight, the hours are the manager's to change, and
+ * the server keeps a different clock from the yard. So it is computed — the
+ * weighing's hour and minute in Pakistan, compared against the two starts.
+ *
+ * It is computed in the database on purpose. This used to read the matching
+ * records into memory and divide them there, which meant a cap on how many
+ * could be read, a page count that counted only as far as the cap, and —
+ * once the dashboard's figures were asked to follow the shift filter too —
+ * the same rule written twice in two languages. One expression, used by the
+ * table and by every figure above it, cannot disagree with itself.
+ *
+ * The cost is that no index covers it; the date filter above it is what keeps
+ * the scan small, and a weighbridge does a few dozen trucks a day.
+ */
+export function shiftMatch(shift: Shift, timings: ShiftTimings): FilterQuery<WeighmentDocument> {
+  const morning = ((timings.MORNING % 1440) + 1440) % 1440;
+  const night = ((timings.NIGHT % 1440) + 1440) % 1440;
 
-  /*
-   * A shift is a range of hours at the bridge, not a field on the record, so
-   * it cannot be put into the Mongo filter: a night shift crosses midnight,
-   * the hours are the manager's to change, and the bridge keeps a different
-   * clock from this server. See shiftAt.
-   *
-   * So the page is sliced after the shift is worked out, which means reading
-   * the matching records rather than one page of them. Bounded on purpose:
-   * the dashboard filters by date as well, and a weighbridge does a few dozen
-   * trucks a day. The cap is what stops a year-wide query being asked to sort
-   * a hundred thousand records in memory.
-   */
-  const timings = query.shift ? await shiftTimings() : null;
-
-  if (timings) {
-    const matching = await WeighmentModel.find(filter)
-      .sort({ [query.sort_by]: query.sort_dir === 'asc' ? 1 : -1 })
-      .limit(SHIFT_SCAN_LIMIT)
-      .lean();
-
-    const inShift = matching.filter(
-      (row) => shiftAt(new Date(row.first_weight_at), timings) === query.shift,
-    );
-
-    return annotate(
-      inShift
-        .slice(skip, skip + query.page_size)
-        .map((row) => toDto(row as WeighmentDocument & { _id: string })),
-      inShift.length,
-      query,
-      timings,
-    );
+  // Equal starts are refused when they are set; if one ever reached the
+  // database anyway, shiftAt calls the whole day MORNING and so does this.
+  if (morning === night) {
+    return shift === 'MORNING' ? {} : { _id: { $in: [] } };
   }
+
+  const minuteOfDay = {
+    $add: [
+      { $multiply: [{ $hour: { date: '$first_weight_at', timezone: DISPLAY_TIMEZONE } }, 60] },
+      { $minute: { date: '$first_weight_at', timezone: DISPLAY_TIMEZONE } },
+    ],
+  };
+
+  // Half-open, exactly as shiftAt has it: a weighing taken at the moment the
+  // night begins is night, not both.
+  const inMorning =
+    morning < night
+      ? { $and: [{ $gte: [minuteOfDay, morning] }, { $lt: [minuteOfDay, night] }] }
+      : // The MORNING is the one crossing midnight in this configuration.
+        { $or: [{ $gte: [minuteOfDay, morning] }, { $lt: [minuteOfDay, night] }] };
+
+  return { $expr: shift === 'MORNING' ? inMorning : { $not: inMorning } };
+}
+
+/**
+ * The whole filter, shift included.
+ *
+ * Async where `buildFilter` is not, because a shift cannot be read off the
+ * query alone — it needs the hours the manager has set. Every caller that
+ * honours the dashboard's filters uses this one; `buildFilter` remains for
+ * what can be decided without a round trip.
+ */
+export async function buildQueryFilter(
+  query: WeighmentQuery,
+): Promise<{ filter: FilterQuery<WeighmentDocument>; timings: ShiftTimings | null }> {
+  const filter = buildFilter(query);
+  if (!query.shift) return { filter, timings: null };
+
+  const timings = await shiftTimings();
+  return { filter: { ...filter, ...shiftMatch(query.shift, timings) }, timings };
+}
+
+export async function listWeighments(query: WeighmentQuery): Promise<PaginatedWeighments> {
+  const { filter, timings } = await buildQueryFilter(query);
+  const skip = (query.page - 1) * query.page_size;
 
   const [rows, total] = await Promise.all([
     WeighmentModel.find(filter)
@@ -146,7 +172,7 @@ export async function listWeighments(query: WeighmentQuery): Promise<PaginatedWe
     rows.map((row) => toDto(row as WeighmentDocument & { _id: string })),
     total,
     query,
-    null,
+    timings,
   );
 }
 
@@ -177,7 +203,7 @@ async function annotate(
    * the first byte of a real photograph moved. The ids are a hundred bytes a
    * row and the dialog has them the moment it opens.
    */
-  const [accounts, images, framings, hours, names] = await Promise.all([
+  const [accounts, images, framings, hours, names, namesByUsername] = await Promise.all([
     LedgerCustomerModel.find({ match_key: { $in: keys } })
       .select({ _id: 1, match_key: 1 })
       .lean(),
@@ -185,6 +211,7 @@ async function annotate(
     cameraFramingForStations(dtos.map((w) => w.station_id)),
     timings ? Promise.resolve(timings) : shiftTimings(),
     operatorNamesByShift(),
+    operatorNamesByUsername(),
   ]);
 
   const idByKey = new Map(accounts.map((doc) => [doc.match_key, String(doc._id)]));
@@ -202,10 +229,18 @@ async function annotate(
         customer_id:
           idByKey.get(customerKey(weighment.customer_name, weighment.customer_company)) ?? null,
         shift,
-        /* Whoever holds that shift NOW — the weighbridge has one login used by
-           whoever is at the window, so there is nothing on the record itself
-           to name. Null when nobody is rostered to it. */
-        operator_name: names[shift],
+        /*
+         * Whoever SAVED it, by the username they signed in with.
+         *
+         * The roster is the fallback, not the answer. It says who holds a
+         * shift now, which was all there was before the operators signed in
+         * at the bridge — and it reads wrong in the two cases that matter:
+         * a weighing saved by the administrator, or by whoever covered the
+         * night, was labelled with the name of the person rostered to the
+         * hour it happened to fall in. Null only when neither knows.
+         */
+        operator_name:
+          namesByUsername.get(weighment.operator_username.trim().toLowerCase()) ?? names[shift],
         captures: {
           // A weighing with no pictures is a pair of nulls, not an absence:
           // the dialog must be able to tell "this bridge has no cameras" from

@@ -29,9 +29,8 @@ import {
   type WeighmentRow,
   type WeighmentStatus,
 } from '@suarza/shared';
-import { ChevronLeft, ChevronRight, FileText, Trash2 } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, FileText, Undo2 } from 'lucide-react';
 import { MD_BREAKPOINT, useMediaQuery } from '../hooks/use-media-query.js';
-import { CustomerId } from './ledger-bits.js';
 
 const STATUS_VARIANT: Record<WeighmentStatus, 'secondary' | 'success' | 'destructive'> = {
   OPEN: 'secondary',
@@ -46,8 +45,9 @@ interface SalesTableProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   onSelect: (weighment: WeighmentRow) => void;
-  /** Absent for anyone who may not delete; the column then does not appear. */
-  onDelete?: (weighment: WeighmentRow) => void;
+  /** Absent for anyone who may not void; the column then does not appear. */
+  onVoid?: (weighment: WeighmentRow) => void;
+  onRestore?: (weighment: WeighmentRow) => void;
 }
 
 export function SalesTable({
@@ -57,7 +57,8 @@ export function SalesTable({
   pageSize,
   onPageChange,
   onSelect,
-  onDelete,
+  onVoid,
+  onRestore,
 }: SalesTableProps) {
   const columns: ColumnDef<WeighmentRow>[] = [
     {
@@ -83,15 +84,14 @@ export function SalesTable({
             {row.original.customer_name || <span className="text-muted-foreground">No name</span>}
           </p>
           {/* Dropped entirely rather than shown as a dash: this is a subtitle,
-              and an empty line under every individual customer is just noise. */}
+              and an empty line under every individual customer is just noise.
+              The ledger account id used to sit under it too, and was removed
+              at the client's request — a row of codes nobody reads. */}
           {row.original.customer_company && (
             <p className="truncate text-xs text-muted-foreground">
               {row.original.customer_company}
             </p>
           )}
-          {/* The ledger account this weighing belongs to. Absent until the
-              account exists, which for an open ticket it does not. */}
-          {row.original.customer_id && <CustomerId id={row.original.customer_id} />}
         </div>
       ),
     },
@@ -168,25 +168,29 @@ export function SalesTable({
         </Button>
       ),
     },
-    ...(onDelete
+    ...(onVoid && onRestore
       ? [
           {
-            id: 'delete',
+            id: 'void',
             header: '',
-            cell: ({ row }: { row: { original: WeighmentRow } }) => (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onDelete(row.original);
-                }}
-                aria-label={`Delete slip ${row.original.slip_number}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            ),
+            cell: ({ row }: { row: { original: WeighmentRow } }) => {
+              const voided = row.original.status === 'VOID';
+              return (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={voided ? undefined : 'text-destructive hover:text-destructive'}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    (voided ? onRestore : onVoid)(row.original);
+                  }}
+                  aria-label={`${voided ? 'Restore' : 'Void'} slip ${row.original.slip_number}`}
+                >
+                  {voided ? <Undo2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+                  {voided ? 'Restore' : 'Void'}
+                </Button>
+              );
+            },
           } as ColumnDef<WeighmentRow>,
         ]
       : []),
@@ -255,7 +259,6 @@ export function SalesTable({
                           {row.customer_company}
                         </p>
                       )}
-                      {row.customer_id && <CustomerId id={row.customer_id} />}
                     </div>
                     <span className="tabular shrink-0 font-semibold">
                       {formatPKR(row.amount_charged)}

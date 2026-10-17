@@ -21,6 +21,8 @@ import type {
   LedgerQuery,
   LedgerSummary,
   LoginResponse,
+  LogQuery,
+  PaginatedLogs,
   PaginatedWeighments,
   ViewFrame,
   Weighment,
@@ -131,31 +133,38 @@ export const api = {
     }>(`/weighments/${encodeURIComponent(slip)}/captures`),
 
   /**
-   * Delete a weighing and everything joined to it.
+   * Set a weighing aside, or bring it back.
    *
-   * Admin only on the server; the button is hidden for anyone else so a
+   * Admin only on the server; the buttons are hidden for anyone else so a
    * manager is not offered something that will be refused.
    */
-  deleteWeighment: (slip: string) =>
-    request<{
-      slip_number: string;
-      audit_entries: number;
-      ledger_entries: number;
-      photographs: number;
-    }>(`/weighments/${encodeURIComponent(slip)}`, { method: 'DELETE' }),
+  /** The reason may be empty; the server records who and when regardless. */
+  voidWeighment: (slip: string, reason: string) =>
+    request<{ weighment: Weighment }>(`/weighments/${encodeURIComponent(slip)}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  restoreWeighment: (slip: string) =>
+    request<{ weighment: Weighment }>(`/weighments/${encodeURIComponent(slip)}/restore`, {
+      method: 'POST',
+    }),
 
   // --- The roster -----------------------------------------------------------
 
-  roster: () => request<Roster>('/operators'),
+  roster: () => request<Roster>('/api/operators'),
 
   setOperator: (input: CreateOperatorInput) =>
-    request<Operator>('/operators', { method: 'POST', body: JSON.stringify(input) }),
+    request<Operator>('/api/operators', { method: 'POST', body: JSON.stringify(input) }),
 
   removeOperator: (id: string) =>
-    request<void>(`/operators/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    request<void>(`/api/operators/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   setShiftTimings: (timings: ShiftTimings) =>
-    request<ShiftTimings>('/shift-timings', { method: 'PUT', body: JSON.stringify(timings) }),
+    request<ShiftTimings>('/api/shift-timings', { method: 'PUT', body: JSON.stringify(timings) }),
+
+  /** The log: shifts starting and ending, slips set aside and brought back. */
+  logs: (query: Partial<LogQuery>) => request<PaginatedLogs>(`/api/logs?${toQueryString(query)}`),
 
   analytics: (query: Partial<WeighmentQuery>) =>
     request<Analytics>(`/analytics?${toQueryString(query)}`),

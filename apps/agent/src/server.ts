@@ -19,8 +19,10 @@ import { registerWeighmentRoutes } from './routes/weighments.js';
 import { registerSimulatorRoutes } from './routes/simulator.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerCameraRoutes } from './routes/cameras.js';
+import { registerOperatorAuthRoutes } from './routes/operator-auth.js';
 import type { SettingsService } from './services/settings-service.js';
 import type { UserRepository } from './db/users.js';
+import type { OperatorRepository } from './db/operators.js';
 import type { CatalogueSync } from './sync/catalogue-sync.js';
 import type { CameraClient, CameraView } from './cameras/camera-client.js';
 import type { CaptureService } from './cameras/capture-service.js';
@@ -58,6 +60,14 @@ export interface AgentDeps {
    * always passes one.
    */
   users?: UserRepository;
+  /**
+   * The operator accounts pulled from the manager, and the shift somebody is
+   * in the middle of. Absent in tests that do not care, and the sign-in
+   * routes are then not registered at all.
+   */
+  operators?: OperatorRepository;
+  /** Nudges the sync worker when a shift event is written. */
+  onOperatorLog?: () => void;
   /** Explicit path to the Operator PWA build; auto-detected when omitted. */
   operatorWebDir?: string | null;
   /** Tests drive the API directly and have no web build to serve. */
@@ -125,6 +135,7 @@ export async function buildServer(deps: AgentDeps): Promise<FastifyInstance> {
   registerWeighmentRoutes(app, deps);
   registerSettingsRoutes(app, deps);
   registerCameraRoutes(app, deps);
+  registerOperatorAuthRoutes(app, deps);
 
   if (deps.config.USE_SIMULATOR && deps.reader instanceof SimulatorWeightReader) {
     registerSimulatorRoutes(app, deps.reader);

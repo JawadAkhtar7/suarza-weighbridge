@@ -11,7 +11,7 @@ import type { AuditEntry, IngestResponse, StationProfile, Weighment } from '@sua
 import { WeighmentModel } from '../models/weighment.model.js';
 import { AuditModel } from '../models/audit.model.js';
 import { StationModel } from '../models/station.model.js';
-import { deletedIdsAmong } from './delete-weighment.service.js';
+import { managerVoidsAmong } from './void-weighment.service.js';
 import { postWeighmentCharges } from './ledger.service.js';
 
 /** Fields that come from the agent, with dates parsed for Mongo. */
@@ -144,25 +144,30 @@ export async function ingest(
     );
 
     /*
-     * Weighings the manager has deleted never come back.
+     * A weighing the manager has voided stays voided.
      *
-     * The bridge still holds its own copy and re-sends whenever one changes —
-     * a second weighing, a void, a reprint — and every write below is an
-     * upsert. Without this, a slip deleted in the morning would reappear the
-     * first time anything touched it at the bridge.
+     * The bridge still holds its own copy, which says COMPLETED, and
+     * re-sends whenever one changes — a reprint, a correction — and every
+     * write below is an upsert. Without this, a slip voided in the morning
+     * would come back as a live weighing the first time anything touched it
+     * at the bridge, and quietly count itself into the day's takings again.
+     *
+     * The record is still written: this only holds its status, with the
+     * reason and the time the manager gave it.
      */
-    const deleted = await deletedIdsAmong(weighments.map((w) => w.id));
+    const voided = await managerVoidsAmong(weighments.map((w) => w.id));
 
     const operations = [];
     for (const weighment of weighments) {
-      if (deleted.has(weighment.id)) {
-        /* Accepted, not rejected: the agent must stop offering it. Rejecting
-           would have it retry this record for ever, and it is not wrong —
-           it simply no longer exists here. */
-        skippedIds.push(weighment.id);
-        acceptedIds.push(weighment.id);
-        continue;
-      }
+      const managerVoid = voided.get(weighment.id);
+      const incomingWeighment: Weighment = managerVoid
+        ? {
+            ...weighment,
+            status: 'VOID',
+            void_reason: managerVoid.reason || null,
+            voided_at: managerVoid.voided_at.toISOString(),
+          }
+        : weighment;
 
       const stored = storedUpdatedAt.get(weighment.id);
       const incoming = new Date(weighment.updated_at).getTime();
@@ -178,7 +183,7 @@ export async function ingest(
       operations.push({
         updateOne: {
           filter: { _id: weighment.id },
-          update: { $set: toDocument(weighment) },
+          update: { $set: toDocument(incomingWeighment) },
           upsert: true,
         },
       });

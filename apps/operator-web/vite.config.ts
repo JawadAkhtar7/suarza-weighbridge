@@ -22,6 +22,9 @@ const AGENT_ROUTES = [
   // the client then reports as a 404 or as nothing at all.
   '/sync/',
   '/vehicle-types',
+  // Starting and ending a shift. Missing here, the sign-in box would ask
+  // Vite rather than the agent and be answered with index.html.
+  '/operator/',
   // Cameras. `/cameras` is the status the panel asks for before it draws
   // anything; `/camera/` carries the live stream and single snapshots;
   // `/captures/` serves the stills a slip prints. Missing, the panel asked

@@ -14,6 +14,7 @@
 import {
   customerSyncResponseSchema,
   nowUtc,
+  operatorAccountSyncSchema,
   vehicleTypeSyncResponseSchema,
   type SyncOutcome,
 } from '@suarza/shared';
@@ -21,6 +22,7 @@ import type { Db } from '../db/connection.js';
 import { applyCustomerSync } from '../db/customers.js';
 import { VehicleTypeRepository } from '../db/vehicle-types.js';
 import { MetaStore, META_KEYS } from '../db/meta.js';
+import { OperatorRepository } from '../db/operators.js';
 import { AppError } from '../errors.js';
 
 export interface CatalogueSyncOptions {
@@ -30,11 +32,7 @@ export interface CatalogueSyncOptions {
   timeoutMs?: number;
 }
 
-async function fetchJson(
-  url: string,
-  apiKey: string,
-  timeoutMs: number,
-): Promise<unknown> {
+async function fetchJson(url: string, apiKey: string, timeoutMs: number): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -72,11 +70,13 @@ async function fetchJson(
 export class CatalogueSync {
   private readonly meta: MetaStore;
   private readonly vehicleTypes: VehicleTypeRepository;
+  private readonly operators: OperatorRepository;
   private readonly timeoutMs: number;
 
   constructor(private readonly options: CatalogueSyncOptions) {
     this.meta = new MetaStore(options.db);
     this.vehicleTypes = new VehicleTypeRepository(options.db);
+    this.operators = new OperatorRepository(options.db);
     this.timeoutMs = options.timeoutMs ?? 20_000;
   }
 
@@ -85,10 +85,17 @@ export class CatalogueSync {
   }
 
   async syncCustomers(): Promise<SyncOutcome> {
-    const body = await fetchJson(this.url('/api/sync/customers'), this.options.apiKey, this.timeoutMs);
+    const body = await fetchJson(
+      this.url('/api/sync/customers'),
+      this.options.apiKey,
+      this.timeoutMs,
+    );
     const parsed = customerSyncResponseSchema.safeParse(body);
     if (!parsed.success) {
-      throw new AppError('CLOUD_REJECTED', 'The server sent a customer list this agent cannot read.');
+      throw new AppError(
+        'CLOUD_REJECTED',
+        'The server sent a customer list this agent cannot read.',
+      );
     }
 
     const counts = applyCustomerSync(this.options.db, parsed.data.customers);
@@ -124,11 +131,45 @@ export class CatalogueSync {
     };
   }
 
+  /**
+   * The operator accounts, so somebody can start a shift with no internet.
+   *
+   * Pulled with the other lists rather than on its own schedule: an operator
+   * whose account was created five minutes ago presses the same button the
+   * rate card comes down on, and one button that fetches everything is one
+   * thing to explain over the telephone.
+   */
+  async syncOperators(): Promise<SyncOutcome> {
+    const body = await fetchJson(
+      this.url('/api/sync/operators'),
+      this.options.apiKey,
+      this.timeoutMs,
+    );
+    const parsed = operatorAccountSyncSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new AppError(
+        'CLOUD_REJECTED',
+        'The server sent an operator list this agent cannot read.',
+      );
+    }
+
+    const { total } = this.operators.applySync(parsed.data.operators);
+    const at = nowUtc();
+    this.meta.set(META_KEYS.operatorsSyncedAt, at);
+
+    return { added: 0, updated: total, removed: 0, total, synced_at: at };
+  }
+
   /** When each list was last pulled, for the Settings screen to show. */
-  lastSyncedAt(): { customers: string | null; vehicle_types: string | null } {
+  lastSyncedAt(): {
+    customers: string | null;
+    vehicle_types: string | null;
+    operators: string | null;
+  } {
     return {
       customers: this.meta.get(META_KEYS.customersSyncedAt),
       vehicle_types: this.meta.get(META_KEYS.vehicleTypesSyncedAt),
+      operators: this.meta.get(META_KEYS.operatorsSyncedAt),
     };
   }
 }

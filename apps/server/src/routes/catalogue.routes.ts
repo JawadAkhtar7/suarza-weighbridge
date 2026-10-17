@@ -11,6 +11,7 @@
 import { Router } from 'express';
 import {
   createCustomerSchema,
+  operatorLogPushSchema,
   createVehicleTypeSchema,
   updateCustomerSchema,
   updateVehicleTypeSchema,
@@ -29,6 +30,8 @@ import {
   updateVehicleType,
   vehicleTypesForSync,
 } from '../services/catalogue.service.js';
+import { operatorAccountsForSync } from '../services/roster.service.js';
+import { recordLogs } from '../services/log.service.js';
 import { parse } from './helpers.js';
 
 export function catalogueRouter(jwtSecret: string, apiKey: string): Router {
@@ -83,6 +86,42 @@ export function catalogueRouter(jwtSecret: string, apiKey: string): Router {
 
   router.get('/api/sync/vehicle-types', requireApiKey(apiKey), async (_req, res) => {
     res.json({ vehicle_types: await vehicleTypesForSync(), synced_at: new Date().toISOString() });
+  });
+
+  /**
+   * The operator accounts, so a shift can start at a bridge with no internet.
+   *
+   * Password hashes cross here, which is why it is behind the ingest key and
+   * nothing else: the weighbridge is a machine with no login, and the whole
+   * reason it holds these is to answer at 6am when the link is down.
+   */
+  router.get('/api/sync/operators', requireApiKey(apiKey), async (_req, res) => {
+    res.json({ operators: await operatorAccountsForSync(), synced_at: new Date().toISOString() });
+  });
+
+  /**
+   * Shift events on their way up.
+   *
+   * The bridge is the only machine that knows a shift has started, so this is
+   * the one log route that is written to rather than read. The entries carry
+   * their own ids and are upserted, so a batch delivered twice records one
+   * shift, not two.
+   */
+  router.post('/api/sync/operator-logs', requireApiKey(apiKey), async (req, res) => {
+    const input = parse(operatorLogPushSchema, req.body);
+    const written = await recordLogs(
+      input.entries.map((entry) => ({
+        id: entry.id,
+        kind: entry.kind,
+        at: entry.at,
+        actor: entry.username,
+        actor_name: entry.name || entry.username,
+        slot: entry.slot,
+        subject: null,
+        detail: entry.detail,
+      })),
+    );
+    res.json({ accepted: input.entries.map((entry) => entry.id), written });
   });
 
   return router;

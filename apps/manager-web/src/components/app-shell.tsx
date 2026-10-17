@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   LayoutDashboard,
   LogOut,
+  ScrollText,
   Menu,
   PanelLeft,
   Truck,
@@ -48,7 +49,8 @@ const NAV: NavItem[] = [
   { to: '/ledger', label: 'Ledger', description: 'Customer accounts', icon: BookOpen },
   { to: '/customers', label: 'Customers', description: 'Names and companies', icon: Users },
   { to: '/vehicle-types', label: 'Vehicle types', description: 'Rates per vehicle', icon: Truck },
-  { to: '/operators', label: 'Operators', description: 'Who is on which shift', icon: UserCog },
+  { to: '/operators', label: 'Operators', description: 'Shifts and sign-ins', icon: UserCog },
+  { to: '/logs', label: 'Logs', description: 'Shifts and voided slips', icon: ScrollText },
 ];
 
 /**

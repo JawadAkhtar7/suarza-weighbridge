@@ -45,7 +45,10 @@ export interface DashboardFilters {
 }
 
 export const DEFAULT_FILTERS: DashboardFilters = {
-  rangeKey: 'last7',
+  /* Today, not the last seven days: the manager opens this to see how the
+     yard is doing now, and a week's figures answered a question they had not
+     asked. Every other range is one button away. */
+  rangeKey: 'today',
   customerName: '',
   customerCompany: '',
   vehicleType: 'all',

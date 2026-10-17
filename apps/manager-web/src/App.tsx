@@ -19,6 +19,7 @@ import { LedgerCustomerPage } from './pages/ledger-customer-page.js';
 import { CustomersPage } from './pages/customers-page.js';
 import { VehicleTypesPage } from './pages/vehicle-types-page.js';
 import { OperatorsPage } from './pages/operators-page.js';
+import { LogsPage } from './pages/logs-page.js';
 
 function NoAccess() {
   const { user, signOut } = useAuth();
@@ -63,6 +64,9 @@ export function App() {
               need the roster — and editable only by an administrator, which
               the page enforces and the server enforces again. */}
           <Route path="operators" element={<OperatorsPage />} />
+          {/* Readable by anyone who can see the dashboard: it says no more
+              than the records themselves do, and nothing here writes to it. */}
+          <Route path="logs" element={<LogsPage />} />
           {/* Anything else is a mistyped or stale URL; the dashboard is the
               safe landing place. */}
           <Route path="*" element={<Navigate to="/" replace />} />

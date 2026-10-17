@@ -111,9 +111,28 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: AgentDeps): v
     return outcome;
   });
 
+  /**
+   * The operator accounts, pulled so a shift can start with no internet.
+   *
+   * Pressed by the same button as the lists above: one "update" on the
+   * Settings screen fetches everything the manager keeps.
+   */
+  app.post('/sync/operators', async (request) => {
+    if (!deps.catalogueSync) {
+      throw new AppError('CLOUD_NOT_CONFIGURED', 'This weighbridge has no cloud configured.');
+    }
+    const outcome = await deps.catalogueSync.syncOperators();
+    request.log.info({ outcome }, 'Operator accounts synced from the manager');
+    return outcome;
+  });
+
   /** What the operator picks from, and when it was last pulled. */
   app.get('/vehicle-types', () => ({
     vehicle_types: deps.service.vehicleTypes(),
-    last_synced_at: deps.catalogueSync?.lastSyncedAt() ?? { customers: null, vehicle_types: null },
+    last_synced_at: deps.catalogueSync?.lastSyncedAt() ?? {
+      customers: null,
+      vehicle_types: null,
+      operators: null,
+    },
   }));
 }

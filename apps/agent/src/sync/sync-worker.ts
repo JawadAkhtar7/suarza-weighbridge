@@ -25,6 +25,7 @@ import type { WeighmentRepository } from '../db/weighments.js';
 import { toDto } from '../db/weighments.js';
 import type { AuditRepository } from '../db/audit.js';
 import { CloudError, type CloudClient } from './cloud-client.js';
+import type { OperatorLogRow } from '../db/operators.js';
 import type { CaptureRow } from '../db/captures.js';
 
 /** Bounded so a week of offline records syncs in batches, not one huge POST. */
@@ -47,6 +48,17 @@ export interface SyncWorkerOptions {
     unsynced(limit?: number): CaptureRow[];
     markSynced(ids: string[]): void;
     read(row: CaptureRow): Promise<Buffer | null>;
+  };
+  /**
+   * Shifts starting and ending, if this bridge signs its operators in.
+   *
+   * Optional like the pictures, and for the same reason: a bridge that has
+   * no operator accounts has an empty table, and there is no sense querying
+   * it on every tick.
+   */
+  operatorLogs?: {
+    unsynced(limit?: number): OperatorLogRow[];
+    markSynced(ids: string[]): void;
   };
   client: CloudClient;
   /**
@@ -198,6 +210,11 @@ export class SyncWorker {
       const images = await this.drainCaptures();
       if (images === 'failed') return;
 
+      /* Shift events. Independent of the weighings — a shift can start on a
+         morning with no trucks — so they drain on their own. */
+      const shifts = await this.drainOperatorLogs();
+      if (shifts === 'failed') return;
+
       /* Last, so a batch above that already carried the newest profile
          makes this a no-op. */
       const profile = await this.sendProfileIfChanged();
@@ -207,6 +224,7 @@ export class SyncWorker {
         drainedSomething ||
         orphans === 'drained' ||
         images === 'drained' ||
+        shifts === 'drained' ||
         profile === 'sent'
       ) {
         this.markOnline();
@@ -315,6 +333,48 @@ export class SyncWorker {
     } catch (error) {
       this.fail(error);
       return 'failed';
+    }
+  }
+
+  /**
+   * Sends the shift events the operator screen has written.
+   *
+   * Marked synced only on a response, like everything else here. The cloud
+   * upserts them on the ids this machine chose, so a batch that lands and
+   * then fails to be acknowledged costs a duplicate request, not a duplicate
+   * shift in the manager's log.
+   */
+  private async drainOperatorLogs(): Promise<'drained' | 'empty' | 'failed'> {
+    const source = this.options.operatorLogs;
+    if (!source) return 'empty';
+
+    let drainedAny = false;
+
+    for (;;) {
+      if (this.stopped) return drainedAny ? 'drained' : 'empty';
+
+      const entries = source.unsynced(BATCH_SIZE);
+      if (entries.length === 0) return drainedAny ? 'drained' : 'empty';
+
+      try {
+        await this.options.client.pushOperatorLogs(
+          entries.map((entry) => ({
+            id: entry.id,
+            kind: entry.kind,
+            at: entry.at,
+            username: entry.username,
+            name: entry.name,
+            slot: entry.slot,
+            detail: entry.detail,
+          })),
+        );
+        source.markSynced(entries.map((entry) => entry.id));
+        this.options.onLog?.('info', `Synced ${entries.length} shift event(s) to the cloud`);
+        drainedAny = true;
+      } catch (error) {
+        this.fail(error);
+        return 'failed';
+      }
     }
   }
 

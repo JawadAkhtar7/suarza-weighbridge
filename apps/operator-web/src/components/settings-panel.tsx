@@ -236,6 +236,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     onSuccess: (outcome: SyncOutcome) => {
       void queryClient.invalidateQueries({ queryKey: ['vehicle-types'] });
       void queryClient.invalidateQueries({ queryKey: ['customers'] });
+      void queryClient.invalidateQueries({ queryKey: ['operator-auth'] });
 
       const changes = [
         outcome.added && `${outcome.added} added`,
@@ -257,6 +258,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
   const syncCustomers = useMutation(pullList('Customers', agentApi.syncCustomers));
   const syncVehicleTypes = useMutation(pullList('Vehicle types', agentApi.syncVehicleTypes));
+  const syncOperators = useMutation(pullList('Operators', agentApi.syncOperators));
 
   /**
    * Re-seed the draft whenever the dialog opens.
@@ -359,6 +361,17 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   View list
                 </Button>
               </SyncRow>
+
+              {/* The accounts the operators start their shift with. Pulled
+                  like the other lists, and for the same reason the others
+                  are: this machine must be able to answer with the link
+                  down, at six in the morning. */}
+              <SyncRow
+                label="Operator sign-ins"
+                lastSyncedAt={syncState.data?.last_synced_at.operators ?? null}
+                onSync={() => syncOperators.mutate()}
+                pending={syncOperators.isPending}
+              />
             </section>
 
             <Separator />

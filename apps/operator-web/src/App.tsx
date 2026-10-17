@@ -13,7 +13,7 @@
 import { useCallback, useState } from 'react';
 import { Button, ThemeToggle, toast } from '@suarza/ui';
 import type { NetWeight, Weighment } from '@suarza/shared';
-import { Settings } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
 import { LiveWeightPanel } from './components/live-weight-panel.js';
 import { WeightCapture, type CapturedWeight } from './components/weight-capture.js';
 import { NewWeighmentForm } from './components/new-weighment-form.js';
@@ -25,10 +25,12 @@ import { SettingsPanel } from './components/settings-panel.js';
 import { ModeSwitch, type WeighingMode } from './components/mode-switch.js';
 import { useLiveWeight, useSyncStatus } from './hooks/use-live-weight.js';
 import { agentApi, type AgentWarning } from './lib/api.js';
+import { useShift } from './components/shift-provider.js';
 
 export function App() {
   const live = useLiveWeight();
   const sync = useSyncStatus();
+  const shift = useShift();
 
   const [mode, setMode] = useState<WeighingMode>('first');
   const [captured, setCaptured] = useState<CapturedWeight | null>(null);
@@ -45,7 +47,8 @@ export function App() {
    */
   const clearCaptured = useCallback(() => {
     setCaptured((current) => {
-      if (current?.captureId) void agentApi.discardCapture(current.captureId).catch(() => undefined);
+      if (current?.captureId)
+        void agentApi.discardCapture(current.captureId).catch(() => undefined);
       return null;
     });
   }, []);
@@ -104,7 +107,30 @@ export function App() {
             className="mr-auto h-12 w-auto"
           />
 
+          {/* Whose shift it is, beside the way out of it. Named rather than
+              implied: two people use this machine and the records carry
+              whoever is signed in. */}
+          {shift.session && (
+            <div className="hidden text-right leading-tight sm:block">
+              <p className="text-sm font-medium">{shift.session.name}</p>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">On shift</p>
+            </div>
+          )}
+
           <ThemeToggle />
+
+          {shift.session && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void shift.endShift().then(() => toast.success('Shift ended'));
+              }}
+            >
+              <LogOut className="h-4 w-4" />
+              End shift
+            </Button>
+          )}
 
           <Button
             variant="ghost"
@@ -119,15 +145,15 @@ export function App() {
 
       <main className="mx-auto max-w-[120rem] px-4 py-6 sm:px-6">
         {/*
-          * Two columns, and the scale starts at the very top.
-          *
-          * The mode tabs used to span the full width above everything, which
-          * pushed the live readout a tab-row down the screen for no reason —
-          * the operator looks at the weight far more often than they switch
-          * pass. The tabs now head the right-hand column instead, so the
-          * readout sits level with the header and the cameras come back
-          * underneath it where the eye already is.
-          */}
+         * Two columns, and the scale starts at the very top.
+         *
+         * The mode tabs used to span the full width above everything, which
+         * pushed the live readout a tab-row down the screen for no reason —
+         * the operator looks at the weight far more often than they switch
+         * pass. The tabs now head the right-hand column instead, so the
+         * readout sits level with the header and the cameras come back
+         * underneath it where the eye already is.
+         */}
         <div className="grid gap-6 lg:items-start lg:grid-cols-[28rem_minmax(0,1fr)] 2xl:grid-cols-[30rem_minmax(0,1fr)]">
           <div className="space-y-4 lg:sticky lg:top-6">
             <LiveWeightPanel

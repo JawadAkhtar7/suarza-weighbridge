@@ -104,3 +104,32 @@ function minutesOfDay(at: Date, timeZone: string): number {
   // Some runtimes render midnight as 24; both mean the same minute of the day.
   return (read('hour') % 24) * 60 + read('minute');
 }
+
+/**
+ * The three people the manager keeps credentials for.
+ *
+ * Two of them are shifts; the third is the administrator who can be at the
+ * bridge at any hour and belongs to neither. Kept as one list rather than
+ * "shifts plus an extra", because the Operators screen, the roster table and
+ * the login all have to answer the same question — which slot is this? — and
+ * a special case in each of them is three chances to disagree.
+ */
+export const OPERATOR_SLOTS = ['MORNING', 'NIGHT', 'ADMIN'] as const;
+export type OperatorSlot = (typeof OPERATOR_SLOTS)[number];
+
+export const OPERATOR_SLOT_LABELS: Record<OperatorSlot, string> = {
+  MORNING: 'Morning',
+  NIGHT: 'Night',
+  ADMIN: 'Administrator',
+};
+
+/**
+ * The shift a slot works, or null for the administrator.
+ *
+ * Null rather than a default shift: the administrator's hours are not a fact
+ * anybody has stated, and picking one would quietly file their weighings
+ * under somebody else's shift.
+ */
+export function shiftForSlot(slot: OperatorSlot): Shift | null {
+  return slot === 'ADMIN' ? null : slot;
+}

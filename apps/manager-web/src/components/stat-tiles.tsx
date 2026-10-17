@@ -1,19 +1,22 @@
 /**
  * The headline figures (brief §9).
  *
- * Deliberately NOT charts: four single numbers have no shape to show, and a
- * donut of "1 of 4 statuses" would be decoration. A stat tile reads in a
- * glance, which is what a manager opening this on a phone actually wants.
+ * Deliberately NOT charts: a single number has no shape to show, and a donut
+ * of "1 of 4 statuses" would be decoration. A stat tile reads in a glance,
+ * which is what a manager opening this on a phone actually wants.
  *
- * Colour here carries meaning rather than decorating: money is the brand green,
- * open tickets are the warning colour because they are the only tile that ever
- * needs acting on, and the two neutral measures stay neutral. Giving all four
- * tiles their own colour would make none of them mean anything.
+ * Colour carries meaning rather than decorating: money is the brand green and
+ * the count beside it stays neutral. Giving both tiles their own colour would
+ * make neither of them mean anything.
+ *
+ * There used to be a third — open tickets — removed at the client's request.
+ * A second weighing follows the first within the hour at this yard, so the
+ * tile read zero nearly all day and nobody acted on it when it did not.
  */
 
 import { Card, CardContent, Skeleton, cn } from '@suarza/ui';
 import { formatPKR, type Analytics } from '@suarza/shared';
-import { CircleDollarSign, ClipboardList, Timer, type LucideIcon } from 'lucide-react';
+import { CircleDollarSign, ClipboardList, type LucideIcon } from 'lucide-react';
 
 interface StatTilesProps {
   analytics: Analytics | undefined;
@@ -59,20 +62,10 @@ export function StatTiles({ analytics, isLoading }: StatTilesProps) {
       icon: ClipboardList,
       tone: 'neutral',
     },
-    {
-      label: 'Open tickets',
-      value: analytics ? analytics.open_weighments.toLocaleString() : '—',
-      note: 'Awaiting a second weighing',
-      icon: Timer,
-      // Coloured only when there ARE open tickets. A permanent orange tile
-      // showing zero would train the manager to ignore it.
-      tone: analytics && analytics.open_weighments > 0 ? 'warning' : 'neutral',
-      emphasise: Boolean(analytics && analytics.open_weighments > 0),
-    },
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2">
       {tiles.map((tile) => {
         const tone = TONES[tile.tone];
         return (

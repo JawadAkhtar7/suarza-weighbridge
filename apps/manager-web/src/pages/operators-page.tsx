@@ -1,68 +1,93 @@
 /**
- * Who is on the weighbridge, and when the shifts change over.
+ * Who is on the weighbridge, what they sign in with, and when the shifts
+ * change over.
  *
- * TWO SLOTS, not a list. The yard runs one person in the morning and one at
- * night, so the screen shows those two and who holds them — a table you add
- * rows to would invite a second morning operator, which is not a thing the
- * yard has and not a thing the records could be read against.
+ * THREE SLOTS, not a list. The yard runs one person in the morning and one at
+ * night, and an administrator who can be at the window at any hour; a table
+ * you add rows to would invite a second morning operator, which is not a
+ * thing the yard has and not a thing the records could be read against.
  *
- * This is NOT a login. The weighbridge has one operator account used by
- * whoever is at the window; this is the manager's note of who that is, so a
- * shift's weighings and takings can be read back against a name. Nothing here
- * lets anybody sign in anywhere.
+ * These ARE logins now — the operator starts their shift at the bridge with
+ * the username and password set here. They are not dashboard logins: they
+ * open the weighing screen on the PC in the yard and nothing else. The bridge
+ * keeps its own copy of them, which is what lets a shift start at six in the
+ * morning with the internet down.
  *
  * The hours are stored as two start times rather than four boundaries,
- * because the shifts divide the whole day between them — each runs until the
- * other begins. Four numbers could describe a yard with a gap in it, and a
- * weighing that fell in the gap would belong to no shift at all.
+ * because the two shifts divide the whole day between them — each runs until
+ * the other begins. Four numbers could describe a yard with a gap in it, and
+ * a weighing that fell in the gap would belong to no shift at all. The
+ * administrator has no hours for the same reason: theirs would be a fiction.
  */
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, CardContent, Input, Label, Skeleton, toast } from '@suarza/ui';
 import {
+  OPERATOR_SLOTS,
+  OPERATOR_SLOT_LABELS,
   clockToMinutes,
   minutesToClock,
-  SHIFTS,
-  SHIFT_LABELS,
   type Operator,
-  type Shift,
+  type OperatorSlot,
 } from '@suarza/shared';
-import { Clock, Pencil, Trash2, UserPlus } from 'lucide-react';
+import { Clock, KeyRound, Trash2, UserPlus } from 'lucide-react';
 import { api, ApiError } from '../lib/api.js';
 import { useAuth } from '../hooks/use-auth.js';
 
-/** One shift's slot: who holds it, and the two things you can do about it. */
-function ShiftSlot({
-  shift,
+/** One slot: who holds it, what they sign in with, and how to change it. */
+function SlotCard({
+  slot,
   operator,
   hours,
   canEdit,
 }: {
-  shift: Shift;
+  slot: OperatorSlot;
   operator: Operator | undefined;
-  /** What the screen says this shift runs, for context beside the name. */
+  /** What the screen says this shift runs; empty for the administrator. */
   hours: string;
   canEdit: boolean;
 }) {
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
   const [name, setName] = useState(operator?.name ?? '');
+  const [username, setUsername] = useState(operator?.username ?? '');
+  const [password, setPassword] = useState('');
+  const [dirty, setDirty] = useState(false);
 
   /* Follow the server when it answers, unless the manager is mid-edit —
      typing a name and having it replaced by a refetch is maddening. */
   useEffect(() => {
-    if (!editing) setName(operator?.name ?? '');
-  }, [operator?.name, editing]);
+    if (dirty) return;
+    setName(operator?.name ?? '');
+    setUsername(operator?.username ?? '');
+  }, [operator?.name, operator?.username, dirty]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['roster'] });
+  const edit =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      set(value);
+      setDirty(true);
+    };
 
   const save = useMutation({
-    mutationFn: () => api.setOperator({ name: name.trim(), shift }),
+    mutationFn: () =>
+      api.setOperator({
+        name: name.trim(),
+        slot,
+        username: username.trim().toLowerCase(),
+        /* Omitted rather than empty: an untouched password box means "leave
+           the one you have", and sending '' would read as a change. */
+        ...(password ? { password } : {}),
+      }),
     onSuccess: (saved) => {
-      void invalidate();
-      setEditing(false);
-      toast.success(`${saved.name} is on the ${SHIFT_LABELS[shift].toLowerCase()} shift`);
+      void queryClient.invalidateQueries({ queryKey: ['roster'] });
+      setPassword('');
+      setDirty(false);
+      toast.success(`${saved.name} saved`, {
+        description: saved.has_password
+          ? 'They can start a shift at the weighbridge with these details.'
+          : 'No password set yet — they cannot sign in at the weighbridge.',
+      });
     },
     onError: (error) =>
       toast.error('Could not save', {
@@ -73,8 +98,10 @@ function ShiftSlot({
   const remove = useMutation({
     mutationFn: () => api.removeOperator(operator!.id),
     onSuccess: () => {
-      void invalidate();
-      toast.success(`${SHIFT_LABELS[shift]} shift has nobody on it`);
+      void queryClient.invalidateQueries({ queryKey: ['roster'] });
+      setPassword('');
+      setDirty(false);
+      toast.success(`${OPERATOR_SLOT_LABELS[slot]} has nobody in it`);
     },
     onError: (error) =>
       toast.error('Could not remove', {
@@ -83,73 +110,103 @@ function ShiftSlot({
   });
 
   const busy = save.isPending || remove.isPending;
+  const field = (part: string) => `${slot.toLowerCase()}-${part}`;
 
   return (
     <Card>
       <CardContent className="space-y-4 pt-6">
-        <div>
-          <h2 className="text-lg font-semibold">{SHIFT_LABELS[shift]} shift</h2>
-          <p className="text-sm text-muted-foreground">{hours}</p>
-        </div>
-
-        {editing || !operator ? (
-          <div className="space-y-2">
-            <Label htmlFor={`${shift}-name`} className="text-xs font-normal">
-              Operator name
-            </Label>
-            <div className="flex flex-wrap gap-2">
-              <Input
-                id={`${shift}-name`}
-                className="min-w-[12rem] flex-1"
-                placeholder="Operator name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && name.trim() && canEdit) save.mutate();
-                }}
-                disabled={!canEdit || busy}
-              />
-              <Button
-                type="button"
-                variant="brand"
-                onClick={() => save.mutate()}
-                disabled={!canEdit || busy || name.trim() === ''}
-              >
-                <UserPlus className="h-4 w-4" />
-                {operator ? 'Save' : 'Add'}
-              </Button>
-              {editing && (
-                <Button type="button" variant="outline" onClick={() => setEditing(false)}>
-                  Cancel
-                </Button>
-              )}
-            </div>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold">
+              {slot === 'ADMIN' ? 'Administrator' : `${OPERATOR_SLOT_LABELS[slot]} shift`}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {slot === 'ADMIN' ? 'No fixed hours — may sign in at any time' : hours}
+            </p>
           </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="flex-1 text-xl font-semibold">{operator.name}</p>
+
+          {operator && (
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setEditing(true)}
-              disabled={!canEdit}
-            >
-              <Pencil className="h-4 w-4" />
-              Change
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => remove.mutate()}
               disabled={!canEdit || busy}
+              aria-label={`Remove the ${OPERATOR_SLOT_LABELS[slot].toLowerCase()} operator`}
             >
               <Trash2 className="h-4 w-4" />
               Remove
             </Button>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor={field('name')} className="text-xs font-normal">
+              Name
+            </Label>
+            <Input
+              id={field('name')}
+              placeholder="Operator name"
+              value={name}
+              onChange={(event) => edit(setName)(event.target.value)}
+              disabled={!canEdit || busy}
+            />
           </div>
-        )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor={field('username')} className="text-xs font-normal">
+                Username
+              </Label>
+              <Input
+                id={field('username')}
+                autoComplete="off"
+                placeholder="e.g. imran"
+                value={username}
+                onChange={(event) => edit(setUsername)(event.target.value)}
+                disabled={!canEdit || busy}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor={field('password')} className="text-xs font-normal">
+                Password
+              </Label>
+              <Input
+                id={field('password')}
+                type="password"
+                autoComplete="new-password"
+                /* Said in the box, because a blank field that means "keep the
+                   old one" is otherwise indistinguishable from one that means
+                   "there is no password". */
+                placeholder={operator?.has_password ? 'Unchanged' : 'Set a password'}
+                value={password}
+                onChange={(event) => edit(setPassword)(event.target.value)}
+                disabled={!canEdit || busy}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="brand"
+            onClick={() => save.mutate()}
+            disabled={!canEdit || busy || name.trim() === ''}
+          >
+            <UserPlus className="h-4 w-4" />
+            {operator ? 'Save' : 'Add'}
+          </Button>
+
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <KeyRound className="h-3.5 w-3.5" />
+            {operator?.has_password
+              ? 'Can sign in at the weighbridge'
+              : 'Cannot sign in until a username and password are set'}
+          </p>
+        </div>
 
         {!canEdit && (
           <p className="text-xs text-muted-foreground">
@@ -194,8 +251,10 @@ function ShiftHours({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['roster'] });
       /* The dashboard and the ledger read a record's shift from these, so
-         every list on screen is now answering an older question. */
+         every list and every figure on screen is now answering an older
+         question. */
       void queryClient.invalidateQueries({ queryKey: ['weighments'] });
+      void queryClient.invalidateQueries({ queryKey: ['analytics'] });
       setDirty(false);
       toast.success('Shift hours saved');
     },
@@ -288,12 +347,12 @@ export function OperatorsPage() {
 
   const operators = roster.data?.operators ?? [];
   const timings = roster.data?.shift_timings;
-  const byShift = (shift: Shift) => operators.find((operator) => operator.shift === shift);
+  const bySlot = (slot: OperatorSlot) => operators.find((operator) => operator.slot === slot);
 
-  const hoursFor = (shift: Shift) => {
-    if (!timings) return '';
-    const from = minutesToClock(shift === 'MORNING' ? timings.MORNING : timings.NIGHT);
-    const to = minutesToClock(shift === 'MORNING' ? timings.NIGHT : timings.MORNING);
+  const hoursFor = (slot: OperatorSlot) => {
+    if (!timings || slot === 'ADMIN') return '';
+    const from = minutesToClock(slot === 'MORNING' ? timings.MORNING : timings.NIGHT);
+    const to = minutesToClock(slot === 'MORNING' ? timings.NIGHT : timings.MORNING);
     return `${from} to ${to}`;
   };
 
@@ -302,18 +361,18 @@ export function OperatorsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Operators</h1>
         <p className="text-sm text-muted-foreground">
-          Who is on the bridge, by shift. Used to label weighings and to filter the dashboard and
-          the ledger — not to sign in anywhere.
+          Who is on the bridge, by shift, and what they sign in with. Used to label weighings, to
+          filter the dashboard and the ledger, and to start a shift at the weighbridge itself.
         </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {SHIFTS.map((shift) => (
-          <ShiftSlot
-            key={shift}
-            shift={shift}
-            operator={byShift(shift)}
-            hours={hoursFor(shift)}
+        {OPERATOR_SLOTS.map((slot) => (
+          <SlotCard
+            key={slot}
+            slot={slot}
+            operator={bySlot(slot)}
+            hours={hoursFor(slot)}
             canEdit={canEdit}
           />
         ))}

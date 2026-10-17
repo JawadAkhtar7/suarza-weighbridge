@@ -230,6 +230,63 @@ MIGRATIONS.push({
   `,
 });
 
+MIGRATIONS.push({
+  version: 8,
+  name: 'operator sign-in: accounts, sessions and shift log',
+  up: `
+    -- The operator accounts, as the manager keeps them in the cloud.
+    --
+    -- A COPY, pulled with the rest of the manager's lists, and the reason it
+    -- is a copy is the only reason it exists: a shift starts at six in the
+    -- morning and the link to the cloud is down as often as not. Asking the
+    -- internet whether somebody may start work would mean a yard that cannot
+    -- weigh a truck because a router in another city is rebooting.
+    --
+    -- The hash is bcrypt because that is what the cloud stores; this machine
+    -- only ever compares against it and can produce no hash of its own.
+    CREATE TABLE operator_accounts (
+      username      TEXT PRIMARY KEY,
+      name          TEXT NOT NULL,
+      slot          TEXT NOT NULL CHECK (slot IN ('MORNING', 'NIGHT', 'ADMIN')),
+      password_hash TEXT NOT NULL,
+      updated_at    TEXT NOT NULL,
+      synced_at     TEXT NOT NULL
+    );
+
+    -- A shift in progress.
+    --
+    -- In the database rather than in memory so that restarting the agent —
+    -- a deploy, a Windows update, a power cut — does not throw the operator
+    -- out at eleven at night. One row per token; ending a shift deletes it.
+    CREATE TABLE operator_sessions (
+      token      TEXT PRIMARY KEY,
+      username   TEXT NOT NULL,
+      name       TEXT NOT NULL,
+      slot       TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL
+    );
+
+    -- Shifts starting and ending, on their way to the manager's log.
+    --
+    -- Written here first and pushed up afterwards, like every other thing
+    -- this machine records: the shift has started whether or not anybody can
+    -- be told about it yet.
+    CREATE TABLE operator_logs (
+      id       TEXT PRIMARY KEY,
+      kind     TEXT NOT NULL CHECK (kind IN ('SHIFT_START', 'SHIFT_END')),
+      username TEXT NOT NULL,
+      name     TEXT NOT NULL,
+      slot     TEXT NOT NULL,
+      detail   TEXT,
+      at       TEXT NOT NULL,
+      synced   INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX idx_operator_logs_unsynced ON operator_logs (synced) WHERE synced = 0;
+  `,
+});
+
 export function migrate(db: Database): number {
   const current = db.pragma('user_version', { simple: true }) as number;
   const pending = MIGRATIONS.filter((m) => m.version > current).sort(

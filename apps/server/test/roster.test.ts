@@ -11,8 +11,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { clearDatabase, completedWeighment, startDatabase, stopDatabase } from './helpers.js';
 import { ingest } from '../src/services/ingest.service.js';
 import { listWeighments } from '../src/services/weighment.service.js';
+import { getAnalytics } from '../src/services/analytics.service.js';
 import {
   listRoster,
+  operatorAccountsForSync,
   operatorNamesByShift,
   removeOperator,
   setOperator,
@@ -56,9 +58,9 @@ describe('the roster', () => {
      * means the first has left. Making them delete the old one first would be
      * a rule to explain rather than a job to do.
      */
-    await setOperator({ name: 'Imran', shift: 'MORNING' });
-    await setOperator({ name: 'Bilal', shift: 'NIGHT' });
-    await setOperator({ name: 'Kashif', shift: 'MORNING' });
+    await setOperator({ name: 'Imran', slot: 'MORNING' });
+    await setOperator({ name: 'Bilal', slot: 'NIGHT' });
+    await setOperator({ name: 'Kashif', slot: 'MORNING' });
 
     const roster = await listRoster();
     expect(roster.operators).toHaveLength(2);
@@ -66,7 +68,7 @@ describe('the roster', () => {
   });
 
   it('leaves a shift with nobody on it when the operator is removed', async () => {
-    const imran = await setOperator({ name: 'Imran', shift: 'MORNING' });
+    const imran = await setOperator({ name: 'Imran', slot: 'MORNING' });
     await removeOperator(imran.id);
 
     // Null rather than absent, so a caller can say "Morning shift" with no
@@ -104,12 +106,40 @@ describe('filtering the dashboard by shift', () => {
   });
 
   it('labels every row with its shift and whoever is on it', async () => {
-    await setOperator({ name: 'Imran', shift: 'MORNING' });
+    await setOperator({ name: 'Imran', slot: 'MORNING' });
     await ingest([at('09:00')], []);
 
     const [row] = (await listWeighments(query())).rows;
     expect(row!.shift).toBe('MORNING');
     expect(row!.operator_name).toBe('Imran');
+  });
+
+  it('names whoever saved it, not whoever is rostered to the hour', async () => {
+    /*
+     * The case that sent this back: an operator signed in, weighed a truck
+     * at night, and the row said "nobody rostered" because the NIGHT slot
+     * held nobody. The record carries the username they signed in with, and
+     * that beats the rota for any weighing older than the last rota change.
+     */
+    await setOperator({
+      name: 'Imran Shah',
+      slot: 'MORNING',
+      username: 'imran',
+      password: 'morning-pass',
+    });
+    await ingest([{ ...at('21:00'), operator_username: 'imran' }], []);
+
+    const [row] = (await listWeighments(query())).rows;
+    expect(row!.shift).toBe('NIGHT');
+    expect(row!.operator_name).toBe('Imran Shah');
+  });
+
+  it('falls back to the rota for a record saved before anybody signed in', async () => {
+    await setOperator({ name: 'Bilal', slot: 'NIGHT' });
+    // The shared username the app used before operators signed in at all.
+    await ingest([{ ...at('21:00'), operator_username: 'operator' }], []);
+
+    expect((await listWeighments(query())).rows[0]?.operator_name).toBe('Bilal');
   });
 
   it('says nobody is rostered rather than inventing a name', async () => {
@@ -145,5 +175,104 @@ describe('filtering the dashboard by shift', () => {
     expect(second.rows).toHaveLength(1);
     // The total is the shift's, not the page's — the pager depends on it.
     expect(first.total).toBe(3);
+  });
+});
+
+describe('the figures above the table', () => {
+  it('follows the shift filter, instead of counting both', async () => {
+    /*
+     * The bug this pins: choosing a shift re-filtered the table and left the
+     * tiles and the charts counting the whole day, so the figures above the
+     * rows quietly answered a different question from the rows themselves.
+     */
+    await ingest([at('09:00'), at('21:00')], []);
+
+    const whole = await getAnalytics(query());
+    const morning = await getAnalytics(query({ shift: 'MORNING' }));
+    const night = await getAnalytics(query({ shift: 'NIGHT' }));
+
+    expect(whole.total_weighments).toBe(2);
+    expect(morning.total_weighments).toBe(1);
+    expect(night.total_weighments).toBe(1);
+    expect(morning.total_revenue + night.total_revenue).toBe(whole.total_revenue);
+  });
+
+  it('agrees with the table it sits above, down to the row', async () => {
+    await ingest([at('09:00'), at('13:30'), at('21:00'), at('02:00')], []);
+
+    const figures = await getAnalytics(query({ shift: 'NIGHT' }));
+    const rows = await listWeighments(query({ shift: 'NIGHT' }));
+
+    expect(figures.total_weighments).toBe(rows.total);
+  });
+
+  it('re-reads the figures too when the hours change', async () => {
+    await ingest([at('07:00')], []);
+    expect((await getAnalytics(query({ shift: 'MORNING' }))).total_weighments).toBe(0);
+
+    await setShiftTimings({ MORNING: 6 * 60, NIGHT: 18 * 60 });
+
+    expect((await getAnalytics(query({ shift: 'MORNING' }))).total_weighments).toBe(1);
+  });
+});
+
+describe('what an operator signs in with', () => {
+  it('keeps the password to itself and only says whether there is one', async () => {
+    const named = await setOperator({ name: 'Imran', slot: 'MORNING' });
+    expect(named).toMatchObject({ username: null, has_password: false });
+
+    const withLogin = await setOperator({
+      name: 'Imran',
+      slot: 'MORNING',
+      username: 'imran',
+      password: 'morning-pass',
+    });
+
+    expect(withLogin).toMatchObject({ username: 'imran', has_password: true });
+    // The DTO goes to a browser; nothing resembling a password may be on it.
+    expect(JSON.stringify(withLogin)).not.toContain('morning-pass');
+  });
+
+  it('leaves the password alone when the manager only fixes a spelling', async () => {
+    await setOperator({ name: 'Imrn', slot: 'MORNING', username: 'imran', password: 'pass-one' });
+    const before = await operatorAccountsForSync();
+
+    const fixed = await setOperator({ name: 'Imran', slot: 'MORNING', username: 'imran' });
+
+    expect(fixed.name).toBe('Imran');
+    expect((await operatorAccountsForSync())[0]?.password_hash).toBe(before[0]?.password_hash);
+  });
+
+  it('refuses a username another slot already has', async () => {
+    await setOperator({ name: 'Imran', slot: 'MORNING', username: 'imran', password: 'pass-one' });
+
+    await expect(
+      setOperator({ name: 'Bilal', slot: 'NIGHT', username: 'imran', password: 'pass-two' }),
+    ).rejects.toThrow(/already in use/i);
+  });
+
+  it('holds an administrator who works no shift and labels no weighing', async () => {
+    await setOperator({ name: 'Mr Khan', slot: 'ADMIN', username: 'boss', password: 'admin-pass' });
+    await ingest([at('09:00')], []);
+
+    const admin = (await listRoster()).operators.find((operator) => operator.slot === 'ADMIN');
+    expect(admin).toMatchObject({ shift: null, username: 'boss' });
+
+    // The roster labels weighings by shift, and the administrator has none.
+    expect(await operatorNamesByShift()).toEqual({ MORNING: null, NIGHT: null });
+    expect((await listWeighments(query())).rows[0]?.operator_name).toBeNull();
+  });
+
+  it('sends the bridge only the accounts that can actually sign in', async () => {
+    await setOperator({ name: 'Imran', slot: 'MORNING', username: 'imran', password: 'pass-one' });
+    // A name with no credentials yet: there is nothing to sign in with, and
+    // sending it would invite the bridge to decide what that means.
+    await setOperator({ name: 'Bilal', slot: 'NIGHT' });
+
+    const accounts = await operatorAccountsForSync();
+
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]).toMatchObject({ username: 'imran', slot: 'MORNING' });
+    expect(accounts[0]?.password_hash).toMatch(/^\$2[aby]\$/);
   });
 });

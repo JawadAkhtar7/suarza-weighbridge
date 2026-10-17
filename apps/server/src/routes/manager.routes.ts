@@ -1,20 +1,27 @@
 /** Manager dashboard data (brief §9, §13-M5). */
 
 import { Router } from 'express';
-import { createOperatorSchema, shiftTimingsSchema, weighmentQuerySchema } from '@suarza/shared';
+import {
+  createOperatorSchema,
+  logQuerySchema,
+  managerVoidWeighmentSchema,
+  shiftTimingsSchema,
+  weighmentQuerySchema,
+} from '@suarza/shared';
 import { z } from 'zod';
 import { requireAuth, requireCapability } from '../middleware/auth.js';
 import { imagesForWeighment } from '../services/capture.service.js';
 import { cameraFramingForStation } from '../services/station.service.js';
 import { listWeighments, requireBySlip, suggestValues } from '../services/weighment.service.js';
 import { getAnalytics } from '../services/analytics.service.js';
-import { deleteWeighmentBySlip } from '../services/delete-weighment.service.js';
+import { restoreWeighmentBySlip, voidWeighmentBySlip } from '../services/void-weighment.service.js';
 import {
   listRoster,
   removeOperator,
   setOperator,
   setShiftTimings,
 } from '../services/roster.service.js';
+import { listLogs } from '../services/log.service.js';
 import { parse } from './helpers.js';
 
 export function managerRouter(jwtSecret: string): Router {
@@ -62,29 +69,57 @@ export function managerRouter(jwtSecret: string): Router {
   });
 
   /**
-   * Delete a weighing, and everything joined to it.
+   * Set a weighing aside, or bring it back.
    *
-   * ADMIN only, not every manager: this removes a record of money taken, and
-   * the capability that already means "may change how the yard is set up" is
-   * the right bar for it.
+   * ADMIN only, not every manager: a void takes a weighing out of the day's
+   * takings, and the capability that already means "may change how the yard
+   * is set up" is the right bar for that.
    *
-   * See delete-weighment.service.ts for what goes and for the one thing kept
-   * — the id, so the bridge cannot sync it back.
+   * The record stays either way — see void-weighment.service.ts for what
+   * stops counting, and for the one thing remembered beyond the record so
+   * the bridge cannot sync it back to life.
    */
-  router.delete<{ slip: string }>(
-    '/weighments/:slip',
+  router.post<{ slip: string }>(
+    '/weighments/:slip/void',
     requireAuth(jwtSecret),
     requireCapability('settings'),
     async (req, res) => {
-      const summary = await deleteWeighmentBySlip(req.params.slip, req.user?.username ?? 'unknown');
-      res.json(summary);
+      const input = parse(managerVoidWeighmentSchema, req.body ?? {});
+      const weighment = await voidWeighmentBySlip(
+        req.params.slip,
+        input.reason,
+        req.user?.username ?? 'unknown',
+      );
+      res.json({ weighment });
     },
   );
 
-  // --- The roster: who is on which shift ------------------------------------
+  router.post<{ slip: string }>(
+    '/weighments/:slip/restore',
+    requireAuth(jwtSecret),
+    requireCapability('settings'),
+    async (req, res) => {
+      const weighment = await restoreWeighmentBySlip(
+        req.params.slip,
+        req.user?.username ?? 'unknown',
+      );
+      res.json({ weighment });
+    },
+  );
+
+  /*
+   * --- The roster, and the log ---------------------------------------------
+   *
+   * Under `/api/`, like the ledger and for exactly the same reason: the
+   * manager app has pages called /operators and /logs, and an API route that
+   * shares a page's path shadows it. A browser refresh on the Operators
+   * screen would be answered by this router — with a 401 if the token is not
+   * in the header, which a page load has no way to put there — instead of by
+   * the app. Namespacing is what keeps the two from ever colliding.
+   */
 
   /** Read by the dashboard's filter as well as the Operators screen. */
-  router.get('/operators', ...guard, async (_req, res) => {
+  router.get('/api/operators', ...guard, async (_req, res) => {
     res.json(await listRoster());
   });
 
@@ -93,7 +128,7 @@ export function managerRouter(jwtSecret: string): Router {
    * person per shift, and naming a second plainly means the first has left.
    */
   router.post(
-    '/operators',
+    '/api/operators',
     requireAuth(jwtSecret),
     requireCapability('settings'),
     async (req, res) => {
@@ -103,7 +138,7 @@ export function managerRouter(jwtSecret: string): Router {
   );
 
   router.delete<{ id: string }>(
-    '/operators/:id',
+    '/api/operators/:id',
     requireAuth(jwtSecret),
     requireCapability('settings'),
     async (req, res) => {
@@ -113,7 +148,7 @@ export function managerRouter(jwtSecret: string): Router {
   );
 
   router.put(
-    '/shift-timings',
+    '/api/shift-timings',
     requireAuth(jwtSecret),
     requireCapability('settings'),
     async (req, res) => {
@@ -121,6 +156,18 @@ export function managerRouter(jwtSecret: string): Router {
       res.json(await setShiftTimings(input));
     },
   );
+
+  /**
+   * The log: shifts starting and ending, slips set aside and brought back.
+   *
+   * Behind the dashboard guard rather than the settings one. It is a record
+   * of what happened, which anyone who can read the dashboard can already
+   * work out from the records themselves; what it is not is a thing anybody
+   * can write to from here.
+   */
+  router.get('/api/logs', ...guard, async (req, res) => {
+    res.json(await listLogs(parse(logQuerySchema, req.query)));
+  });
 
   /** Typeahead for the dashboard's customer and company filters. */
   const suggestQuerySchema = z.object({

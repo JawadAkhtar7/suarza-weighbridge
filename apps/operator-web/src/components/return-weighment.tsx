@@ -31,7 +31,13 @@ import {
   type Weighment,
 } from '@suarza/shared';
 import { Ban, CircleCheck, Loader2, Printer, RotateCcw, Save } from 'lucide-react';
-import { agentApi, AgentApiError, printPageUrl, type WeighmentResponse } from '../lib/api.js';
+import {
+  agentApi,
+  AgentApiError,
+  printPageUrl,
+  signedInUsername,
+  type WeighmentResponse,
+} from '../lib/api.js';
 import { SlipSearch } from './slip-search.js';
 import { RecentWeighments } from './recent-weighments.js';
 import { WeighmentSummary } from './weighment-summary.js';
@@ -51,11 +57,7 @@ interface ReturnWeighmentProps {
   onNetChange?: (net: NetWeight | null, pending: boolean) => void;
 }
 
-export function ReturnWeighment({
-  captured,
-  onClearCapture,
-  onNetChange,
-}: ReturnWeighmentProps) {
+export function ReturnWeighment({ captured, onClearCapture, onNetChange }: ReturnWeighmentProps) {
   const [record, setRecord] = useState<WeighmentResponse | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [justCompleted, setJustCompleted] = useState(false);
@@ -152,7 +154,7 @@ export function ReturnWeighment({
         capture_id: captured.captureId ?? undefined,
         amount_charged: parseAmount(amount),
         payment_status: settlement,
-        operator_username: DEFAULT_OPERATOR_USERNAME,
+        operator_username: signedInUsername() ?? DEFAULT_OPERATOR_USERNAME,
         product: product.trim() || undefined,
         container_number: containerNumber.trim() || undefined,
       });
@@ -197,10 +199,7 @@ export function ReturnWeighment({
       // Straight to the tab. It carries its own print and download buttons, so
       // repeating the slip on this screen underneath was a second copy of
       // something the operator is already looking at.
-      const tab = window.open(
-        printPageUrl(record!.weighment.slip_number, receipt),
-        '_blank',
-      );
+      const tab = window.open(printPageUrl(record!.weighment.slip_number, receipt), '_blank');
       if (tab) {
         toast.success('Receipt opened in a new tab');
       } else {
@@ -314,9 +313,7 @@ export function ReturnWeighment({
                     )}
                   >
                     <span className="block text-sm font-semibold">Paid now</span>
-                    <span className="block text-xs text-muted-foreground">
-                      Customer has paid
-                    </span>
+                    <span className="block text-xs text-muted-foreground">Customer has paid</span>
                   </button>
                   <button
                     type="button"
@@ -426,10 +423,7 @@ export function ReturnWeighment({
       </div>
 
       {/* Receipt #2 — the full receipt, printed once the weighing completes. */}
-      {justCompleted && (
-        <ReceiptPanel weighment={weighment} variant="SECOND" autoPrint />
-      )}
-
+      {justCompleted && <ReceiptPanel weighment={weighment} variant="SECOND" autoPrint />}
     </div>
   );
 }

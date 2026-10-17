@@ -24,6 +24,10 @@ const API_PREFIXES = [
   '/customers',
   '/sync/',
   '/vehicle-types',
+  /* Starting and ending a shift. Only matters for the 404: without it, a
+     mistyped sign-in URL would be answered with the app rather than said to
+     be missing. */
+  '/operator/',
   '/cameras',
   '/camera/',
   '/captures/',

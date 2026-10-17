@@ -10,12 +10,20 @@
 import type { Analytics, WeighmentQuery } from '@suarza/shared';
 import { DISPLAY_TIMEZONE } from '@suarza/shared';
 import { WeighmentModel } from '../models/weighment.model.js';
-import { buildFilter } from './weighment.service.js';
+import { buildQueryFilter } from './weighment.service.js';
 
 const TOP_N = 10;
 
 export async function getAnalytics(query: WeighmentQuery): Promise<Analytics> {
-  const filter = buildFilter(query);
+  /*
+   * The SAME filter the table below uses, shift included.
+   *
+   * It used to be `buildFilter`, which knows nothing about shifts, so
+   * choosing a shift re-filtered the table and left every figure above it
+   * counting both — the tiles and the charts quietly answering a different
+   * question from the rows underneath them.
+   */
+  const { filter } = await buildQueryFilter(query);
   // The caller's own status filter is respected, but VOID can never sneak in.
   const revenueMatch = { ...filter, status: { $ne: 'VOID' } };
 

@@ -5,7 +5,7 @@ import { vehicleTypeSchema, weighmentSchema } from './weighment.js';
 import { auditEntrySchema } from './audit.js';
 import { WEIGHMENT_STATUSES, USER_ROLES } from '../constants/domain.js';
 import { FRONT_VIEW_ZOOM } from '../constants/paper.js';
-import { SHIFTS } from '../constants/shifts.js';
+import { OPERATOR_SLOTS, SHIFTS } from '../constants/shifts.js';
 import { frontViewFrameSchema, sideViewFrameSchema } from './settings.js';
 
 /**
@@ -254,16 +254,44 @@ export type ApiError = z.infer<typeof apiErrorSchema>;
 export const operatorSchema = z.object({
   id: z.string(),
   name: z.string().trim().min(1).max(80),
-  shift: z.enum(SHIFTS),
+  /** MORNING, NIGHT, or the administrator who belongs to neither. */
+  slot: z.enum(OPERATOR_SLOTS),
+  /** The shift this slot works; null for the administrator. */
+  shift: z.enum(SHIFTS).nullable(),
+  /** What they sign in to the weighbridge with; null until one is set. */
+  username: z.string().nullable(),
+  /**
+   * Whether a password is set — never the password, and never its hash.
+   *
+   * The manager's screen needs to show "this account can sign in" without the
+   * hash travelling to a browser, and the hash the bridge needs travels on a
+   * different route, behind the ingest key.
+   */
+  has_password: z.boolean(),
   created_at: z.string().datetime({ offset: true }),
   updated_at: z.string().datetime({ offset: true }),
 });
 
 export type Operator = z.infer<typeof operatorSchema>;
 
+/**
+ * Put somebody in a slot, with or without credentials.
+ *
+ * The password is optional on purpose: renaming the morning operator must not
+ * force the manager to retype a password they may not remember. Omitted means
+ * "leave whatever is there", and the screen says so.
+ */
 export const createOperatorSchema = z.object({
   name: z.string().trim().min(1, 'Give the operator a name').max(80),
-  shift: z.enum(SHIFTS),
+  slot: z.enum(OPERATOR_SLOTS),
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(64)
+    .regex(/^[a-z0-9._-]*$/, 'Letters, numbers, dot, dash and underscore only')
+    .optional(),
+  password: z.string().min(4, 'Use at least four characters').max(200).optional(),
 });
 
 export type CreateOperatorInput = z.infer<typeof createOperatorSchema>;
@@ -288,3 +316,145 @@ export const rosterSchema = z.object({
 });
 
 export type Roster = z.infer<typeof rosterSchema>;
+
+/**
+ * POST /weighments/:slip/void, from the manager's dashboard.
+ *
+ * The reason is optional here and mandatory at the bridge, which is not an
+ * inconsistency: the operator voids a ticket in front of the customer it was
+ * wrong for, and the reason is the only record of what happened. A manager
+ * setting a slip aside already leaves a dated, named entry in the log, and
+ * making them justify it in a box they can type "x" into buys nothing.
+ */
+export const managerVoidWeighmentSchema = z.object({
+  reason: z.string().trim().max(500).default(''),
+});
+
+export type ManagerVoidWeighmentInput = z.infer<typeof managerVoidWeighmentSchema>;
+
+// ---------------------------------------------------------------------------
+// Operator sign-in at the bridge (client request, October 2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * A signed-in operator, as the weighbridge screen knows them.
+ *
+ * The session lives on the weighbridge PC, not in the cloud, and that is the
+ * whole point: the yard must be able to start a shift with the internet down.
+ * The credentials are the manager's — they are set in the dashboard — and
+ * they reach the bridge with the rest of the manager's lists.
+ */
+export const operatorSessionSchema = z.object({
+  token: z.string(),
+  username: z.string(),
+  name: z.string(),
+  slot: z.enum(OPERATOR_SLOTS),
+  /** Null for the administrator, who works no particular shift. */
+  shift: z.enum(SHIFTS).nullable(),
+  started_at: z.string().datetime({ offset: true }),
+});
+
+export type OperatorSession = z.infer<typeof operatorSessionSchema>;
+
+/** What the bridge pulls down so a shift can start with no internet. */
+export const operatorAccountSyncSchema = z.object({
+  operators: z.array(
+    z.object({
+      username: z.string(),
+      name: z.string(),
+      slot: z.enum(OPERATOR_SLOTS),
+      /** bcrypt, as the cloud stores it. The bridge only ever compares it. */
+      password_hash: z.string(),
+      updated_at: z.string(),
+    }),
+  ),
+  synced_at: z.string(),
+});
+
+export type OperatorAccountSync = z.infer<typeof operatorAccountSyncSchema>;
+
+// ---------------------------------------------------------------------------
+// The log (client request, October 2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * What the log records, and nothing else yet.
+ *
+ * Deliberately a short list. A log that records everything is read by nobody;
+ * these four are the events somebody actually asks about after the fact —
+ * who was on the bridge, and which slips were set aside.
+ */
+export const LOG_KINDS = [
+  'SHIFT_START',
+  'SHIFT_END',
+  'WEIGHMENT_VOID',
+  'WEIGHMENT_RESTORE',
+] as const;
+export type LogKind = (typeof LOG_KINDS)[number];
+
+export const LOG_KIND_LABELS: Record<LogKind, string> = {
+  SHIFT_START: 'Shift started',
+  SHIFT_END: 'Shift ended',
+  WEIGHMENT_VOID: 'Slip voided',
+  WEIGHMENT_RESTORE: 'Slip restored',
+};
+
+export const logEntrySchema = z.object({
+  id: z.string(),
+  kind: z.enum(LOG_KINDS),
+  at: z.string().datetime({ offset: true }),
+  /** Who did it — an operator's username, or the manager's. */
+  actor: z.string(),
+  actor_name: z.string(),
+  /** The operator's slot, where the event has one. */
+  slot: z.enum(OPERATOR_SLOTS).nullable(),
+  /** What it was done to: a slip number, for the two weighment kinds. */
+  subject: z.string().nullable(),
+  /** A reason, or anything else worth reading beside the event. */
+  detail: z.string().nullable(),
+});
+
+export type LogEntry = z.infer<typeof logEntrySchema>;
+
+export const logQuerySchema = z.object({
+  kind: z.enum(LOG_KINDS).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(200).default(50),
+});
+
+export type LogQuery = z.infer<typeof logQuerySchema>;
+
+export const paginatedLogsSchema = z.object({
+  rows: z.array(logEntrySchema),
+  total: z.number().int().min(0),
+  page: z.number().int().min(1),
+  page_size: z.number().int().min(1),
+});
+
+export type PaginatedLogs = z.infer<typeof paginatedLogsSchema>;
+
+/**
+ * Shift events on their way up from a bridge.
+ *
+ * They are written on the weighbridge PC — which is the only machine that
+ * knows a shift has started — and pushed with the same key the weighings use.
+ * Carrying their own ids means a retry after a half-delivered batch cannot
+ * record the same shift twice.
+ */
+export const operatorLogPushSchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(64),
+        kind: z.enum(['SHIFT_START', 'SHIFT_END']),
+        at: z.string(),
+        username: z.string().min(1).max(64),
+        name: z.string().max(80).default(''),
+        slot: z.enum(OPERATOR_SLOTS),
+        detail: z.string().max(200).nullable().default(null),
+      }),
+    )
+    .max(200),
+});
+
+export type OperatorLogPush = z.infer<typeof operatorLogPushSchema>;

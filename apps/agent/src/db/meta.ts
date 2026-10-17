@@ -51,4 +51,5 @@ export const META_KEYS = {
   /** When the operator last pulled each manager-kept list. */
   customersSyncedAt: 'customers_synced_at',
   vehicleTypesSyncedAt: 'vehicle_types_synced_at',
+  operatorsSyncedAt: 'operators_synced_at',
 } as const;
