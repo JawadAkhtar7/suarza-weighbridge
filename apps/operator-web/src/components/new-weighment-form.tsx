@@ -64,6 +64,9 @@ function emptyValues(): FormValues {
     container_number: '',
     product: '',
     amount_charged: 0,
+    /* Off unless the operator asks for it: most trucks cross the bridge once
+       and a directory full of them is a directory nobody can search. */
+    save_customer: false,
   };
 }
 
@@ -585,8 +588,29 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
           {/* Below the search box, not above it. Sitting above, it read as a
               heading the search field belonged under, so operators typed the
               customer's name into the search instead of the name field. */}
-          <div className="border-t pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
             <h3 className="text-lg font-semibold leading-none tracking-tight">Customer Details</h3>
+
+            {/*
+             * Beside the heading it belongs to, not down with the save
+             * buttons: it is a fact about this customer, decided while the
+             * operator is looking at their name.
+             *
+             * Off by default. Ticking it for somebody already saved does not
+             * make a second entry — the directory merges on name and company
+             * — so the operator never has to remember who is in it.
+             */}
+            <label className="flex cursor-pointer select-none items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted/60">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-primary"
+                {...form.register('save_customer')}
+              />
+              Make customer
+              <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
+                (save for next time)
+              </span>
+            </label>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

@@ -23,6 +23,7 @@ import { Button, SlipA5, SLIP_PAGE_CSS, WhatsAppShareButton, slipValues } from '
 import { Loader2, Printer, X } from 'lucide-react';
 import { agentApi, captureImageUrl } from '../lib/api.js';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
+import { useSlipOperator } from '../hooks/use-slip-operator.js';
 import { buildReceiptUrl } from '../lib/receipt-settings.js';
 
 export interface PrintRequest {
@@ -77,6 +78,9 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
   });
 
   const weighment = query.data?.weighment;
+  /* This is a tab of its own, with no shift session in it — so the name comes
+     from the record's own username rather than from whoever is signed in. */
+  const operator = useSlipOperator(weighment?.operator_username);
 
   /*
    * The camera stills for this slip, if the bridge has cameras.
@@ -173,7 +177,9 @@ export function PrintReceiptPage({ request }: { request: PrintRequest }) {
     );
   }
 
-  const values = slipValues({ weighment });
+  /* The soft copy below names who weighed it; the sheet that goes to the
+     printer draws no such line — see the slip's `screen` layer. */
+  const values = slipValues({ weighment, operator });
 
   const verifyUrl = buildReceiptUrl(settings.receipt_base_url, weighment.slip_number) ?? undefined;
   const frontImageUrl = captures.data?.front ? captureImageUrl(captures.data.front) : undefined;

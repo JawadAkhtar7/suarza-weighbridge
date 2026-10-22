@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   LogOut,
   ScrollText,
+  ShieldCheck,
   Menu,
   PanelLeft,
   Truck,
@@ -51,6 +52,7 @@ const NAV: NavItem[] = [
   { to: '/vehicle-types', label: 'Vehicle types', description: 'Rates per vehicle', icon: Truck },
   { to: '/operators', label: 'Operators', description: 'Shifts and sign-ins', icon: UserCog },
   { to: '/logs', label: 'Logs', description: 'Shifts and voided slips', icon: ScrollText },
+  { to: '/audit', label: 'Audit Logs', description: 'Shift cash handovers', icon: ShieldCheck },
 ];
 
 /**

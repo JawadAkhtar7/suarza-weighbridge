@@ -4,6 +4,7 @@ import { Router } from 'express';
 import {
   createOperatorSchema,
   logQuerySchema,
+  shiftAuditQuerySchema,
   managerVoidWeighmentSchema,
   shiftTimingsSchema,
   weighmentQuerySchema,
@@ -22,6 +23,7 @@ import {
   setShiftTimings,
 } from '../services/roster.service.js';
 import { listLogs } from '../services/log.service.js';
+import { listShiftAudit } from '../services/shift-audit.service.js';
 import { parse } from './helpers.js';
 
 export function managerRouter(jwtSecret: string): Router {
@@ -169,9 +171,20 @@ export function managerRouter(jwtSecret: string): Router {
     res.json(await listLogs(parse(logQuerySchema, req.query)));
   });
 
-  /** Typeahead for the dashboard's customer and company filters. */
+  /**
+   * The shifts, with the money each one handed over.
+   *
+   * Behind the dashboard guard like the log beside it: it says what the
+   * records already say, assembled into the one question a manager asks of a
+   * shift — does it add up.
+   */
+  router.get('/api/shift-audit', ...guard, async (req, res) => {
+    res.json(await listShiftAudit(parse(shiftAuditQuerySchema, req.query)));
+  });
+
+  /** Typeahead for the dashboard's customer, company and plate filters. */
   const suggestQuerySchema = z.object({
-    field: z.enum(['customer_name', 'customer_company']),
+    field: z.enum(['customer_name', 'customer_company', 'vehicle_plate']),
     q: z.string().max(120).default(''),
     limit: z.coerce.number().int().min(1).max(25).default(10),
   });

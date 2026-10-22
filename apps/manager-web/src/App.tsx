@@ -20,6 +20,7 @@ import { CustomersPage } from './pages/customers-page.js';
 import { VehicleTypesPage } from './pages/vehicle-types-page.js';
 import { OperatorsPage } from './pages/operators-page.js';
 import { LogsPage } from './pages/logs-page.js';
+import { AuditLogsPage } from './pages/audit-logs-page.js';
 
 function NoAccess() {
   const { user, signOut } = useAuth();
@@ -67,6 +68,9 @@ export function App() {
           {/* Readable by anyone who can see the dashboard: it says no more
               than the records themselves do, and nothing here writes to it. */}
           <Route path="logs" element={<LogsPage />} />
+          {/* The money side of the same shifts: what each one took over, took
+              at the window, and handed on. */}
+          <Route path="audit" element={<AuditLogsPage />} />
           {/* Anything else is a mistyped or stale URL; the dashboard is the
               safe landing place. */}
           <Route path="*" element={<Navigate to="/" replace />} />

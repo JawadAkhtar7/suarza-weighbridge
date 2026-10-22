@@ -98,6 +98,14 @@ export const weighmentQuerySchema = dateRangeSchema.extend({
   customer_company: z.string().trim().max(120).optional(),
   // A key, not an enum — the catalogue is the manager's to change.
   vehicle_type: vehicleTypeSchema.optional(),
+  /**
+   * A plate, matched on any part of it.
+   *
+   * Partial on purpose: a manager looking for a truck remembers four digits
+   * of a plate far more often than the whole of it, and the yard writes the
+   * same plate down with and without its dash.
+   */
+  vehicle_plate: z.string().trim().max(32).optional(),
   status: z.enum(WEIGHMENT_STATUSES).optional(),
   slip_number: z.string().trim().max(32).optional(),
   /**
@@ -346,6 +354,14 @@ export type ManagerVoidWeighmentInput = z.infer<typeof managerVoidWeighmentSchem
  */
 export const operatorSessionSchema = z.object({
   token: z.string(),
+  /**
+   * The shift's own id, which its two log entries share.
+   *
+   * Separate from the token on purpose: the token opens the screen on one PC
+   * and has no business leaving it, while this travels to the manager so a
+   * start and an end can be read back as one shift.
+   */
+  session_id: z.string(),
   username: z.string(),
   name: z.string(),
   slot: z.enum(OPERATOR_SLOTS),
@@ -372,6 +388,125 @@ export const operatorAccountSyncSchema = z.object({
 });
 
 export type OperatorAccountSync = z.infer<typeof operatorAccountSyncSchema>;
+
+// ---------------------------------------------------------------------------
+// The cash a shift hands over (client request, October 2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * One handing-over of money during a shift.
+ *
+ * FOUR FIGURES, because cash moves both ways at a handover: an operator can
+ * be given the night's takings and hand back a float in the same minute, and
+ * both a colleague and the manager can be on the other side of it. The names
+ * travel beside the figures because "who" is half of the answer — a figure
+ * with nobody's name against it settles no argument later.
+ *
+ * Every amount may be zero, and usually some are. A zero that was typed is a
+ * statement; a blank is an absence, and the screen records the first rather
+ * than guessing at the second.
+ */
+export const shiftCashMovementSchema = z.object({
+  person_name: z.string().trim().max(80).default(''),
+  person_taken: z.number().finite().min(0).max(100_000_000).default(0),
+  person_given: z.number().finite().min(0).max(100_000_000).default(0),
+  manager_name: z.string().trim().max(80).default(''),
+  manager_taken: z.number().finite().min(0).max(100_000_000).default(0),
+  manager_given: z.number().finite().min(0).max(100_000_000).default(0),
+});
+
+export type ShiftCashMovement = z.infer<typeof shiftCashMovementSchema>;
+
+/** Which end of the shift a movement was written down at. */
+export const SHIFT_CASH_STAGES = ['START', 'END'] as const;
+export type ShiftCashStage = (typeof SHIFT_CASH_STAGES)[number];
+
+/**
+ * A movement, as recorded: with its own time and its own id.
+ *
+ * A LIST, not one figure per end of the shift. Money changes hands more than
+ * twice in a day — a manager collects at noon, a colleague covers an hour,
+ * the float is topped up — and the first version of this overwrote each
+ * entry with the next, so a shift could only ever show the last thing that
+ * happened. Every submission is now its own line, with the time on it.
+ */
+export const shiftCashEntrySchema = shiftCashMovementSchema.extend({
+  id: z.string(),
+  session_id: z.string(),
+  stage: z.enum(SHIFT_CASH_STAGES),
+  at: z.string(),
+});
+
+export type ShiftCashEntry = z.infer<typeof shiftCashEntrySchema>;
+
+/** What the operator's screen sends: a movement, and which end it belongs to. */
+export const shiftCashInputSchema = shiftCashMovementSchema.extend({
+  stage: z.enum(SHIFT_CASH_STAGES).default('START'),
+});
+
+export type ShiftCashInput = z.infer<typeof shiftCashInputSchema>;
+
+/** Movements on their way up from a bridge, with the ids it gave them. */
+export const shiftCashPushSchema = z.object({
+  entries: z
+    .array(
+      shiftCashEntrySchema.extend({
+        /** Who wrote it down, so the cloud can file it without a lookup. */
+        operator: z.string().min(1).max(64),
+      }),
+    )
+    .max(200),
+});
+
+export type ShiftCashPush = z.infer<typeof shiftCashPushSchema>;
+
+/**
+ * One shift, as the manager reviews it afterwards.
+ *
+ * The two log entries of a shift read back as one thing, with the weighing
+ * it did in between and every movement of money that was written down. No
+ * totals are stored anywhere — they are counted from the records each time —
+ * so nothing here can drift from what the records say.
+ */
+export const shiftAuditSchema = z.object({
+  session_id: z.string(),
+  operator: z.string(),
+  operator_name: z.string(),
+  slot: z.enum(OPERATOR_SLOTS),
+  started_at: z.string().datetime({ offset: true }),
+  /** Null while the shift is still running. */
+  ended_at: z.string().datetime({ offset: true }).nullable(),
+  /** Every movement written down during this shift, oldest first. */
+  cash_entries: z.array(shiftCashEntrySchema),
+  /** Weighings saved by this operator between those two moments. */
+  weighments: z.number().int().min(0),
+  /** What those weighings charged — voided ones excluded. */
+  takings: z.number(),
+});
+
+export type ShiftAudit = z.infer<typeof shiftAuditSchema>;
+
+export const shiftAuditPageSchema = z.object({
+  rows: z.array(shiftAuditSchema),
+});
+
+export type ShiftAuditPage = z.infer<typeof shiftAuditPageSchema>;
+
+/**
+ * One day of shifts.
+ *
+ * A day rather than a page: the screen shows the morning beside the night,
+ * which is a question about a day and not about the most recent twenty
+ * shifts. The window is passed as two instants because the manager's own
+ * clock decides where a Pakistan day begins — the same way the dashboard's
+ * date filters already work.
+ */
+export const shiftAuditQuerySchema = z.object({
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+});
+
+export type ShiftAuditQuery = z.infer<typeof shiftAuditQuerySchema>;
 
 // ---------------------------------------------------------------------------
 // The log (client request, October 2026)
@@ -412,6 +547,13 @@ export const logEntrySchema = z.object({
   subject: z.string().nullable(),
   /** A reason, or anything else worth reading beside the event. */
   detail: z.string().nullable(),
+  /**
+   * Both entries of one shift share this; null for everything else.
+   *
+   * The money is NOT here: it is a list of its own, because cash changes
+   * hands more than twice in a day. See shiftCashEntrySchema.
+   */
+  session_id: z.string().nullable().default(null),
 });
 
 export type LogEntry = z.infer<typeof logEntrySchema>;
@@ -452,6 +594,9 @@ export const operatorLogPushSchema = z.object({
         name: z.string().max(80).default(''),
         slot: z.enum(OPERATOR_SLOTS),
         detail: z.string().max(200).nullable().default(null),
+        /* The two entries of one shift carry the same id, which is how the
+           audit screen reads a start and an end back as one shift. */
+        session_id: z.string().max(64).nullable().default(null),
       }),
     )
     .max(200),

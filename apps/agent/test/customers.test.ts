@@ -14,8 +14,16 @@ let db: Db;
 let customers: CustomerRepository;
 let service: WeighmentService;
 
+/*
+ * Ticked by default here, where the directory itself is under test.
+ *
+ * The weighing screen leaves it off — most trucks cross the bridge once and
+ * a directory full of them is a directory nobody can search — so a fixture
+ * that left it off would be testing the gate rather than the merge rule.
+ */
 const weigh = (overrides: Record<string, unknown> = {}) =>
   service.createFirstWeight({
+    save_customer: true,
     customer_name: 'Ali Raza',
     customer_company: 'Raza Traders',
     vehicle_type: 'truck',
@@ -37,6 +45,27 @@ beforeEach(() => {
 });
 
 describe('built from weighings', () => {
+  it('records nobody unless the operator asks for it', () => {
+    /*
+     * The directory used to fill itself from every weighing, which is right
+     * for a yard of regulars and wrong for the lorry that passes through
+     * once. The tick is the operator saying "this one will be back".
+     */
+    weigh({ save_customer: false });
+
+    expect(customers.count()).toBe(0);
+  });
+
+  it('does not add a second entry for somebody already there', () => {
+    weigh();
+    weigh({ customer_name: 'ALI RAZA', vehicle_plate: 'LES-9999' });
+
+    // Merged on name and company, so ticking it for a customer already in
+    // the directory updates them rather than making a duplicate.
+    expect(customers.count()).toBe(1);
+    expect(customers.search('Ali')[0]?.weighment_count).toBe(2);
+  });
+
   it('records a customer the first time they are weighed', () => {
     weigh();
     const found = customers.search('Ali');
@@ -218,7 +247,11 @@ describe('search by vehicle plate', () => {
 
   it('puts plate matches first when the search has a digit, names first otherwise', () => {
     weigh({ customer_name: 'Ali Raza', vehicle_plate: 'ABC-111' });
-    weigh({ customer_name: 'Abcd Khan', customer_company: 'Khan & Sons', vehicle_plate: 'XYZ-222' });
+    weigh({
+      customer_name: 'Abcd Khan',
+      customer_company: 'Khan & Sons',
+      vehicle_plate: 'XYZ-222',
+    });
 
     // "ABC" matches Ali's plate and Abcd's name; letters only, so the name leads.
     expect(customers.search('abc')[0]?.name).toBe('Abcd Khan');

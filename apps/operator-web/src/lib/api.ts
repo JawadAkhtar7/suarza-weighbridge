@@ -10,6 +10,10 @@
 import type {
   AuditEntry,
   OperatorSession,
+  OperatorSlot,
+  ShiftCashEntry,
+  ShiftCashInput,
+  ShiftCashMovement,
   Customer,
   FramingUpdate,
   StationSettings,
@@ -220,6 +224,12 @@ export const agentApi = {
    * The screen then lets the operator straight through rather than locking
    * the yard out of weighing until somebody can be telephoned.
    */
+  /** Usernames to names, so a slip can say who weighed it. */
+  operatorDirectory: () =>
+    request<{ operators: { username: string; name: string; slot: OperatorSlot }[] }>(
+      '/operator/directory',
+    ),
+
   operatorAuth: () =>
     request<{ required: boolean; session: OperatorSession | null }>('/operator/auth'),
 
@@ -229,7 +239,28 @@ export const agentApi = {
       body: JSON.stringify({ username, password }),
     }),
 
-  endShift: () => request<{ ended: boolean }>('/operator/auth/logout', { method: 'POST' }),
+  /**
+   * What was taken over at the start of the shift.
+   *
+   * Sent after signing in rather than with it: the shift has already begun
+   * and a truck may already be on the bridge, so this is a note beside the
+   * weighing screen, never a gate in front of it.
+   */
+  /** What this shift has already written down, for reopening the form. */
+  shiftCash: () => request<{ entries: ShiftCashEntry[] }>('/operator/shift/cash'),
+
+  recordShiftCash: (cash: ShiftCashInput) =>
+    request<{ entry: ShiftCashEntry }>('/operator/shift/cash', {
+      method: 'POST',
+      body: JSON.stringify(cash),
+    }),
+
+  /** Ends the shift, with the closing handover — or without, if they skipped. */
+  endShift: (cash?: ShiftCashMovement) =>
+    request<{ ended: boolean }>('/operator/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify(cash ?? {}),
+    }),
 
   createWeighment: (input: CreateWeighmentInput) =>
     request<CreateWeighmentResponse>('/weighments', {

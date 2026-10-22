@@ -347,9 +347,16 @@ describe('createCompleted — the whole weighing in one visit', () => {
     expect(weighment.payment_status).toBe('ON_ACCOUNT');
   });
 
-  it('remembers the customer for the picker', () => {
-    service.createCompleted(oneVisit({ customer_name: 'Zainab Bibi' }));
+  it('remembers the customer for the picker when the operator ticks the box', () => {
+    service.createCompleted(oneVisit({ customer_name: 'Zainab Bibi', save_customer: true }));
     expect(service.searchCustomers('zainab')).toHaveLength(1);
+  });
+
+  it('remembers nobody when the box is left alone', () => {
+    // The one-visit flow is where the passing lorry is weighed, so this is
+    // the case the tick exists for.
+    service.createCompleted(oneVisit({ customer_name: 'Passing Lorry' }));
+    expect(service.searchCustomers('passing')).toHaveLength(0);
   });
 
   it('still warns about a plate that already has an open ticket', () => {
@@ -375,7 +382,9 @@ describe('the list the operator picks from', () => {
     // database: sorting a page in the browser would leave an open ticket
     // stranded on a page nobody loaded, and open tickets are the whole reason
     // that list exists.
-    const first = service.createFirstWeight(firstWeightInput({ vehicle_plate: 'LES-0001' })).weighment;
+    const first = service.createFirstWeight(
+      firstWeightInput({ vehicle_plate: 'LES-0001' }),
+    ).weighment;
     service.complete(first.slip_number, {
       second_weight_kg: 20_000,
       second_weight_src: 'SERIAL',
@@ -383,7 +392,9 @@ describe('the list the operator picks from', () => {
       payment_status: 'PAID',
       operator_username: 'operator',
     });
-    const stillOpen = service.createFirstWeight(firstWeightInput({ vehicle_plate: 'LES-0002' })).weighment;
+    const stillOpen = service.createFirstWeight(
+      firstWeightInput({ vehicle_plate: 'LES-0002' }),
+    ).weighment;
 
     const rows = service.list({ limit: 10 });
     expect(rows[0]!.slip_number).toBe(stillOpen.slip_number);

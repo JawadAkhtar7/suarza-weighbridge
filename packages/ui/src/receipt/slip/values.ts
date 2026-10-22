@@ -11,12 +11,7 @@
  * would be a difference the client can see at ten paces.
  */
 
-import {
-  DISPLAY_TIMEZONE,
-  KG_PER_MAUND,
-  netWeightKg,
-  type Weighment,
-} from '@suarza/shared';
+import { DISPLAY_TIMEZONE, KG_PER_MAUND, netWeightKg, type Weighment } from '@suarza/shared';
 import type { SlipValues } from './layout.js';
 
 /** `02-10-2026` in Pakistan time, as the artwork writes it. */
@@ -73,6 +68,16 @@ export function slipMann(kg: number): string {
   }).format(kg / KG_PER_MAUND);
 }
 
+/** `Operator: Imran Shah · Morning shift`, or nothing at all. */
+export function slipOperator(
+  operator: { name: string; shift?: string | null } | null | undefined,
+): string {
+  const name = operator?.name.trim();
+  if (!name) return '';
+  const shift = operator?.shift?.trim();
+  return shift ? `Operator: ${name} · ${shift} shift` : `Operator: ${name}`;
+}
+
 /** `PKR 5000/-` — the client's own way of writing a settled amount. */
 export function slipAmount(amount: number, currency: string): string {
   if (!Number.isFinite(amount) || amount <= 0) return '';
@@ -109,6 +114,15 @@ export interface SlipValuesOptions {
   weighment: Weighment;
   /** When the slip was printed. Defaults to now, which is what a reprint wants. */
   printedAt?: Date | string | number;
+  /**
+   * Who was at the window, for the soft copy only.
+   *
+   * Passed in rather than read off the weighment: the record carries a
+   * username, and a username is not a thing to put in front of a customer.
+   * Omitted — a bridge where nobody signs in, or a slip from before anybody
+   * did — and the line simply does not appear.
+   */
+  operator?: { name: string; shift?: string | null } | null;
 }
 
 /**
@@ -121,7 +135,7 @@ export interface SlipValuesOptions {
  * The second weight and the net are the exception: before the truck comes
  * back they read `Pending` rather than blank. See SLIP_PENDING.
  */
-export function slipValues({ weighment, printedAt }: SlipValuesOptions): SlipValues {
+export function slipValues({ weighment, printedAt, operator }: SlipValuesOptions): SlipValues {
   const net = netWeightKg(weighment.first_weight_kg, weighment.second_weight_kg);
   const hasSecond = weighment.second_weight_kg !== null && weighment.second_weight_kg !== undefined;
 
@@ -158,5 +172,9 @@ export function slipValues({ weighment, printedAt }: SlipValuesOptions): SlipVal
     net_kg: hasSecond ? slipKg(net) : SLIP_PENDING,
     mann: hasSecond ? slipMann(net) : '',
 
+    /* Soft copy only; the overprint has no layer that draws it. An operator
+       with no shift — the administrator — is named without one rather than
+       being filed under somebody else's hours. */
+    operator: slipOperator(operator),
   };
 }

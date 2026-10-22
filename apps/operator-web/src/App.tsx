@@ -10,10 +10,11 @@
  * leaving the inactive one alive would make F9 ambiguous.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button, ThemeToggle, toast } from '@suarza/ui';
 import type { NetWeight, Weighment } from '@suarza/shared';
-import { LogOut, Settings } from 'lucide-react';
+import { HandCoins, LogOut, Settings } from 'lucide-react';
 import { LiveWeightPanel } from './components/live-weight-panel.js';
 import { WeightCapture, type CapturedWeight } from './components/weight-capture.js';
 import { NewWeighmentForm } from './components/new-weighment-form.js';
@@ -26,11 +27,126 @@ import { ModeSwitch, type WeighingMode } from './components/mode-switch.js';
 import { useLiveWeight, useSyncStatus } from './hooks/use-live-weight.js';
 import { agentApi, type AgentWarning } from './lib/api.js';
 import { useShift } from './components/shift-provider.js';
+import { ShiftCashDialog } from './components/shift-cash-dialog.js';
+import type { ShiftCashMovement } from '@suarza/shared';
+
+/**
+ * Whether this shift has already been asked about its opening cash.
+ *
+ * Per session id, so a reload does not ask twice and the next shift is asked
+ * afresh. Guarded like every other storage read: a browser that refuses it
+ * simply asks again, which is the harmless failure.
+ */
+const CASH_ASKED_PREFIX = 'suarza.shift.cash-asked.';
+
+function readCashAsked(sessionId: string): boolean {
+  try {
+    return window.localStorage.getItem(CASH_ASKED_PREFIX + sessionId) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberCashAsked(sessionId: string): void {
+  try {
+    window.localStorage.setItem(CASH_ASKED_PREFIX + sessionId, '1');
+  } catch {
+    // Asking again after a reload is the harmless failure.
+  }
+}
 
 export function App() {
   const live = useLiveWeight();
   const sync = useSyncStatus();
   const shift = useShift();
+
+  /*
+   * The cash form, at both ends of the shift.
+   *
+   * `null` is the ordinary state — the weighing screen, with nothing in
+   * front of it. The start form appears once when a shift begins and can be
+   * put off; the end form appears when the operator asks to go home.
+   */
+  const [cashStage, setCashStage] = useState<'start' | 'end' | null>(null);
+  const [cashBusy, setCashBusy] = useState(false);
+
+  /* Asked once per shift. The flag is kept per session id, so a reload — or
+     the print tab stealing focus — does not ask again, and the next shift
+     is asked afresh. */
+  useEffect(() => {
+    const id = shift.session?.session_id;
+    if (!id) return;
+    if (readCashAsked(id)) return;
+    setCashStage('start');
+  }, [shift.session?.session_id]);
+
+  /* Who is on the other shift, as the likely person on the other side of the
+     handover. A guess the operator can type over, not an answer. */
+  const directory = useQuery({
+    queryKey: ['operator-directory'],
+    queryFn: agentApi.operatorDirectory,
+    staleTime: 5 * 60_000,
+    retry: false,
+    enabled: Boolean(shift.session),
+  });
+
+  /* Everybody but the person filling the form in: the handover is with
+     somebody else, and offering an operator their own name is noise. */
+  const operatorNames = (directory.data?.operators ?? [])
+    .filter((operator) => operator.username !== shift.session?.username)
+    .map((operator) => operator.name);
+
+  const counterpart =
+    directory.data?.operators.find(
+      (operator) => operator.slot !== 'ADMIN' && operator.slot !== shift.session?.slot,
+    )?.name ?? '';
+
+  /* What this shift has written down already. Listed in the form, because
+     an operator about to type a figure needs to know whether they have
+     typed it already. */
+  const recorded = useQuery({
+    queryKey: ['shift-cash', shift.session?.session_id],
+    queryFn: agentApi.shiftCash,
+    enabled: Boolean(shift.session) && cashStage !== null,
+    retry: false,
+  });
+
+  const closeCash = (id: string | undefined) => {
+    if (id) rememberCashAsked(id);
+    setCashStage(null);
+  };
+
+  const submitCash = (cash: ShiftCashMovement) => {
+    const id = shift.session?.session_id;
+    setCashBusy(true);
+
+    if (cashStage === 'start') {
+      void agentApi
+        .recordShiftCash({ ...cash, stage: 'START' })
+        .then(() => {
+          void recorded.refetch();
+          toast.success('Cash written down');
+        })
+        .catch(() =>
+          toast.error('Could not save the cash', {
+            description: 'Your shift has started; tell the manager what you were given.',
+          }),
+        )
+        .finally(() => {
+          setCashBusy(false);
+          closeCash(id);
+        });
+      return;
+    }
+
+    void shift
+      .endShift(cash)
+      .then(() => toast.success('Shift ended'))
+      .finally(() => {
+        setCashBusy(false);
+        setCashStage(null);
+      });
+  };
 
   const [mode, setMode] = useState<WeighingMode>('first');
   const [captured, setCaptured] = useState<CapturedWeight | null>(null);
@@ -119,14 +235,23 @@ export function App() {
 
           <ThemeToggle />
 
+          {/* Opens the same form the shift started with. The start form can
+              be put off, and an operator who put it off needs a way back to
+              it that is not signing out and in again. */}
           {shift.session && (
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              onClick={() => {
-                void shift.endShift().then(() => toast.success('Shift ended'));
-              }}
+              onClick={() => setCashStage('start')}
+              title="Write down the cash you took or gave at the start of your shift"
             >
+              <HandCoins className="h-4 w-4" />
+              Shift cash
+            </Button>
+          )}
+
+          {shift.session && (
+            <Button variant="outline" size="sm" onClick={() => setCashStage('end')}>
               <LogOut className="h-4 w-4" />
               End shift
             </Button>
@@ -233,6 +358,26 @@ export function App() {
           </div>
         </div>
       </main>
+
+      <ShiftCashDialog
+        open={cashStage !== null}
+        stage={cashStage ?? 'start'}
+        operatorNames={operatorNames}
+        counterpartName={counterpart}
+        recorded={recorded.data?.entries ?? []}
+        busy={cashBusy}
+        onSubmit={submitCash}
+        onSkip={() => {
+          /* At the start this is "later"; at the end it is "go home anyway".
+             Neither is a failure, and neither keeps the operator here. */
+          if (cashStage === 'end') {
+            void shift.endShift().then(() => toast.success('Shift ended'));
+            setCashStage(null);
+            return;
+          }
+          closeCash(shift.session?.session_id);
+        }}
+      />
 
       <SettingsPanel open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>

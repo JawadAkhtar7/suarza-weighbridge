@@ -12,6 +12,7 @@ import { Router } from 'express';
 import {
   createCustomerSchema,
   operatorLogPushSchema,
+  shiftCashPushSchema,
   createVehicleTypeSchema,
   updateCustomerSchema,
   updateVehicleTypeSchema,
@@ -32,6 +33,7 @@ import {
 } from '../services/catalogue.service.js';
 import { operatorAccountsForSync } from '../services/roster.service.js';
 import { recordLogs } from '../services/log.service.js';
+import { recordShiftCash } from '../services/shift-audit.service.js';
 import { parse } from './helpers.js';
 
 export function catalogueRouter(jwtSecret: string, apiKey: string): Router {
@@ -119,9 +121,24 @@ export function catalogueRouter(jwtSecret: string, apiKey: string): Router {
         slot: entry.slot,
         subject: null,
         detail: entry.detail,
+        session_id: entry.session_id,
       })),
     );
     res.json({ accepted: input.entries.map((entry) => entry.id), written });
+  });
+
+  /**
+   * The money written down during a shift.
+   *
+   * Its own route beside the shift events, because a movement can be
+   * recorded hours after the shift began and must not wait for one. Upserted
+   * on the bridge's own ids, so a batch delivered twice records one
+   * movement.
+   */
+  router.post('/api/sync/shift-cash', requireApiKey(apiKey), async (req, res) => {
+    const input = parse(shiftCashPushSchema, req.body);
+    await recordShiftCash(input.entries);
+    res.json({ accepted: input.entries.map((entry) => entry.id) });
   });
 
   return router;

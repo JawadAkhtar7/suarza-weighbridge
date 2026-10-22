@@ -287,6 +287,64 @@ MIGRATIONS.push({
   `,
 });
 
+MIGRATIONS.push({
+  version: 9,
+  name: 'the cash a shift hands over',
+  up: `
+    -- A shift's own id, shared by its start and its end.
+    --
+    -- Not the session token: the token opens the screen on this PC and has
+    -- no business leaving it, while this id travels to the cloud so the
+    -- manager's audit screen can read a start and an end back as one shift.
+    ALTER TABLE operator_sessions ADD COLUMN session_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE operator_logs ADD COLUMN session_id TEXT;
+
+    -- The four amounts and four names, as typed, kept as JSON.
+    --
+    -- JSON rather than eight columns because this machine never reads inside
+    -- it: the operator types it, the row goes up, and the cloud is where it
+    -- is added up. Eight columns would be eight migrations the day the
+    -- client wants a fifth figure.
+    ALTER TABLE operator_logs ADD COLUMN cash TEXT;
+  `,
+});
+
+MIGRATIONS.push({
+  version: 10,
+  name: 'every movement of cash during a shift, not just two',
+  up: `
+    -- One row per handing-over, with its own time.
+    --
+    -- A LIST, where the previous version kept one set of figures per end of
+    -- the shift and overwrote it. Money changes hands more than twice in a
+    -- day — the manager collects at noon, a colleague covers an hour, the
+    -- float is topped up — and overwriting meant a shift could only ever
+    -- show the last thing that happened.
+    --
+    -- Its own table rather than more columns on operator_logs: these are not
+    -- events in the shift's life, they are a ledger of one kind of thing,
+    -- and they sync on their own because a movement can be written down long
+    -- after the entry it belongs beside.
+    CREATE TABLE operator_cash_entries (
+      id            TEXT PRIMARY KEY,
+      session_id    TEXT NOT NULL,
+      username      TEXT NOT NULL,
+      stage         TEXT NOT NULL CHECK (stage IN ('START', 'END')),
+      person_name   TEXT NOT NULL DEFAULT '',
+      person_taken  REAL NOT NULL DEFAULT 0,
+      person_given  REAL NOT NULL DEFAULT 0,
+      manager_name  TEXT NOT NULL DEFAULT '',
+      manager_taken REAL NOT NULL DEFAULT 0,
+      manager_given REAL NOT NULL DEFAULT 0,
+      at            TEXT NOT NULL,
+      synced        INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX idx_cash_entries_session ON operator_cash_entries (session_id, at);
+    CREATE INDEX idx_cash_entries_unsynced ON operator_cash_entries (synced) WHERE synced = 0;
+  `,
+});
+
 export function migrate(db: Database): number {
   const current = db.pragma('user_version', { simple: true }) as number;
   const pending = MIGRATIONS.filter((m) => m.version > current).sort(

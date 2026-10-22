@@ -57,6 +57,10 @@ async function seedRecords() {
         slip_number: '20262',
         customer_name: 'Bilal Khan',
         customer_company: 'Khan Brothers',
+        /* A plate of its own; every other record keeps the fixture's
+           LES-1234, which is what gives the plate filter something to
+           separate. */
+        vehicle_plate: 'KHI 5678',
         vehicle_type: 'container',
         amount_charged: 500,
         net_weight_kg: 18_000,
@@ -126,6 +130,36 @@ describe('GET /weighments', () => {
     const { body } = await authed('/weighments?customer_company=Khan');
     expect(body.total).toBe(1);
     expect(body.rows[0].slip_number).toBe('20262');
+  });
+
+  it('filters by part of a plate, which is how much of one anybody remembers', async () => {
+    const { body } = await authed('/weighments?vehicle_plate=5678');
+
+    expect(body.total).toBe(1);
+    expect(body.rows[0].slip_number).toBe('20262');
+  });
+
+  it('ignores the spaces and dashes the yard writes differently each time', async () => {
+    /*
+     * `KHI 5678`, `khi-5678` and `khi5678` are one truck as far as anybody
+     * at the gate is concerned, and which of them reached the record depends
+     * on who typed it.
+     */
+    const spaced = await authed('/weighments?vehicle_plate=KHI%205678');
+    const dashed = await authed('/weighments?vehicle_plate=khi-5678');
+    const run = await authed('/weighments?vehicle_plate=khi5678');
+
+    expect(spaced.body.total).toBe(1);
+    expect(dashed.body.total).toBe(1);
+    expect(run.body.total).toBe(1);
+  });
+
+  it('treats punctuation on its own as no filter rather than as a pattern', async () => {
+    // Everything typed has been stripped, so there is nothing to match on —
+    // and `.*` must never become a pattern that matches the whole table by
+    // accident of being a regex.
+    const { body } = await authed('/weighments?vehicle_plate=.*');
+    expect(body.total).toBe(5);
   });
 
   it('filters by vehicle type', async () => {
@@ -251,6 +285,11 @@ describe('GET /suggestions', () => {
   it('suggests company names', async () => {
     const { body } = await authed('/suggestions?field=customer_company&q=kh');
     expect(body.values).toEqual(['Khan Brothers']);
+  });
+
+  it('suggests plates already in the records', async () => {
+    const { body } = await authed('/suggestions?field=vehicle_plate&q=KHI');
+    expect(body.values).toEqual(['KHI 5678']);
   });
 
   it('is case-insensitive', async () => {

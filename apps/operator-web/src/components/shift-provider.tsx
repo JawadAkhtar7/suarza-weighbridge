@@ -16,7 +16,7 @@
 
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { OperatorSession } from '@suarza/shared';
+import type { OperatorSession, ShiftCashMovement } from '@suarza/shared';
 import { agentApi, setShiftToken } from '../lib/api.js';
 
 const TOKEN_KEY = 'suarza.shift.token';
@@ -47,7 +47,8 @@ export interface ShiftState {
   required: boolean;
   loading: boolean;
   signIn: (session: OperatorSession) => void;
-  endShift: () => Promise<void>;
+  /** With the closing handover, when the operator filled the form in. */
+  endShift: (cash?: ShiftCashMovement) => Promise<void>;
 }
 
 const ShiftContext = React.createContext<ShiftState | null>(null);
@@ -82,16 +83,19 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
   }, []);
 
-  const endShift = React.useCallback(async () => {
-    try {
-      await agentApi.endShift();
-    } finally {
-      /* Forgotten here whatever the agent said. A token it does not know is
+  const endShift = React.useCallback(
+    async (cash?: ShiftCashMovement) => {
+      try {
+        await agentApi.endShift(cash);
+      } finally {
+        /* Forgotten here whatever the agent said. A token it does not know is
          not a shift, and leaving the operator signed in because the request
          failed would be the one outcome nobody wants at the end of a day. */
-      forget();
-    }
-  }, [forget]);
+        forget();
+      }
+    },
+    [forget],
+  );
 
   /* An unknown or expired token: the agent says nobody is signed in while we
      still hold one. Drop it, or every call carries a token that means

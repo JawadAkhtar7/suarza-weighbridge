@@ -22,6 +22,8 @@ export interface RecordLogInput {
   /** Supplied by the bridge, whose events may be delivered twice. */
   id?: string;
   at?: Date | string;
+  /** Both entries of one shift share this. */
+  session_id?: string | null;
 }
 
 function toDto(doc: LogDocument & { _id: string }): LogEntry {
@@ -34,12 +36,19 @@ function toDto(doc: LogDocument & { _id: string }): LogEntry {
     slot: (doc.slot as OperatorSlot | null) ?? null,
     subject: doc.subject ?? null,
     detail: doc.detail ?? null,
+    session_id: doc.session_id ?? null,
   };
 }
 
 /** Write one line. Never throws; a failure is logged and swallowed. */
 export async function recordLog(input: RecordLogInput): Promise<void> {
   try {
+    /*
+     * Written once, never updated: a log entry is a thing that happened, and
+     * the second delivery of a batch must leave the first exactly as it was.
+     * The money is a list of its own — see ShiftCashModel — because cash
+     * changes hands more than twice in a day.
+     */
     await LogModel.updateOne(
       { _id: input.id ?? newId() },
       {
@@ -51,6 +60,7 @@ export async function recordLog(input: RecordLogInput): Promise<void> {
           slot: input.slot ?? null,
           subject: input.subject ?? null,
           detail: input.detail ?? null,
+          session_id: input.session_id ?? null,
         },
       },
       { upsert: true },

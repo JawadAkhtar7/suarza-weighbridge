@@ -160,16 +160,26 @@ export class WeighmentService {
 
       this.weighments.insert(record);
 
-      // Inside the transaction: the directory is a view of the weighments, so
-      // it must not be able to record a customer whose weighing rolled back.
-      this.customers.remember({
-        name: record.customer_name,
-        company: record.customer_company,
-        phone: record.customer_phone,
-        vehicle_type: record.vehicle_type,
-        vehicle_plate: record.vehicle_plate,
-        product: record.product,
-      });
+      /*
+       * Only when the operator asked for it.
+       *
+       * Inside the transaction, so the directory cannot record a customer
+       * whose weighing rolled back — and behind the operator's tick, because
+       * a directory that remembered everybody who ever crossed the bridge
+       * was a list nobody could find a regular in. `remember` merges on name
+       * and company, so ticking it for somebody already there updates that
+       * entry rather than making a second one.
+       */
+      if (input.save_customer) {
+        this.customers.remember({
+          name: record.customer_name,
+          company: record.customer_company,
+          phone: record.customer_phone,
+          vehicle_type: record.vehicle_type,
+          vehicle_plate: record.vehicle_plate,
+          product: record.product,
+        });
+      }
 
       this.audit.append({
         weighment_id: record.id,
@@ -279,14 +289,17 @@ export class WeighmentService {
 
       this.weighments.insert(record);
 
-      this.customers.remember({
-        name: record.customer_name,
-        company: record.customer_company,
-        phone: record.customer_phone,
-        vehicle_type: record.vehicle_type,
-        vehicle_plate: record.vehicle_plate,
-        product: record.product,
-      });
+      /* The operator's tick, as in the two-pass flow above. */
+      if (input.save_customer) {
+        this.customers.remember({
+          name: record.customer_name,
+          company: record.customer_company,
+          phone: record.customer_phone,
+          vehicle_type: record.vehicle_type,
+          vehicle_plate: record.vehicle_plate,
+          product: record.product,
+        });
+      }
 
       this.audit.append({
         weighment_id: record.id,

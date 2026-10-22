@@ -39,6 +39,8 @@ export interface DashboardFilters {
   customTo?: Date;
   customerName: string;
   customerCompany: string;
+  /** A plate, or any part of one. */
+  vehiclePlate: string;
   vehicleType: VehicleType | 'all';
   /** Which shift's weighings, by the hours the manager has set. */
   shift: Shift | 'all';
@@ -51,6 +53,7 @@ export const DEFAULT_FILTERS: DashboardFilters = {
   rangeKey: 'today',
   customerName: '',
   customerCompany: '',
+  vehiclePlate: '',
   vehicleType: 'all',
   shift: 'all',
 };
@@ -62,6 +65,7 @@ export function toQuery(filters: DashboardFilters) {
     ...range,
     customer_name: filters.customerName.trim() || undefined,
     customer_company: filters.customerCompany.trim() || undefined,
+    vehicle_plate: filters.vehiclePlate.trim() || undefined,
     vehicle_type: filters.vehicleType === 'all' ? undefined : filters.vehicleType,
     shift: filters.shift === 'all' ? undefined : filters.shift,
   };
@@ -86,7 +90,10 @@ export function FiltersBar({ filters, onChange }: FiltersBarProps) {
   /* The Clear button hides when there is nothing to clear; a shift chosen
      counts, or clearing it would be the one filter with no way back. */
   const hasTextFilters =
-    filters.customerName !== '' || filters.customerCompany !== '' || filters.shift !== 'all';
+    filters.customerName !== '' ||
+    filters.customerCompany !== '' ||
+    filters.vehiclePlate !== '' ||
+    filters.shift !== 'all';
 
   return (
     <div className="space-y-3">
@@ -119,7 +126,10 @@ export function FiltersBar({ filters, onChange }: FiltersBarProps) {
         </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_14rem_auto]">
+      {/* Three across rather than a single long row: the plate makes five
+          controls, and squeezing five into one row left each of them too
+          narrow to read a company name in. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <FilterAutocomplete
           id="filter-name"
           label="Customer name"
@@ -136,6 +146,15 @@ export function FiltersBar({ filters, onChange }: FiltersBarProps) {
           placeholder="Any company"
           value={filters.customerCompany}
           onChange={(customerCompany) => set({ customerCompany })}
+        />
+
+        <FilterAutocomplete
+          id="filter-plate"
+          label="Vehicle plate"
+          field="vehicle_plate"
+          placeholder="Any plate"
+          value={filters.vehiclePlate}
+          onChange={(vehiclePlate) => set({ vehiclePlate })}
         />
 
         <div className="space-y-1.5">
@@ -187,7 +206,13 @@ export function FiltersBar({ filters, onChange }: FiltersBarProps) {
             type="button"
             variant="ghost"
             onClick={() =>
-              set({ customerName: '', customerCompany: '', vehicleType: 'all', shift: 'all' })
+              set({
+                customerName: '',
+                customerCompany: '',
+                vehiclePlate: '',
+                vehicleType: 'all',
+                shift: 'all',
+              })
             }
           >
             <X className="h-4 w-4" />

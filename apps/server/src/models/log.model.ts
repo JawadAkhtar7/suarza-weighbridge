@@ -31,6 +31,13 @@ const logSchema = new Schema(
     /** The slip number, for the two weighment kinds. */
     subject: { type: String, default: null },
     detail: { type: String, default: null },
+    /**
+     * Both entries of one shift carry this; null for everything else.
+     *
+     * The money is NOT here: it is its own collection, because cash changes
+     * hands more than twice in a day. See ShiftCashModel.
+     */
+    session_id: { type: String, default: null },
   },
   { timestamps: false, versionKey: false, _id: false },
 );
@@ -39,6 +46,8 @@ const logSchema = new Schema(
 // and the per-kind filter both.
 logSchema.index({ at: -1 });
 logSchema.index({ kind: 1, at: -1 });
+/* The audit screen reads a shift's two entries together. */
+logSchema.index({ session_id: 1 });
 
 export type LogDocument = InferSchemaType<typeof logSchema>;
 

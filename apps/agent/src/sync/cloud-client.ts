@@ -6,7 +6,13 @@
  * weighments and do nothing more.
  */
 
-import type { AuditEntry, IngestResponse, StationProfile, Weighment } from '@suarza/shared';
+import type {
+  AuditEntry,
+  IngestResponse,
+  ShiftCashEntry,
+  StationProfile,
+  Weighment,
+} from '@suarza/shared';
 
 export interface CloudClientOptions {
   baseUrl: string;
@@ -56,12 +62,19 @@ export interface OperatorLogUpload {
   name: string;
   slot: 'MORNING' | 'NIGHT' | 'ADMIN';
   detail: string | null;
+  /** Both entries of one shift carry the same id. */
+  session_id: string | null;
 }
+
+/** One handing-over of money, on its way to the manager's audit screen. */
+export type ShiftCashUpload = ShiftCashEntry & { operator: string };
 
 export interface CloudClient {
   ingest(weighments: Weighment[], auditEntries: AuditEntry[]): Promise<IngestResponse>;
   /** Resolves with the ids the cloud has recorded; throws CloudError otherwise. */
   pushOperatorLogs(entries: OperatorLogUpload[]): Promise<string[]>;
+  /** The same, for the money written down during a shift. */
+  pushShiftCash(entries: ShiftCashUpload[]): Promise<string[]>;
   /** Resolves when the cloud has the picture; throws CloudError otherwise. */
   uploadCapture(capture: CaptureUpload): Promise<void>;
   ping(): Promise<boolean>;
@@ -139,6 +152,36 @@ export function createCloudClient(options: CloudClientOptions): CloudClient {
         const text = await response.text().catch(() => '');
         throw new CloudError(
           `Cloud rejected the shift log (${response.status}): ${text.slice(0, 200)}`,
+          response.status,
+          true,
+        );
+      }
+
+      const body = (await response.json()) as { accepted?: string[] };
+      return body.accepted ?? entries.map((entry) => entry.id);
+    },
+
+    /**
+     * Send the money written down during a shift.
+     *
+     * Batched and upserted on the ids this machine chose, like the shift
+     * events beside it: a batch delivered twice records one movement.
+     */
+    async pushShiftCash(entries) {
+      if (entries.length === 0) return [];
+
+      let response: Response;
+      try {
+        response = await post('/api/sync/shift-cash', { entries });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new CloudError(`Cannot reach the cloud: ${message}`, null, false);
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new CloudError(
+          `Cloud rejected the shift cash (${response.status}): ${text.slice(0, 200)}`,
           response.status,
           true,
         );

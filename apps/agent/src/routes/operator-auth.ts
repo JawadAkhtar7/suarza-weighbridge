@@ -15,7 +15,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { loginRequestSchema } from '@suarza/shared';
+import { loginRequestSchema, shiftCashInputSchema } from '@suarza/shared';
 import type { AgentDeps } from '../server.js';
 import { AppError } from '../errors.js';
 import { toSession } from '../db/operators.js';
@@ -50,6 +50,16 @@ export function registerOperatorAuthRoutes(app: FastifyInstance, deps: AgentDeps
     };
   });
 
+  /**
+   * The names behind the usernames, for the soft copy of a slip.
+   *
+   * No password hashes and no session: a weighing records the username of
+   * whoever saved it, and the slip on screen should say "Imran Shah" rather
+   * than "imran". Read by the print tab too, which is a window of its own
+   * with no session in it.
+   */
+  app.get('/operator/directory', () => ({ operators: operators.list() }));
+
   app.post('/operator/auth/login', (request) => {
     const credentials = parse(loginRequestSchema, request.body);
     const account = operators.verify(credentials.username, credentials.password);
@@ -66,8 +76,68 @@ export function registerOperatorAuthRoutes(app: FastifyInstance, deps: AgentDeps
     return { session };
   });
 
+  /**
+   * The cash taken over at the start of a shift.
+   *
+   * Its own route rather than part of the sign-in, because the operator types
+   * it a moment AFTER signing in — the shift has already begun, a truck may
+   * already be on the bridge, and making the sign-in wait on a form would be
+   * a gate in front of the weighing screen rather than a note beside it.
+   *
+   * It updates the entry the sign-in already wrote, so a shift has one start
+   * however many times this is sent.
+   */
+  /** Everything this shift has written down so far, oldest first. */
+  app.get('/operator/shift/cash', (request) => {
+    const token = bearer(request);
+    const session = token ? operators.session(token) : undefined;
+    if (!session) {
+      throw new AppError('INVALID_CREDENTIALS', 'No shift is running on this screen.');
+    }
+    return { entries: operators.cashEntries(session.session_id) };
+  });
+
+  /**
+   * Write down one handing-over of money.
+   *
+   * Its own route rather than part of the sign-in, because the operator
+   * types it a moment AFTER signing in — the shift has already begun, a
+   * truck may already be on the bridge, and making the sign-in wait on a
+   * form would be a gate in front of the weighing screen rather than a note
+   * beside it.
+   *
+   * Every call appends. Cash changes hands more than twice in a day, and the
+   * second time must not erase the first.
+   */
+  app.post('/operator/shift/cash', (request) => {
+    const token = bearer(request);
+    const session = token ? operators.session(token) : undefined;
+    if (!session) {
+      throw new AppError('INVALID_CREDENTIALS', 'No shift is running on this screen.');
+    }
+
+    const { stage, ...movement } = parse(shiftCashInputSchema, request.body);
+    const entry = operators.recordCash(session.session_id, session.username, stage, movement);
+    request.log.info({ username: session.username, stage }, 'Shift cash recorded');
+    deps.onOperatorLog?.();
+    return { entry };
+  });
+
   app.post('/operator/auth/logout', (request) => {
     const token = bearer(request);
+    const session = token ? operators.session(token) : undefined;
+
+    /* The closing handover is optional and, when there is one, it is a
+       movement like any other — written down as its own row before the
+       shift closes. An operator who skips it has still gone home. */
+    if (session && request.body && Object.keys(request.body as object).length > 0) {
+      const { stage, ...movement } = parse(shiftCashInputSchema, {
+        stage: 'END',
+        ...(request.body as object),
+      });
+      operators.recordCash(session.session_id, session.username, stage, movement);
+    }
+
     const ended = token ? operators.endShift(token) : null;
     if (ended) {
       request.log.info({ username: ended.username }, 'Shift ended');

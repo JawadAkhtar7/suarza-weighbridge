@@ -89,8 +89,16 @@ export const FONTS = {
   label: "'Open Sans', sans-serif",
 } as const;
 
-/** Which of the three views an item belongs to. */
-export type Layer = 'chrome' | 'value';
+/**
+ * Which of the three views an item belongs to.
+ *
+ * `screen` is the odd one: it is neither the pad's printed design nor a value
+ * that belongs on the pad. It is what the soft copy can say and the paper
+ * cannot — the operator's name, so far — and it exists because an overprint
+ * has nowhere to put it: every square millimetre of that sheet is already
+ * printed, and ink laid over the artwork is a smudge, not a note.
+ */
+export type Layer = 'chrome' | 'value' | 'screen';
 
 interface Placed {
   /** From the left edge, in design pixels. Omitted when `right` is given. */
@@ -118,14 +126,7 @@ interface Placed {
    * never move, which the front view is — nothing has asked for it, and a
    * control nobody needs is one more thing to set wrong.
    */
-  group?:
-    | 'slip-number'
-    | 'details'
-    | 'weights'
-    | 'first-time'
-    | 'second-time'
-    | 'qr'
-    | 'none';
+  group?: 'slip-number' | 'details' | 'weights' | 'first-time' | 'second-time' | 'qr' | 'none';
   omitWhenPending?: true;
   /**
    * Where this item sits on a first-weight slip instead.
@@ -216,7 +217,9 @@ export type ValueField =
   | 'second_kg'
   | 'second_manual'
   | 'net_kg'
-  | 'mann';
+  | 'mann'
+  /** Soft copy only — see the `screen` layer. */
+  | 'operator';
 
 const green = COLOURS.green;
 const ink = COLOURS.ink;
@@ -257,23 +260,138 @@ export const SLIP: SlipItem[] = [
 
   /* ----------------------------------------------------------- the slip row */
   /* Centred in the white box, measured off the artwork at 130.53 -> 258.82. */
-  { kind: 'text', layer: 'value', group: 'slip-number', left: 130.53, width: 128.28, align: 'center', top: 181.36, field: 'slip_number', size: 11.35, weight: 700, colour: ink, font: 'display', tracking: 0.28 },
+  {
+    kind: 'text',
+    layer: 'value',
+    group: 'slip-number',
+    left: 130.53,
+    width: 128.28,
+    align: 'center',
+    top: 181.36,
+    field: 'slip_number',
+    size: 11.35,
+    weight: 700,
+    colour: ink,
+    font: 'display',
+    tracking: 0.28,
+  },
   /* The one value the design sets in Open Sans rather than Montserrat. */
   /* Centred in the space to the right of the "Print Date/Time" label, which
      the artwork ends at 362.84. */
-  { kind: 'text', layer: 'value', left: 368, width: 138, align: 'center', top: 180.33, field: 'printed_at', size: 9.99, weight: 600, colour: ink, font: 'label', tracking: -0.22 },
+  {
+    kind: 'text',
+    layer: 'value',
+    left: 368,
+    width: 138,
+    align: 'center',
+    top: 180.33,
+    field: 'printed_at',
+    size: 9.99,
+    weight: 600,
+    colour: ink,
+    font: 'label',
+    tracking: -0.22,
+  },
 
   /* -------------------------------------------------------- details, left */
-  { kind: 'text', layer: 'value', left: 147, top: 225.86, field: 'driver_name', size: 11.35, weight: 600, colour: ink, font: 'display', tracking: -0.27 },
-  { kind: 'text', layer: 'value', left: 147, top: 259.76, field: 'vehicle_plate', size: 11.35, weight: 600, colour: ink, font: 'display', tracking: 0.08 },
-  { kind: 'text', layer: 'value', left: 147, top: 293.66, field: 'driver_phone', size: 11.35, weight: 600, colour: ink, font: 'display', tracking: 0.26 },
-  { kind: 'text', layer: 'value', left: 147, top: 327.56, field: 'vehicle_type', size: 11.35, weight: 600, colour: ink, font: 'display', tracking: 0.17 },
+  {
+    kind: 'text',
+    layer: 'value',
+    left: 147,
+    top: 225.86,
+    field: 'driver_name',
+    size: 11.35,
+    weight: 600,
+    colour: ink,
+    font: 'display',
+    tracking: -0.27,
+  },
+  {
+    kind: 'text',
+    layer: 'value',
+    left: 147,
+    top: 259.76,
+    field: 'vehicle_plate',
+    size: 11.35,
+    weight: 600,
+    colour: ink,
+    font: 'display',
+    tracking: 0.08,
+  },
+  {
+    kind: 'text',
+    layer: 'value',
+    left: 147,
+    top: 293.66,
+    field: 'driver_phone',
+    size: 11.35,
+    weight: 600,
+    colour: ink,
+    font: 'display',
+    tracking: 0.26,
+  },
+  {
+    kind: 'text',
+    layer: 'value',
+    left: 147,
+    top: 327.56,
+    field: 'vehicle_type',
+    size: 11.35,
+    weight: 600,
+    colour: ink,
+    font: 'display',
+    tracking: 0.17,
+  },
 
   /* ------------------------------------------------------- details, right */
-  { kind: 'text', layer: 'value', left: 410.6, top: 225.86, field: 'container_number', size: 11.35, weight: 600, colour: ink, font: 'display', tracking: -0.05 },
-  { kind: 'text', layer: 'value', left: 410.6, top: 259.76, field: 'product', size: 11.35, weight: 600, colour: ink, font: 'display', tracking: -0.16 },
-  { kind: 'text', layer: 'value', left: 410.6, top: 293.66, field: 'customer', size: 11.35, weight: 600, colour: ink, font: 'display', tracking: -0.17 },
-  { kind: 'text', layer: 'value', left: 410.6, top: 327.56, field: 'amount', size: 11.35, weight: 600, colour: ink, font: 'display', tracking: 0.33 },
+  {
+    kind: 'text',
+    layer: 'value',
+    left: 410.6,
+    top: 225.86,
+    field: 'container_number',
+    size: 11.35,
+    weight: 600,
+    colour: ink,
+    font: 'display',
+    tracking: -0.05,
+  },
+  {
+    kind: 'text',
+    layer: 'value',
+    left: 410.6,
+    top: 259.76,
+    field: 'product',
+    size: 11.35,
+    weight: 600,
+    colour: ink,
+    font: 'display',
+    tracking: -0.16,
+  },
+  {
+    kind: 'text',
+    layer: 'value',
+    left: 410.6,
+    top: 293.66,
+    field: 'customer',
+    size: 11.35,
+    weight: 600,
+    colour: ink,
+    font: 'display',
+    tracking: -0.17,
+  },
+  {
+    kind: 'text',
+    layer: 'value',
+    left: 410.6,
+    top: 327.56,
+    field: 'amount',
+    size: 11.35,
+    weight: 600,
+    colour: ink,
+    font: 'display',
+    tracking: 0.33,
+  },
 
   /* ------------------------------------------------------------- the weights */
   /* The figures are the `weights` group: Settings -> Print moves them on
@@ -287,8 +405,32 @@ export const SLIP: SlipItem[] = [
    * 420.5). On paper the icon is the pad's, wherever its press put it, so the
    * centring there is a calibration, set in Settings -> Print.
    */
-  { kind: 'text', layer: 'value', group: 'first-time', left: 63.9, top: 416.39, field: 'first_at', size: 8.28, weight: 500, colour: ink, font: 'display', tracking: 0.26 },
-  { kind: 'text', layer: 'value', group: 'weights', left: 39.6, top: 439.24, field: 'first_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.42 },
+  {
+    kind: 'text',
+    layer: 'value',
+    group: 'first-time',
+    left: 63.9,
+    top: 416.39,
+    field: 'first_at',
+    size: 8.28,
+    weight: 500,
+    colour: ink,
+    font: 'display',
+    tracking: 0.26,
+  },
+  {
+    kind: 'text',
+    layer: 'value',
+    group: 'weights',
+    left: 39.6,
+    top: 439.24,
+    field: 'first_kg',
+    size: 25.23,
+    weight: 900,
+    colour: ink,
+    font: 'display',
+    tracking: -0.42,
+  },
   /*
    * The first weight's MANUAL marker.
    *
@@ -297,14 +439,86 @@ export const SLIP: SlipItem[] = [
    * (232.9 - 198.6 = 34.3), on the same baseline, so the pair reads as one
    * decision rather than two placements.
    */
-  { kind: 'text', layer: 'value', group: 'weights', left: 73.9, top: 473.02, field: 'first_manual', size: 8.83, weight: 500, colour: ink, font: 'display', tracking: 0.21 },
+  {
+    kind: 'text',
+    layer: 'value',
+    group: 'weights',
+    left: 73.9,
+    top: 473.02,
+    field: 'first_manual',
+    size: 8.83,
+    weight: 500,
+    colour: ink,
+    font: 'display',
+    tracking: 0.21,
+  },
 
-  { kind: 'text', layer: 'value', group: 'second-time', left: 222.9, top: 416.39, field: 'second_at', size: 8.28, weight: 500, colour: ink, font: 'display', tracking: 0.26 },
-  { kind: 'text', layer: 'value', group: 'weights', left: 198.6, top: 439.24, field: 'second_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.4 },
-  { kind: 'text', layer: 'value', group: 'weights', left: 232.9, top: 473.02, field: 'second_manual', size: 8.83, weight: 500, colour: ink, font: 'display', tracking: 0.21 },
+  {
+    kind: 'text',
+    layer: 'value',
+    group: 'second-time',
+    left: 222.9,
+    top: 416.39,
+    field: 'second_at',
+    size: 8.28,
+    weight: 500,
+    colour: ink,
+    font: 'display',
+    tracking: 0.26,
+  },
+  {
+    kind: 'text',
+    layer: 'value',
+    group: 'weights',
+    left: 198.6,
+    top: 439.24,
+    field: 'second_kg',
+    size: 25.23,
+    weight: 900,
+    colour: ink,
+    font: 'display',
+    tracking: -0.4,
+  },
+  {
+    kind: 'text',
+    layer: 'value',
+    group: 'weights',
+    left: 232.9,
+    top: 473.02,
+    field: 'second_manual',
+    size: 8.83,
+    weight: 500,
+    colour: ink,
+    font: 'display',
+    tracking: 0.21,
+  },
 
-  { kind: 'text', layer: 'value', group: 'weights', left: 357.4, top: 420.44, field: 'net_kg', size: 25.23, weight: 900, colour: ink, font: 'display', tracking: -0.59 },
-  { kind: 'text', layer: 'value', group: 'weights', left: 370, top: 465.33, field: 'mann', size: 15.11, weight: 700, colour: ink, font: 'display', tracking: 0.14 },
+  {
+    kind: 'text',
+    layer: 'value',
+    group: 'weights',
+    left: 357.4,
+    top: 420.44,
+    field: 'net_kg',
+    size: 25.23,
+    weight: 900,
+    colour: ink,
+    font: 'display',
+    tracking: -0.59,
+  },
+  {
+    kind: 'text',
+    layer: 'value',
+    group: 'weights',
+    left: 370,
+    top: 465.33,
+    field: 'mann',
+    size: 15.11,
+    weight: 700,
+    colour: ink,
+    font: 'display',
+    tracking: 0.14,
+  },
 
   /* ------------------------------------------------------------ the photos */
   /*
@@ -324,10 +538,29 @@ export const SLIP: SlipItem[] = [
    * measuring sheet — and not from these coordinates at all (SlipA5).
    */
   {
-    kind: 'image', layer: 'value', slot: 'front-view', group: 'none', left: 21, top: 528.63, width: 237.31, height: 119.28, radius: '3px', zoom: FRONT_VIEW_ZOOM.default, alt: 'Truck on the weighbridge, front view',
+    kind: 'image',
+    layer: 'value',
+    slot: 'front-view',
+    group: 'none',
+    left: 21,
+    top: 528.63,
+    width: 237.31,
+    height: 119.28,
+    radius: '3px',
+    zoom: FRONT_VIEW_ZOOM.default,
+    alt: 'Truck on the weighbridge, front view',
   },
   {
-    kind: 'image', layer: 'value', slot: 'side-view', group: 'none', left: 271.32, top: 528.63, width: 237.31, height: 119.28, radius: '3px', alt: 'Truck on the weighbridge, side view',
+    kind: 'image',
+    layer: 'value',
+    slot: 'side-view',
+    group: 'none',
+    left: 271.32,
+    top: 528.63,
+    width: 237.31,
+    height: 119.28,
+    radius: '3px',
+    alt: 'Truck on the weighbridge, side view',
   },
 
   /* ---------------------------------------------------------------- the QR */
@@ -336,7 +569,40 @@ export const SLIP: SlipItem[] = [
   /* Dead centre of the SCAN TO VERIFY box, measured at 438.86 -> 504.13 by
      667.67 -> 726.68. The box is wider than it is tall, so the square sits
      centred on both axes rather than filling either. */
-  { kind: 'image', layer: 'value', slot: 'qr', group: 'qr', left: 443.99, top: 669.67, width: 55, height: 55, alt: 'Scan to verify this slip' },
+  {
+    kind: 'image',
+    layer: 'value',
+    slot: 'qr',
+    group: 'qr',
+    left: 443.99,
+    top: 669.67,
+    width: 55,
+    height: 55,
+    alt: 'Scan to verify this slip',
+  },
+
+  /* ------------------------------------------------------ the soft copy only */
+  /*
+   * Who weighed it, under the two picture boxes.
+   *
+   * The strip between the pictures (which end at 647.91) and the "Thanks"
+   * mark (which begins around 665) is the one piece of white left on the
+   * sheet, measured off a render of the artwork. Small and quiet on purpose:
+   * it is a note for whoever looks the slip up later, not a line the customer
+   * is meant to read first.
+   */
+  {
+    kind: 'text',
+    layer: 'screen',
+    left: 21,
+    top: 651.5,
+    field: 'operator',
+    size: 7.2,
+    weight: 600,
+    colour: green,
+    font: 'label',
+    tracking: 0.1,
+  },
 ];
 
 /**
@@ -395,7 +661,9 @@ export const VIEW_ASPECT = {
 } as const;
 
 export const LAYERS: Record<SlipView, readonly Layer[]> = {
-  soft: ['chrome', 'value'],
+  /* The only view that carries `screen`: the paper has no room for it and the
+     blank template is the pad's design, which this is not part of. */
+  soft: ['chrome', 'value', 'screen'],
   overprint: ['value'],
   template: ['chrome'],
 };

@@ -241,6 +241,19 @@ export const createWeighmentSchema = z.object({
   amount_charged: z.number().finite().min(0).default(0),
   operator_username: z.string().trim().min(1).max(64).default('operator'),
   capture_id: captureToken,
+  /**
+   * Keep this person in the customer directory.
+   *
+   * The operator's choice, and off by default. The directory used to fill
+   * itself from every weighing, which is right for a yard of regulars and
+   * wrong for the lorry that passes through once: a picker with six hundred
+   * one-off names in it is a picker nobody can find a regular in.
+   *
+   * Ticking it for somebody already in the directory does NOT make a second
+   * entry — the directory is keyed on name and company, so the existing one
+   * is updated with whatever this weighing adds. See CustomerRepository.
+   */
+  save_customer: z.boolean().default(false),
 });
 
 export type CreateWeighmentInput = z.infer<typeof createWeighmentSchema>;

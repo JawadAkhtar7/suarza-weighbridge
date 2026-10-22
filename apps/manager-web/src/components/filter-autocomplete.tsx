@@ -1,9 +1,9 @@
 /**
- * A filter box that suggests names already in the records (manager feedback).
+ * A filter box that suggests values already in the records (manager feedback).
  *
- * Suggestions come from the weighments themselves, so a customer can be
- * suggested the moment they have been weighed once, and the list can never
- * offer a name that would return nothing.
+ * Suggestions come from the weighments themselves, so a customer or a truck
+ * can be suggested the moment it has been weighed once, and the list can
+ * never offer a value that would return nothing.
  *
  * It stays a free-text filter: typing a partial name still works, because
  * partial matching is what the filter does anyway.
@@ -17,7 +17,7 @@ import { useDebounced } from '../hooks/use-debounced.js';
 interface FilterAutocompleteProps {
   id: string;
   label: string;
-  field: 'customer_name' | 'customer_company';
+  field: 'customer_name' | 'customer_company' | 'vehicle_plate';
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;

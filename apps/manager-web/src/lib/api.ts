@@ -24,6 +24,8 @@ import type {
   LogQuery,
   PaginatedLogs,
   PaginatedWeighments,
+  ShiftAuditPage,
+  ShiftAuditQuery,
   ViewFrame,
   Weighment,
   WeighmentQuery,
@@ -163,14 +165,18 @@ export const api = {
   setShiftTimings: (timings: ShiftTimings) =>
     request<ShiftTimings>('/api/shift-timings', { method: 'PUT', body: JSON.stringify(timings) }),
 
+  /** Each shift with the money it took over, took in, and handed on. */
+  shiftAudit: (query: Partial<ShiftAuditQuery>) =>
+    request<ShiftAuditPage>(`/api/shift-audit?${toQueryString(query)}`),
+
   /** The log: shifts starting and ending, slips set aside and brought back. */
   logs: (query: Partial<LogQuery>) => request<PaginatedLogs>(`/api/logs?${toQueryString(query)}`),
 
   analytics: (query: Partial<WeighmentQuery>) =>
     request<Analytics>(`/analytics?${toQueryString(query)}`),
 
-  /** Names already in the records, for the filter typeahead. */
-  suggestions: (field: 'customer_name' | 'customer_company', q: string) =>
+  /** Values already in the records, for the filter typeahead. */
+  suggestions: (field: 'customer_name' | 'customer_company' | 'vehicle_plate', q: string) =>
     request<{ values: string[] }>(`/suggestions?${new URLSearchParams({ field, q }).toString()}`),
 
   // --- Ledger --------------------------------------------------------------

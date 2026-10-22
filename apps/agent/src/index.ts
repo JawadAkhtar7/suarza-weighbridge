@@ -153,6 +153,10 @@ async function main(): Promise<void> {
         unsynced: (limit) => operators.unsyncedLogs(limit),
         markSynced: (ids) => operators.markLogsSynced(ids),
       },
+      shiftCash: {
+        unsynced: (limit) => operators.unsyncedCash(limit),
+        markSynced: (ids) => operators.markCashSynced(ids),
+      },
       client: createCloudClient({
         baseUrl: cloud.url,
         apiKey: cloud.apiKey,

@@ -26,6 +26,7 @@ import { toDto } from '../db/weighments.js';
 import type { AuditRepository } from '../db/audit.js';
 import { CloudError, type CloudClient } from './cloud-client.js';
 import type { OperatorLogRow } from '../db/operators.js';
+import type { ShiftCashEntry } from '@suarza/shared';
 import type { CaptureRow } from '../db/captures.js';
 
 /** Bounded so a week of offline records syncs in batches, not one huge POST. */
@@ -58,6 +59,17 @@ export interface SyncWorkerOptions {
    */
   operatorLogs?: {
     unsynced(limit?: number): OperatorLogRow[];
+    markSynced(ids: string[]): void;
+  };
+  /**
+   * The money written down during a shift.
+   *
+   * Drained beside the shift events rather than with them: a movement can be
+   * recorded hours after the shift started, and waiting for the next shift
+   * event to carry it would leave the manager's screen stale all day.
+   */
+  shiftCash?: {
+    unsynced(limit?: number): (ShiftCashEntry & { operator: string })[];
     markSynced(ids: string[]): void;
   };
   client: CloudClient;
@@ -215,6 +227,10 @@ export class SyncWorker {
       const shifts = await this.drainOperatorLogs();
       if (shifts === 'failed') return;
 
+      /* And the money written down during those shifts. */
+      const cash = await this.drainShiftCash();
+      if (cash === 'failed') return;
+
       /* Last, so a batch above that already carried the newest profile
          makes this a no-op. */
       const profile = await this.sendProfileIfChanged();
@@ -225,6 +241,7 @@ export class SyncWorker {
         orphans === 'drained' ||
         images === 'drained' ||
         shifts === 'drained' ||
+        cash === 'drained' ||
         profile === 'sent'
       ) {
         this.markOnline();
@@ -366,10 +383,42 @@ export class SyncWorker {
             name: entry.name,
             slot: entry.slot,
             detail: entry.detail,
+            session_id: entry.session_id,
           })),
         );
         source.markSynced(entries.map((entry) => entry.id));
         this.options.onLog?.('info', `Synced ${entries.length} shift event(s) to the cloud`);
+        drainedAny = true;
+      } catch (error) {
+        this.fail(error);
+        return 'failed';
+      }
+    }
+  }
+
+  /**
+   * Sends the money written down during a shift.
+   *
+   * Marked synced only on a response, like everything else here, and upserted
+   * on the ids this machine chose — so a batch that lands and then fails to
+   * be acknowledged costs a duplicate request, not a duplicate movement.
+   */
+  private async drainShiftCash(): Promise<'drained' | 'empty' | 'failed'> {
+    const source = this.options.shiftCash;
+    if (!source) return 'empty';
+
+    let drainedAny = false;
+
+    for (;;) {
+      if (this.stopped) return drainedAny ? 'drained' : 'empty';
+
+      const entries = source.unsynced(BATCH_SIZE);
+      if (entries.length === 0) return drainedAny ? 'drained' : 'empty';
+
+      try {
+        await this.options.client.pushShiftCash(entries);
+        source.markSynced(entries.map((entry) => entry.id));
+        this.options.onLog?.('info', `Synced ${entries.length} cash entr(ies) to the cloud`);
         drainedAny = true;
       } catch (error) {
         this.fail(error);

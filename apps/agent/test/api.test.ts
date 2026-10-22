@@ -331,7 +331,13 @@ describe('GET /sync-status', () => {
 
 describe('GET /customers', () => {
   it('returns customers the station has weighed before', async () => {
-    await app.inject({ method: 'POST', url: '/weighments', payload: firstWeightBody() });
+    await app.inject({
+      method: 'POST',
+      url: '/weighments',
+      /* Ticked: the directory holds the customers the operator asked it to
+         hold, not everybody who has ever crossed the bridge. */
+      payload: firstWeightBody({ save_customer: true }),
+    });
 
     const response = await app.inject({ url: '/customers?q=Ali' });
     expect(response.statusCode).toBe(200);
@@ -342,7 +348,11 @@ describe('GET /customers', () => {
   });
 
   it('returns the most recent when nothing is typed', async () => {
-    await app.inject({ method: 'POST', url: '/weighments', payload: firstWeightBody() });
+    await app.inject({
+      method: 'POST',
+      url: '/weighments',
+      payload: firstWeightBody({ save_customer: true }),
+    });
     expect((await app.inject({ url: '/customers' })).json().customers).toHaveLength(1);
   });
 

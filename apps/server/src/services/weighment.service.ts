@@ -82,6 +82,25 @@ export function buildFilter(query: WeighmentQuery): FilterQuery<WeighmentDocumen
     filter.customer_company = { $regex: escapeRegex(query.customer_company.trim()), $options: 'i' };
   }
 
+  /*
+   * A plate, matched on any part of it and without its punctuation.
+   *
+   * `LES-1234`, `LES 1234` and `les1234` are one truck as far as the yard is
+   * concerned, and which of the three reached the record depends on who
+   * typed it. So the separators are dropped from what was typed and allowed
+   * to be anything between the characters that remain — which is what makes
+   * searching `1234` find the truck as readily as the whole plate does.
+   */
+  if (query.vehicle_plate) {
+    const characters = [...query.vehicle_plate.replace(/[^a-z0-9]/gi, '')];
+    if (characters.length > 0) {
+      filter.vehicle_plate = {
+        $regex: characters.map((character) => escapeRegex(character)).join('[^a-z0-9]*'),
+        $options: 'i',
+      };
+    }
+  }
+
   if (query.from || query.to) {
     filter.first_weight_at = {};
     if (query.from) filter.first_weight_at.$gte = new Date(query.from);
@@ -275,14 +294,14 @@ export async function requireBySlip(slipNumber: string): Promise<Weighment> {
 export { DISPLAY_TIMEZONE };
 
 /**
- * Distinct customer or company names for the dashboard's filter suggestions.
+ * Distinct customer names, companies or plates for the filter suggestions.
  *
  * Read from the weighments themselves rather than a separate list, so a name
  * can be suggested the moment it has been used once and can never drift out of
  * step with the records it filters.
  */
 export async function suggestValues(
-  field: 'customer_name' | 'customer_company',
+  field: 'customer_name' | 'customer_company' | 'vehicle_plate',
   query: string,
   limit = 10,
 ): Promise<string[]> {
