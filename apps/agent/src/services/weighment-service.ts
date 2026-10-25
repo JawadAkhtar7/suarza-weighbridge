@@ -156,6 +156,8 @@ export class WeighmentService {
         updated_at: at,
         void_reason: null,
         voided_at: null,
+        /* A first weighing is always the bridge's own reading. */
+        owner_declared: false,
       };
 
       this.weighments.insert(record);
@@ -285,6 +287,12 @@ export class WeighmentService {
         updated_at: at,
         void_reason: null,
         voided_at: null,
+        /*
+         * The container re-weigh issues a slip on the customer's own figure
+         * for what is inside his container, and the slip has to say so —
+         * see OWNER_DECLARATION.
+         */
+        owner_declared: input.owner_declared === true,
       };
 
       this.weighments.insert(record);

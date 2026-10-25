@@ -23,7 +23,7 @@ export function weighment(overrides: Partial<Weighment> = {}): Weighment {
     customer_company: 'Raza Traders',
     customer_phone: undefined,
     vehicle_type: 'truck',
-  vehicle_type_label: 'Truck',
+    vehicle_type_label: 'Truck',
     vehicle_plate: 'LES-1234',
     container_number: undefined,
     product: 'Cement',
@@ -36,12 +36,14 @@ export function weighment(overrides: Partial<Weighment> = {}): Weighment {
     net_weight_kg: 12_000,
     amount_charged: 300,
     currency: 'PKR',
-  payment_status: 'PAID',
+    payment_status: 'PAID',
     operator_username: 'operator',
     created_at: '2026-09-14T09:00:00.000Z',
     updated_at: '2026-09-14T11:00:00.000Z',
     void_reason: null,
     voided_at: null,
+    /* The bridge weighed it, which is the ordinary case. */
+    owner_declared: false,
     ...overrides,
   };
 }

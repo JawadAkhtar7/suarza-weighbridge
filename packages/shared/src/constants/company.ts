@@ -28,3 +28,23 @@ export const COMPANY = {
 
 /** The address as one string, for anywhere that wants it on a single line. */
 export const COMPANY_ADDRESS = COMPANY.addressLines.join(' ');
+
+/**
+ * What a slip says when its load is the customer's own figure.
+ *
+ * Printed on the container re-weigh (step 4), where nothing was weighed: the
+ * customer declares what is inside the container and the slip is issued on
+ * that declaration. The wording is the client's own, and it is on BOTH the
+ * soft copy and the paper — a disclaimer that only appeared on the screen
+ * copy would be a disclaimer on the one copy nobody keeps.
+ */
+export const OWNER_DECLARATION =
+  '* Manual Weight declared by owner; SUARZA Kanta is not responsible for its accuracy.';
+
+/**
+ * Taken off a declared payload before the slip is issued.
+ *
+ * The client's rule, not an arithmetic one: the figure the owner gives is
+ * for the goods, and this is the allowance the yard applies to it.
+ */
+export const DECLARED_PAYLOAD_DEDUCTION_KG = 100;

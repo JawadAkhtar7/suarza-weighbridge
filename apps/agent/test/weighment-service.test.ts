@@ -352,6 +352,29 @@ describe('createCompleted — the whole weighing in one visit', () => {
     expect(service.searchCustomers('zainab')).toHaveLength(1);
   });
 
+  it('records a load the owner declared, so the slip can say so', () => {
+    /*
+     * The container re-weigh: nothing was on the bridge, the figure came
+     * from the customer, and the slip has to carry that for ever — on a
+     * reprint and on the page behind the QR. Which is why it is a field of
+     * its own and not inferred from `second_weight_src`: an operator typing
+     * a figure the indicator could not read is the bridge's own reading by
+     * another route, and this is not.
+     */
+    const { weighment } = service.createCompleted(
+      oneVisit({ owner_declared: true, second_weight_src: 'MANUAL' as const }),
+    );
+
+    expect(weighment.owner_declared).toBe(true);
+    // And it survives the trip back out of SQLite.
+    expect(service.getBySlip(weighment.slip_number).owner_declared).toBe(true);
+  });
+
+  it('leaves an ordinary weighing undeclared', () => {
+    const { weighment } = service.createCompleted(oneVisit());
+    expect(weighment.owner_declared).toBe(false);
+  });
+
   it('remembers nobody when the box is left alone', () => {
     // The one-visit flow is where the passing lorry is weighed, so this is
     // the case the tick exists for.

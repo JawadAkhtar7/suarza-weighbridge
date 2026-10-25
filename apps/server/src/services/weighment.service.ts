@@ -57,6 +57,8 @@ export function toDto(doc: WeighmentDocument & { _id: string }): Weighment {
     updated_at: new Date(doc.updated_at).toISOString(),
     void_reason: doc.void_reason ?? null,
     voided_at: doc.voided_at ? new Date(doc.voided_at).toISOString() : null,
+    /* Records that predate the container re-weigh have no such field. */
+    owner_declared: doc.owner_declared === true,
   };
 }
 

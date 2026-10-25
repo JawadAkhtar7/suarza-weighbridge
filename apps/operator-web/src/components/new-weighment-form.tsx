@@ -26,7 +26,14 @@ import {
   toast,
 } from '@suarza/ui';
 import {
+  CONTAINER_VEHICLE_TYPE,
+  DECLARED_PAYLOAD_DEDUCTION_KG,
+  OWNER_DECLARATION,
   createWeighmentSchema,
+  formatPKR,
+  requireContainerNumber,
+  formatKg,
+  netWeightKg,
   parseAmount,
   type Customer,
   type PaymentStatus,
@@ -38,6 +45,7 @@ import { agentApi, AgentApiError, signedInUsername, type AgentWarning } from '..
 import type { CapturedWeight } from './weight-capture.js';
 import { CustomerPicker } from './customer-picker.js';
 import { SlipSearch } from './slip-search.js';
+import { RecentWeighments } from './recent-weighments.js';
 import { DEFAULT_OPERATOR_USERNAME, HOTKEYS } from '../lib/constants.js';
 import { useHotkeys } from '../hooks/use-hotkeys.js';
 import { useRefreshSyncStatus } from '../hooks/use-refresh-sync-status.js';
@@ -49,6 +57,14 @@ const formSchema = createWeighmentSchema
   // Number inputs hand back strings; coercing in the schema keeps the parsing
   // in one place instead of at every read site.
   .extend({ amount_charged: z.coerce.number().finite().min(0, 'Amount cannot be negative') });
+
+/*
+ * What the form is validated against: the shape above, plus the rule that
+ * spans two fields — a container must carry its number. The agent applies
+ * the very same refinement, so the screen and the service cannot disagree
+ * about what a container weighing needs.
+ */
+const resolverSchema = formSchema.superRefine(requireContainerNumber);
 
 type FormValues = z.input<typeof formSchema>;
 
@@ -102,20 +118,18 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
   const isRepeat = flow === 'fourth';
   // Typed, not weighed: the figure the driver gives for his empty truck.
   const [knownFirstWeight, setKnownFirstWeight] = useState('');
-  // --- fourth weight: everything fetched from an earlier slip -------------
-  const [repeatSecondWeight, setRepeatSecondWeight] = useState('');
   /*
-   * Whether each weight prints "(MANUAL)" on the slip.
+   * --- fourth weight: the container re-weigh ------------------------------
    *
-   * The operator decides, rather than the software inferring it. Neither
-   * figure was read off the indicator in this flow, so inferring would mark
-   * both every time — but a weight copied unchanged from a slip that WAS
-   * weighed is not a hand-typed number, and marking it as one would misread
-   * the record. Default off; tick what was actually typed.
+   * The whole earlier weighing, not a handful of fields off it. Its two
+   * figures are shown and cannot be edited: they are what the bridge
+   * actually read on the day, and the only new number here is the one the
+   * customer declares.
    */
-  const [firstIsManual, setFirstIsManual] = useState(false);
-  const [secondIsManual, setSecondIsManual] = useState(false);
-  const [sourceSlip, setSourceSlip] = useState<string | null>(null);
+  const [source, setSource] = useState<Weighment | null>(null);
+  /** What the customer says is inside the container, in kilos. */
+  const [declaredPayload, setDeclaredPayload] = useState('');
+  const sourceSlip = source?.slip_number ?? null;
   /**
    * Whether the slip the figures came from has photographs to carry over.
    *
@@ -127,26 +141,41 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
   const [sourceHasPhotos, setSourceHasPhotos] = useState<boolean | null>(null);
   const [slipError, setSlipError] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('PAID');
-  const [amountEdited, setAmountEdited] = useState(false);
   const refreshSyncStatus = useRefreshSyncStatus();
   // The rate card belongs to the manager now: this is the copy this bridge
   // pulled, and nothing here can edit it.
   const vehicleTypes = useVehicleTypes();
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(resolverSchema),
     defaultValues: emptyValues(),
   });
 
-  // Settings arrive a moment after first paint; the amount follows once they
-  // do, unless the operator has already typed over it.
-  const configuredDefaultPrice = vehicleTypes.rateFor(DEFAULT_VEHICLE);
-  useEffect(() => {
-    if (amountEdited || form.formState.isDirty) return;
-    form.setValue('amount_charged', configuredDefaultPrice);
-  }, [configuredDefaultPrice, amountEdited, form]);
-
   const vehicleType = form.watch('vehicle_type') as VehicleType;
+
+  /*
+   * The charge, which nobody types.
+   *
+   * It is the manager's rate for the vehicle type, full stop — one figure
+   * with one source, so a slip can never carry a price the rate card does
+   * not explain. The box on screen shows it and cannot be edited.
+   *
+   * The container re-weigh charges nothing: it re-issues a slip against a
+   * weighing the customer has already paid for.
+   */
+  const charge = isRepeat ? 0 : vehicleTypes.rateFor(vehicleType);
+  useEffect(() => {
+    form.setValue('amount_charged', charge);
+  }, [charge, form]);
+
+  /* Set as soon as the flow is opened rather than only when a slip is
+     fetched, so the locked field never shows a type this flow cannot issue. */
+  useEffect(() => {
+    if (isRepeat)
+      form.setValue('vehicle_type', CONTAINER_VEHICLE_TYPE as VehicleType, {
+        shouldValidate: true,
+      });
+  }, [isRepeat, form]);
 
   /*
    * Fetch an earlier slip and fill the form from it.
@@ -165,7 +194,30 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
   const lookup = useMutation({
     mutationFn: (slip: string) => agentApi.getWeighment(slip),
     onSuccess: ({ weighment }) => {
-      setSourceSlip(weighment.slip_number);
+      /*
+       * Completed slips only.
+       *
+       * This flow re-issues a weighing against figures the bridge already
+       * took, and an open ticket has only half of them — there is nothing
+       * to re-issue. A voided one was disowned on purpose, and quietly
+       * carrying its figures into a fresh slip would put them back into the
+       * record under a new number. The recent list still shows both, so the
+       * operator can see what is there; the refusal happens here, where the
+       * slip is actually used.
+       */
+      if (weighment.status !== 'COMPLETED') {
+        setSource(null);
+        setSourceHasPhotos(null);
+        setSlipError(
+          weighment.status === 'VOID'
+            ? `Slip ${weighment.slip_number} was voided, so it cannot be re-weighed.`
+            : `Slip ${weighment.slip_number} is not finished — it has no second weight yet. Only completed slips can be re-weighed here.`,
+        );
+        return;
+      }
+
+      setSource(weighment);
+      setDeclaredPayload('');
       setSlipError(null);
 
       /*
@@ -223,45 +275,29 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
       fill('container_number', weighment.container_number ?? '', wasEmpty.container);
       fill('product', weighment.product, wasEmpty.product);
 
-      /* The truck and its rate move together, and only when no truck has been
-         named: a plate already in the form must not be contradicted by a
-         vehicle type from the slip it did not come from. */
+      /* The plate comes from the slip when no truck has been named; a plate
+         already typed must not be contradicted by the slip it did not come
+         from. The vehicle TYPE does not follow it here — see below. */
       if (wasEmpty.plate && weighment.vehicle_plate) {
         form.setValue('vehicle_plate', weighment.vehicle_plate, { shouldValidate: true });
-        form.setValue('vehicle_type', weighment.vehicle_type as VehicleType, {
-          shouldValidate: true,
-        });
-        form.setValue('amount_charged', weighment.amount_charged);
-        // The rate is the one that slip was charged, not today's card, so the
-        // amount must not be overwritten when settings next arrive.
-        setAmountEdited(true);
       }
 
-      setKnownFirstWeight(String(weighment.first_weight_kg));
-      setRepeatSecondWeight(
-        weighment.second_weight_kg === null ? '' : String(weighment.second_weight_kg),
-      );
-      // Carry the earlier slip's own answer forward as the starting point.
-      setFirstIsManual(weighment.first_weight_src === 'MANUAL');
-      setSecondIsManual(weighment.second_weight_src === 'MANUAL');
+      /*
+       * A container, whatever the earlier slip said.
+       *
+       * This flow exists for containers: the customer declares what is
+       * inside one. Carrying the old slip's vehicle type across would let a
+       * declaration be issued against a tipper, so the type is set here and
+       * the field is locked for the rest of the flow.
+       */
+      form.setValue('vehicle_type', CONTAINER_VEHICLE_TYPE as VehicleType, {
+        shouldValidate: true,
+      });
 
-      if (weighment.status === 'VOID') {
-        // Allowed, but said out loud: the figures on a voided slip were
-        // disowned for a reason, and carrying them forward unnoticed would
-        // put them back into the record under a fresh number.
-        toast.warning(`Slip ${weighment.slip_number} was voided`, {
-          description: 'Its details have been filled in. Check both weights before saving.',
-        });
-      } else if (weighment.second_weight_kg === null) {
-        toast.warning(`Slip ${weighment.slip_number} has no second weight yet`, {
-          description: 'Its first weight has been filled in. Type the second one.',
-        });
-      } else {
-        toast.success(`Filled from slip ${weighment.slip_number}`);
-      }
+      toast.success(`Filled from slip ${weighment.slip_number}`);
     },
     onError: (error) => {
-      setSourceSlip(null);
+      setSource(null);
       setSourceHasPhotos(null);
       setSlipError(
         error instanceof AgentApiError && error.status === 404
@@ -284,29 +320,35 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
       };
 
       if (isRepeat) {
+        if (!source || declared === null) throw new Error('No declared payload');
+
         /*
-         * Both figures are typed here, so both sources are the operator's
-         * answer rather than anything the software can observe. A box left
-         * unticked says the number came off a scale at some point — on the
-         * earlier slip — and the receipt stays silent about it.
+         * The first weight is the earlier slip's, unchanged and with its own
+         * provenance: it was read off the indicator then, and saying
+         * otherwise would disown a measurement the bridge actually took.
+         *
+         * The second is NOT. It is worked back from what the customer says
+         * is in his container, so it is MANUAL on the slip and the slip
+         * carries the owner's declaration beside it — see OWNER_DECLARATION.
          */
         return agentApi.createCompletedWeighment({
           ...details,
-          first_weight_kg: parseAmount(knownFirstWeight),
-          first_weight_src: firstIsManual ? 'MANUAL' : 'SERIAL',
-          second_weight_kg: parseAmount(repeatSecondWeight),
-          second_weight_src: secondIsManual ? 'MANUAL' : 'SERIAL',
+          first_weight_kg: source.first_weight_kg,
+          first_weight_src: source.first_weight_src,
+          second_weight_kg: declared.secondWeightKg,
+          second_weight_src: 'MANUAL',
+          owner_declared: true,
           payment_status: paymentStatus,
           /*
            * The photographs come off the slip the figures came off.
            *
-           * Nothing is on the bridge in this flow — both weights were read
-           * from a slip in the driver's hand — so photographing the yard now
-           * would put an empty plate, or somebody else's lorry, onto this
-           * slip. The honest picture is the one taken when this truck was
-           * last weighed.
+           * Nothing is on the bridge in this flow — the truck was weighed on
+           * an earlier visit — so photographing the yard now would put an
+           * empty plate, or somebody else's lorry, onto this slip. The
+           * honest picture is the one taken when this truck was last
+           * weighed.
            */
-          copy_captures_from_slip: sourceSlip ?? undefined,
+          copy_captures_from_slip: source.slip_number,
         });
       }
 
@@ -322,6 +364,8 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
           first_weight_src: 'MANUAL',
           second_weight_kg: captured.kg,
           second_weight_src: captured.source,
+          /* The bridge weighed the load; nobody declared it. */
+          owner_declared: false,
           payment_status: paymentStatus,
           /* The pictures taken when the weight was, not when Save was
              pressed: by now the truck has often pulled off the bridge. */
@@ -339,13 +383,10 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
     onSuccess: (response) => {
       form.reset(emptyValues());
       setKnownFirstWeight('');
-      setRepeatSecondWeight('');
-      setFirstIsManual(false);
-      setSecondIsManual(false);
-      setSourceSlip(null);
+      setSource(null);
+      setDeclaredPayload('');
       setSlipError(null);
       setPaymentStatus('PAID');
-      setAmountEdited(false);
       refreshSyncStatus();
       onSaved(response.weighment, response.warnings);
     },
@@ -364,11 +405,38 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
   // Typed before anything is weighed, so it is checked before the capture is.
   const knownKg = parseAmount(knownFirstWeight);
-  const repeatSecondKg = parseAmount(repeatSecondWeight);
-  const knownFirstWeightValid = (!isSingleVisit && !isRepeat) || knownKg > 0;
-  const repeatWeightsValid = !isRepeat || (knownKg > 0 && repeatSecondKg > 0);
-  /* Nothing is captured in the fourth flow, so the capture gate does not
-     apply to it — the two typed weights are the gate instead. */
+  const knownFirstWeightValid = !isSingleVisit || knownKg > 0;
+
+  /*
+   * What the declared payload makes of the earlier weighing.
+   *
+   * The yard deducts a hundred kilos from whatever the customer says is in
+   * the container, and the slip is issued on what is left. The second
+   * weight is then worked BACK from that net, in the same direction the
+   * original weighing ran — a truck weighed empty first and loaded second
+   * must not come out with its figures the other way round.
+   *
+   * Null until there is a slip and a payload worth more than the deduction;
+   * a declaration of 100 kg or less would make a net of nothing.
+   */
+  const declared = (() => {
+    if (!isRepeat || !source || source.second_weight_kg === null) return null;
+    const payload = parseAmount(declaredPayload);
+    const net = payload - DECLARED_PAYLOAD_DEDUCTION_KG;
+    if (!(net > 0)) return null;
+
+    const loadedWasHeavier = source.second_weight_kg >= source.first_weight_kg;
+    return {
+      payload,
+      netKg: net,
+      secondWeightKg: loadedWasHeavier
+        ? source.first_weight_kg + net
+        : source.first_weight_kg - net,
+    };
+  })();
+
+  /* Nothing is captured in the fourth flow — the truck is not on the bridge
+     — so the declaration stands in for the capture gate. */
   const captureSatisfied = isRepeat || captured !== null;
 
   // No name, no customer account — the same rule the return screen enforces.
@@ -379,13 +447,13 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
   const submit = form.handleSubmit(
     (values) => {
-      if (isRepeat && !sourceSlip) {
-        toast.error('Fetch an earlier slip first');
+      if (isRepeat && !source) {
+        toast.error('Fetch a completed slip first');
         return;
       }
-      if (isRepeat && !repeatWeightsValid) {
-        toast.error('Both weights are needed', {
-          description: 'Fetch a slip that has both, or type the missing one.',
+      if (isRepeat && !declared) {
+        toast.error('Enter the payload of the container', {
+          description: `It must be more than ${DECLARED_PAYLOAD_DEDUCTION_KG} kg, which is deducted from it.`,
         });
         return;
       }
@@ -412,12 +480,9 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
   const resetForm = () => {
     form.reset(emptyValues());
-    setAmountEdited(false);
     setKnownFirstWeight('');
-    setRepeatSecondWeight('');
-    setFirstIsManual(false);
-    setSecondIsManual(false);
-    setSourceSlip(null);
+    setSource(null);
+    setDeclaredPayload('');
     setSlipError(null);
   };
 
@@ -455,11 +520,9 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
     if (wasEmpty.plate && customer.last_vehicle_plate) {
       form.setValue('vehicle_plate', customer.last_vehicle_plate, { shouldValidate: true });
 
+      /* The rate follows the type by itself — see `charge`. */
       if (customer.last_vehicle_type) {
         form.setValue('vehicle_type', customer.last_vehicle_type, { shouldValidate: true });
-        if (!amountEdited) {
-          form.setValue('amount_charged', vehicleTypes.rateFor(customer.last_vehicle_type));
-        }
       }
     }
 
@@ -494,8 +557,8 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
 
             {sourceSlip && (
               <p className="text-sm text-muted-foreground">
-                Filled from slip <span className="tabular font-semibold">{sourceSlip}</span>. Both
-                weights can be corrected below; saving issues a new slip.{' '}
+                Filled from slip <span className="tabular font-semibold">{sourceSlip}</span>. Its
+                weights cannot be changed; saving issues a new slip.{' '}
                 {sourceHasPhotos === true && 'Its photographs will be carried over.'}
                 {sourceHasPhotos === false && (
                   <span className="font-medium text-brand">
@@ -504,6 +567,19 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
                 )}
               </p>
             )}
+
+            {/*
+             * The same list the second-weight screen offers, and for the
+             * same reason: reading six digits off a dusty slip and typing
+             * them is slower and likelier to go wrong than picking the
+             * truck from a list.
+             *
+             * It shows everything, open tickets included. Hiding them
+             * would leave an operator wondering why a slip he can see on
+             * the paper in his hand is missing from the screen; picking
+             * one says plainly why it cannot be used here.
+             */}
+            {!sourceSlip && <RecentWeighments onPick={(slip) => lookup.mutate(slip)} />}
           </div>
         )}
 
@@ -543,37 +619,87 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
           )}
 
           {/* ---------------------------------------------- fourth weight */}
-          {isRepeat && (
+          {isRepeat && source && (
             <>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <RepeatWeightField
-                  id="repeat-first-weight"
-                  label="First weight"
-                  value={knownFirstWeight}
-                  onChange={setKnownFirstWeight}
-                  manual={firstIsManual}
-                  onManualChange={setFirstIsManual}
-                />
-                <RepeatWeightField
-                  id="repeat-second-weight"
-                  label="Second weight"
-                  value={repeatSecondWeight}
-                  onChange={setRepeatSecondWeight}
-                  manual={secondIsManual}
-                  onManualChange={setSecondIsManual}
+              {/*
+               * What the bridge actually read, on the day it read it.
+               *
+               * Shown and not editable: these are the measurements this
+               * slip is built on, and the only new figure in this flow is
+               * the one the customer declares.
+               */}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <WeighedFigure label="First weight" kg={source.first_weight_kg} />
+                <WeighedFigure label="Second weight" kg={source.second_weight_kg ?? 0} />
+                <WeighedFigure
+                  label="Net weight"
+                  kg={netWeightKg(source.first_weight_kg, source.second_weight_kg)}
                 />
               </div>
 
-              {/* The figure the customer is billed on, shown before it is
-                  committed rather than discovered on the printed slip. */}
-              <div className="rounded-lg border-2 border-brand/40 bg-brand/5 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Net weight
+              {/* The one number typed in this flow, so it gets the big box
+                  the captured weight gets everywhere else. */}
+              <div className="space-y-2 rounded-lg border-2 border-brand/40 bg-brand/5 p-4">
+                <Label htmlFor="declared-payload" className="text-sm font-medium">
+                  What is the payload of the container?
+                </Label>
+                <div className="relative">
+                  <NumberInput
+                    id="declared-payload"
+                    min={0}
+                    step="1"
+                    inputMode="numeric"
+                    placeholder="Payload"
+                    value={declaredPayload}
+                    onChange={(event) => setDeclaredPayload(event.target.value)}
+                    className="tabular h-16 pr-14 text-3xl font-bold"
+                  />
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-lg font-semibold text-muted-foreground">
+                    kg
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  As the owner declares it. {DECLARED_PAYLOAD_DEDUCTION_KG} kg is deducted, and the
+                  new slip is issued on what is left.
                 </p>
-                <p className="tabular mt-1 text-3xl font-bold leading-none">
-                  {repeatWeightsValid
-                    ? `${Math.abs(knownKg - repeatSecondKg).toLocaleString()} kg`
-                    : '—'}
+              </div>
+
+              {/*
+               * The arithmetic, in full, before it is committed.
+               *
+               * An operator about to hand a customer a slip should be able
+               * to see where its figures came from — not discover them on
+               * the printed sheet.
+               */}
+              <div className="rounded-lg border-2 border-brand/40 bg-brand/5 p-4">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      New net weight
+                    </p>
+                    <p className="tabular mt-1 text-3xl font-bold leading-none">
+                      {declared ? `${declared.netKg.toLocaleString()} kg` : '—'}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      New second weight
+                    </p>
+                    <p className="tabular mt-1 text-xl font-semibold leading-none">
+                      {declared ? `${declared.secondWeightKg.toLocaleString()} kg` : '—'}
+                      <span className="ml-1 text-xs font-medium text-muted-foreground">
+                        (MANUAL)
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-3 border-t border-brand/20 pt-2 text-xs text-muted-foreground">
+                  {declared
+                    ? `${declared.payload.toLocaleString()} kg declared − ${DECLARED_PAYLOAD_DEDUCTION_KG} kg = ${declared.netKg.toLocaleString()} kg net.`
+                    : `Enter a payload of more than ${DECLARED_PAYLOAD_DEDUCTION_KG} kg.`}{' '}
+                  The slip will carry: “{OWNER_DECLARATION}”
                 </p>
               </div>
             </>
@@ -648,13 +774,14 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
             >
               <Select
                 value={vehicleType}
-                onValueChange={(value) => {
-                  form.setValue('vehicle_type', value as VehicleType, { shouldValidate: true });
-                  // Changing the vehicle type is a deliberate act, so the rate
-                  // follows it. The field stays editable either way (brief §7.8).
-                  form.setValue('amount_charged', vehicleTypes.rateFor(value));
-                  setAmountEdited(false);
-                }}
+                /* Locked in the container re-weigh: the flow issues a slip
+                   against a customer's declaration of what is in his
+                   container, so anything else is not a thing it can do. */
+                disabled={isRepeat}
+                /* The rate follows the type on its own — see `charge`. */
+                onValueChange={(value) =>
+                  form.setValue('vehicle_type', value as VehicleType, { shouldValidate: true })
+                }
               >
                 <SelectTrigger id="vehicle_type">
                   <SelectValue placeholder="Vehicle type" />
@@ -667,6 +794,11 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
                   ))}
                 </SelectContent>
               </Select>
+              {isRepeat && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Always a container in this flow.
+                </p>
+              )}
             </Field>
 
             <Field
@@ -688,18 +820,23 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               <Input id="product" {...form.register('product')} placeholder="Product" />
             </Field>
 
-            <Field
-              htmlFor="container_number"
-              label="Container number"
-              error={errors.container_number?.message}
-            >
-              <Input
-                id="container_number"
-                {...form.register('container_number')}
-                placeholder="Container number"
-                className="uppercase placeholder:normal-case"
-              />
-            </Field>
+            {/* Only a container has one, and every container must have one:
+                the number is what ties the weighing to the box it was for. */}
+            {vehicleType === CONTAINER_VEHICLE_TYPE && (
+              <Field
+                htmlFor="container_number"
+                label="Container number"
+                error={errors.container_number?.message}
+                required
+              >
+                <Input
+                  id="container_number"
+                  {...form.register('container_number')}
+                  placeholder="Container number"
+                  className="uppercase placeholder:normal-case"
+                />
+              </Field>
+            )}
 
             <Field htmlFor="customer_phone" label="Phone" error={errors.customer_phone?.message}>
               <Input
@@ -710,26 +847,27 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               />
             </Field>
 
-            <Field
-              htmlFor="amount_charged"
-              label="Amount charged"
-              error={errors.amount_charged?.message}
-            >
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                  Rs
-                </span>
-                <NumberInput
-                  id="amount_charged"
-                  {...form.register('amount_charged', {
-                    onChange: () => setAmountEdited(true),
-                  })}
-                  min={0}
-                  step="1"
-                  placeholder="Amount charged"
-                  className={cn('pl-9', amountEdited && 'border-primary')}
-                />
+            {/*
+             * Shown, not typed.
+             *
+             * The charge is the manager's rate for the vehicle type, and
+             * leaving it editable meant a slip could carry a price the rate
+             * card did not explain — and two operators charging differently
+             * for the same lorry. It moves when the vehicle type moves, and
+             * the container re-weigh charges nothing at all.
+             */}
+            <Field htmlFor="amount_charged" label="Amount charged">
+              <div
+                id="amount_charged"
+                className="tabular flex h-10 items-center rounded-md border bg-muted/60 px-3 text-base font-semibold"
+              >
+                {formatPKR(charge)}
               </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {isRepeat
+                  ? 'Nothing is charged for a re-issued slip.'
+                  : "From the manager's rate card."}
+              </p>
             </Field>
           </div>
 
@@ -789,8 +927,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               disabled={
                 !captureSatisfied ||
                 !knownFirstWeightValid ||
-                !repeatWeightsValid ||
-                (isRepeat && !sourceSlip) ||
+                (isRepeat && !declared) ||
                 mutation.isPending
               }
             >
@@ -818,7 +955,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
           )}
 
           {isRepeat && !sourceSlip && (
-            <p className="text-sm text-muted-foreground">Fetch an earlier slip to fill this in.</p>
+            <p className="text-sm text-muted-foreground">Fetch a completed slip to fill this in.</p>
           )}
         </form>
       </CardContent>
@@ -888,62 +1025,17 @@ function Field({ htmlFor, label, error, hint, required, markClass, children }: F
 }
 
 /**
- * One of the fourth flow's two weights: a figure and whether the slip says a
- * human chose it.
+ * A figure the bridge already read, shown and not editable.
  *
- * The box is big and tabular for the same reason the capture readout is —
- * this number ends up on a slip and in a net weight, and a mistyped digit is
- * a wrong invoice.
+ * Not an input: these came off the indicator on an earlier visit and this
+ * flow has no business changing them. The only new number here is the one
+ * the customer declares, and it has a box of its own.
  */
-function RepeatWeightField({
-  id,
-  label,
-  value,
-  onChange,
-  manual,
-  onManualChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  manual: boolean;
-  onManualChange: (manual: boolean) => void;
-}) {
+function WeighedFigure({ label, kg }: { label: string; kg: number }) {
   return (
-    <div className="space-y-2 rounded-lg border p-4">
-      <Label htmlFor={id} className="text-sm font-semibold">
-        {label}
-      </Label>
-
-      <div className="relative">
-        <NumberInput
-          id={id}
-          min={0}
-          step="1"
-          inputMode="numeric"
-          placeholder={label}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="tabular h-14 pr-12 text-2xl font-bold"
-        />
-        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-muted-foreground">
-          kg
-        </span>
-      </div>
-
-      {/* A plain checkbox rather than the two-button pattern used elsewhere:
-          this is one yes/no about what the slip prints, not a choice between
-          two things the operator is weighing up. */}
-      <label className="flex cursor-pointer items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={manual}
-          onChange={(event) => onManualChange(event.target.checked)}
-          className="h-4 w-4 cursor-pointer accent-[hsl(var(--brand-orange))]"
-        />
-        Print &ldquo;MANUAL&rdquo; on the slip
-      </label>
+    <div className="rounded-lg border bg-muted/40 p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="tabular mt-1 text-xl font-bold leading-none">{formatKg(kg)}</p>
     </div>
   );
 }

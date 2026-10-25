@@ -12,6 +12,7 @@ import {
   Card,
   CardContent,
   Skeleton,
+  cn,
   Table,
   TableBody,
   TableCell,
@@ -119,8 +120,17 @@ export function SalesTable({
     {
       accessorKey: 'amount_charged',
       header: () => <div className="text-right">Amount</div>,
+      /* Struck through on a voided row. The figure is still worth seeing —
+         it is what the ticket said — but it counts towards nothing above,
+         and a column of identical-looking amounts invites the reader to add
+         them up and wonder why the Revenue tile disagrees. */
       cell: ({ row }) => (
-        <div className="tabular whitespace-nowrap text-right font-medium">
+        <div
+          className={cn(
+            'tabular whitespace-nowrap text-right font-medium',
+            row.original.status === 'VOID' && 'text-muted-foreground line-through',
+          )}
+        >
           {formatPKR(row.original.amount_charged)}
         </div>
       ),
@@ -260,7 +270,12 @@ export function SalesTable({
                         </p>
                       )}
                     </div>
-                    <span className="tabular shrink-0 font-semibold">
+                    <span
+                      className={cn(
+                        'tabular shrink-0 font-semibold',
+                        row.status === 'VOID' && 'text-muted-foreground line-through',
+                      )}
+                    >
                       {formatPKR(row.amount_charged)}
                     </span>
                   </div>

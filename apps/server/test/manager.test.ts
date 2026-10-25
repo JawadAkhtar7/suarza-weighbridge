@@ -220,6 +220,34 @@ describe('GET /analytics', () => {
     expect(body.total_weighments).toBe(4);
   });
 
+  it('drops the amount from revenue the moment a slip is voided', async () => {
+    /*
+     * The round trip the dashboard itself makes: read the figures, void a
+     * slip through the route, read them again. The exclusion is asserted
+     * elsewhere against records that arrived voided; this one is about the
+     * act of voiding, which is what a manager actually watches happen.
+     */
+    const revenueBefore = (await authed('/analytics')).body.total_revenue as number;
+
+    /* Voiding is the administrator's, not every manager's — so this is the
+       one place in the file that signs in as one. */
+    await createUser({ username: 'the-admin', password: 'admin-pw', role: 'ADMIN' });
+    const adminToken = (
+      await request(app).post('/auth/login').send({ username: 'the-admin', password: 'admin-pw' })
+    ).body.token as string;
+
+    const voided = await request(app)
+      .post('/weighments/20261/void')
+      .set('authorization', `Bearer ${adminToken}`)
+      .send({ reason: '' });
+    expect(voided.status).toBe(200);
+    expect(voided.body.weighment.status).toBe('VOID');
+
+    const after = (await authed('/analytics')).body;
+    // 20261 was charged 300 of the seeded records' revenue.
+    expect(after.total_revenue).toBe(revenueBefore - 300);
+  });
+
   it('excludes voided tickets from total net weight', async () => {
     const { body } = await authed('/analytics');
     expect(body.total_net_weight_kg).toBe(39_000);

@@ -345,6 +345,22 @@ MIGRATIONS.push({
   `,
 });
 
+MIGRATIONS.push({
+  version: 11,
+  name: 'a load the owner declared rather than the bridge weighing it',
+  up: `
+    -- The container re-weigh (step 4) issues a slip on the customer's own
+    -- figure for what is inside his container. Stored rather than worked
+    -- out, because the slip must carry its disclaimer for ever — on a
+    -- reprint, and on the page behind the QR code.
+    --
+    -- Not the same thing as second_weight_src = MANUAL: an operator typing
+    -- a figure the indicator could not read is the bridge's own reading by
+    -- another route, and a customer telling us what he is carrying is not.
+    ALTER TABLE weighments ADD COLUMN owner_declared INTEGER NOT NULL DEFAULT 0;
+  `,
+});
+
 export function migrate(db: Database): number {
   const current = db.pragma('user_version', { simple: true }) as number;
   const pending = MIGRATIONS.filter((m) => m.version > current).sort(

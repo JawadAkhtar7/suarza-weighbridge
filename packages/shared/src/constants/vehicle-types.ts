@@ -115,3 +115,12 @@ export function priceFor(key: VehicleType, table?: Partial<PricingTable>): numbe
   if (typeof override === 'number') return override;
   return BY_KEY.get(key)?.defaultPrice ?? 0;
 }
+
+/**
+ * The one type that carries a container, and therefore a container number.
+ *
+ * Named rather than written as a string in four places: the number is
+ * mandatory for it, the fourth-weight flow issues against it and nothing
+ * else, and a typo in any of those would fail quietly.
+ */
+export const CONTAINER_VEHICLE_TYPE = 'container';

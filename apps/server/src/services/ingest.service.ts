@@ -42,6 +42,7 @@ function toDocument(weighment: Weighment): Record<string, unknown> {
     created_at: new Date(weighment.created_at),
     updated_at: new Date(weighment.updated_at),
     void_reason: weighment.void_reason,
+    owner_declared: weighment.owner_declared === true,
     voided_at: weighment.voided_at ? new Date(weighment.voided_at) : null,
     synced_at: new Date(),
   };

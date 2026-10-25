@@ -11,6 +11,7 @@
 import { z } from 'zod';
 import { WEIGHMENT_STATUSES, WEIGHT_SOURCES, DEFAULT_CURRENCY } from '../constants/domain.js';
 import { isStorableSlipNumber } from '../utils/slip.js';
+import { CONTAINER_VEHICLE_TYPE } from '../constants/vehicle-types.js';
 
 /**
  * A vehicle type key. A key, not one of a fixed set — the manager keeps the
@@ -157,6 +158,21 @@ export const weighmentSchema = z.object({
   updated_at: utcDateTime,
   void_reason: z.string().trim().max(500).nullable().default(null),
   voided_at: utcDateTime.nullable().default(null),
+  /**
+   * The load on this slip is the owner's own figure, not the bridge's.
+   *
+   * Set by the container re-weigh (step 4), where the customer declares what
+   * is inside the container and the slip is issued on that declaration. It
+   * is stored rather than worked out because the slip must carry the
+   * disclaimer for ever — on a reprint, and on the page behind the QR —
+   * and because `second_weight_src: MANUAL` cannot stand in for it: an
+   * operator typing a figure the scale could not read is a different thing
+   * from a customer telling us what he is carrying.
+   *
+   * The declared payload is not stored separately: it is this slip's net
+   * weight plus the hundred kilos the flow deducts.
+   */
+  owner_declared: z.boolean().default(false),
 });
 
 export type Weighment = z.infer<typeof weighmentSchema>;
@@ -303,9 +319,44 @@ export const createCompletedWeighmentSchema = createWeighmentSchema.extend({
    * The second pass's pictures are preferred — the loaded truck, as it left.
    */
   copy_captures_from_slip: z.string().trim().max(32).optional(),
+  /** See `owner_declared` on the weighment: the slip carries a disclaimer. */
+  owner_declared: z.boolean().default(false),
 });
 
 export type CreateCompletedWeighmentInput = z.infer<typeof createCompletedWeighmentSchema>;
+
+/**
+ * A container must be identified by its number.
+ *
+ * A cross-field rule, so it cannot live on the field itself: the number is
+ * optional for a tipper that has no container, and required the moment the
+ * vehicle type says there is one. A container weighing with no number on it
+ * cannot be matched to the box it was for, which is the whole reason the
+ * number is asked for.
+ *
+ * Written as a refinement function rather than baked into the schema so the
+ * schemas stay plain objects — `.omit()` and `.extend()` are used on them in
+ * three places, and a refined schema has neither.
+ */
+export function requireContainerNumber(
+  value: { vehicle_type: string; container_number?: string | undefined },
+  ctx: z.RefinementCtx,
+): void {
+  if (value.vehicle_type !== CONTAINER_VEHICLE_TYPE) return;
+  if ((value.container_number ?? '').trim() !== '') return;
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['container_number'],
+    message: 'Container number is required for a container',
+  });
+}
+
+/** What the agent accepts: the shape, plus the rules that span fields. */
+export const createWeighmentInputSchema = createWeighmentSchema.superRefine(requireContainerNumber);
+
+export const createCompletedWeighmentInputSchema =
+  createCompletedWeighmentSchema.superRefine(requireContainerNumber);
 
 /** POST /weighments/:slip/void — a reason is mandatory (brief §7.6). */
 export const voidWeighmentSchema = z.object({

@@ -36,6 +36,8 @@ interface WeighmentRow {
   updated_at: string;
   void_reason: string | null;
   voided_at: string | null;
+  /** 0 or 1: SQLite has no boolean. */
+  owner_declared: number;
   synced: number;
   sync_attempts: number;
   last_attempt_at: string | null;
@@ -85,6 +87,7 @@ function rowToWeighment(row: WeighmentRow): WeighmentWithSync {
     updated_at: row.updated_at,
     void_reason: row.void_reason,
     voided_at: row.voided_at,
+    owner_declared: row.owner_declared === 1,
     sync: {
       synced: row.synced === 1,
       sync_attempts: row.sync_attempts,
@@ -109,7 +112,8 @@ const SELECT_ALL = `
          second_weight_kg, second_weight_at, second_weight_src, net_weight_kg,
          amount_charged, currency, payment_status, operator_username,
          created_at, updated_at,
-         void_reason, voided_at, synced, sync_attempts, last_attempt_at,
+         void_reason, voided_at, owner_declared,
+         synced, sync_attempts, last_attempt_at,
          sync_blocked_reason, sync_blocked_at
   FROM weighments
 `;
@@ -128,7 +132,8 @@ export class WeighmentRepository {
            second_weight_kg, second_weight_at, second_weight_src, net_weight_kg,
            amount_charged, currency, payment_status, operator_username,
            created_at, updated_at,
-           void_reason, voided_at, synced, sync_attempts, last_attempt_at
+           void_reason, voided_at, owner_declared,
+           synced, sync_attempts, last_attempt_at
          ) VALUES (
            @id, @slip_number, @status, @station_id,
            COALESCE(@customer_name, ''), @customer_company, @customer_phone,
@@ -138,7 +143,8 @@ export class WeighmentRepository {
            @second_weight_kg, @second_weight_at, @second_weight_src, @net_weight_kg,
            @amount_charged, @currency, COALESCE(@payment_status, 'PAID'), @operator_username,
            @created_at, @updated_at,
-           @void_reason, @voided_at, 0, 0, NULL
+           @void_reason, @voided_at, @owner_declared,
+           0, 0, NULL
          )`,
       )
       .run({
@@ -151,6 +157,7 @@ export class WeighmentRepository {
         second_weight_src: weighment.second_weight_src ?? null,
         void_reason: weighment.void_reason ?? null,
         voided_at: weighment.voided_at ?? null,
+        owner_declared: weighment.owner_declared ? 1 : 0,
       });
   }
 

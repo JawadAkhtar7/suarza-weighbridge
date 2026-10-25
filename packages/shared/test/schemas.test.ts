@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   completeWeighmentSchema,
+  createWeighmentInputSchema,
   createWeighmentSchema,
   voidWeighmentSchema,
   weighmentSchema,
@@ -152,5 +153,45 @@ describe('ingestRequestSchema', () => {
     });
     expect(parsed.audit_entries).toEqual([]);
     expect(parsed.weighments).toHaveLength(1);
+  });
+});
+
+describe('a container must carry its number', () => {
+  const input = (overrides: Record<string, unknown> = {}) => ({
+    customer_name: 'Ali Raza',
+    customer_company: 'Raza Traders',
+    vehicle_type: 'container',
+    vehicle_plate: 'LES-1234',
+    product: 'Cement',
+    first_weight_kg: 8000,
+    first_weight_src: 'SERIAL',
+    amount_charged: 500,
+    operator_username: 'operator',
+    ...overrides,
+  });
+
+  it('refuses a container weighing with no container number', () => {
+    const result = createWeighmentInputSchema.safeParse(input());
+
+    expect(result.success).toBe(false);
+    expect(result.success === false && result.error.issues[0]?.path).toEqual(['container_number']);
+  });
+
+  it('refuses one whose number is only spaces', () => {
+    expect(createWeighmentInputSchema.safeParse(input({ container_number: '   ' })).success).toBe(
+      false,
+    );
+  });
+
+  it('accepts a container weighing that has one', () => {
+    expect(
+      createWeighmentInputSchema.safeParse(input({ container_number: 'MSCU1234567' })).success,
+    ).toBe(true);
+  });
+
+  it('asks nothing of a lorry, which has no container to number', () => {
+    expect(createWeighmentInputSchema.safeParse(input({ vehicle_type: 'truck' })).success).toBe(
+      true,
+    );
   });
 });

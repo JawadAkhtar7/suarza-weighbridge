@@ -57,6 +57,14 @@ const weighmentSchema = new Schema(
     created_at: { type: Date, required: true },
     updated_at: { type: Date, required: true },
     void_reason: { type: String, default: null },
+    /**
+     * The load is the customer's own figure, not the bridge's.
+     *
+     * Set by the container re-weigh at the bridge and carried up with the
+     * record, because the slip must print its disclaimer on every copy —
+     * including the page behind the QR, which this server renders.
+     */
+    owner_declared: { type: Boolean, default: false },
     voided_at: { type: Date, default: null },
 
     /** When the cloud received it. Never used for reporting — see below. */

@@ -148,7 +148,22 @@ export function App() {
       });
   };
 
+  /*
+   * The container re-weigh is the administrator's.
+   *
+   * A bridge that signs nobody in has no administrator to be — and no way
+   * to tell one — so it keeps the tab, exactly as it did before anybody
+   * signed in at all.
+   */
+  const canReweigh = !shift.session || shift.session.slot === 'ADMIN';
+
   const [mode, setMode] = useState<WeighingMode>('first');
+
+  /* An administrator who ends their shift must not be left standing in a
+     flow they can no longer use. */
+  useEffect(() => {
+    if (!canReweigh && mode === 'fourth') setMode('first');
+  }, [canReweigh, mode]);
   const [captured, setCaptured] = useState<CapturedWeight | null>(null);
 
   /**
@@ -332,7 +347,7 @@ export function App() {
             {/* Heading this column rather than the whole page. Switching pass
                 is something an operator does once a truck, not once a glance,
                 so it does not deserve a full-width row above the readout. */}
-            <ModeSwitch mode={mode} onChange={switchMode} />
+            <ModeSwitch mode={mode} onChange={switchMode} showFourth={canReweigh} />
 
             {mode === 'second' ? (
               <ReturnWeighment

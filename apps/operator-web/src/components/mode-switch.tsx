@@ -73,10 +73,22 @@ const OPTIONS: ModeOption[] = [
 export function ModeSwitch({
   mode,
   onChange,
+  showFourth = true,
 }: {
   mode: WeighingMode;
   onChange: (mode: WeighingMode) => void;
+  /**
+   * Whether the container re-weigh is offered.
+   *
+   * It issues a slip against a customer's own declaration rather than
+   * against anything the bridge weighed, so it belongs to the
+   * administrator. Hidden rather than disabled: a button an operator can
+   * see and cannot press is a question they will ask once a week.
+   */
+  showFourth?: boolean;
 }) {
+  const options = showFourth ? OPTIONS : OPTIONS.filter((option) => option.key !== 'fourth');
+
   return (
     <div
       // A radiogroup, not a tablist: these are two answers to one question, and
@@ -89,7 +101,7 @@ export function ModeSwitch({
          each — not enough for a step number, an icon and "Second Weight". */
       className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
     >
-      {OPTIONS.map((option) => {
+      {options.map((option) => {
         const active = mode === option.key;
         const Icon = option.icon;
 

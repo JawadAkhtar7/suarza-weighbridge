@@ -3,8 +3,8 @@
 import type { FastifyInstance } from 'fastify';
 import {
   completeWeighmentSchema,
-  createCompletedWeighmentSchema,
-  createWeighmentSchema,
+  createCompletedWeighmentInputSchema,
+  createWeighmentInputSchema,
   netWeightAllUnits,
   reprintWeighmentSchema,
   voidWeighmentSchema,
@@ -20,7 +20,7 @@ interface SlipParams {
 export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): void {
   // --- Pass 1 --------------------------------------------------------------
   app.post('/weighments', (request, reply) => {
-    const input = parse(createWeighmentSchema, request.body);
+    const input = parse(createWeighmentInputSchema, request.body);
     const { weighment, warnings } = deps.service.createFirstWeight(input);
 
     request.log.info(
@@ -39,7 +39,7 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
    * A static path, so Fastify matches it ahead of `/weighments/:slip`.
    */
   app.post('/weighments/complete', (request, reply) => {
-    const input = parse(createCompletedWeighmentSchema, request.body);
+    const input = parse(createCompletedWeighmentInputSchema, request.body);
     const { weighment, warnings } = deps.service.createCompleted(input);
 
     request.log.info(

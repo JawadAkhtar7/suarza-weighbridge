@@ -329,6 +329,39 @@ describe('GET /sync-status', () => {
   });
 });
 
+describe('POST /weighments — a container', () => {
+  it('is refused without its container number', async () => {
+    /*
+     * Enforced by the service, not only by the screen: the number is what
+     * ties a weighing to the box it was for, and a rule that lives only in
+     * a browser is a rule the next client can forget.
+     */
+    const response = await app.inject({
+      method: 'POST',
+      url: '/weighments',
+      payload: firstWeightBody({ vehicle_type: 'container', container_number: '' }),
+    });
+
+    expect(response.statusCode).toBe(400);
+    /* Named against the field, so the form highlights the box rather than
+       showing a sentence the operator has to interpret. */
+    expect(response.json().error.details.field_errors.container_number[0]).toMatch(
+      /container number/i,
+    );
+  });
+
+  it('is accepted with one', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/weighments',
+      payload: firstWeightBody({ vehicle_type: 'container', container_number: 'MSCU1234567' }),
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().weighment.container_number).toBe('MSCU1234567');
+  });
+});
+
 describe('GET /customers', () => {
   it('returns customers the station has weighed before', async () => {
     await app.inject({

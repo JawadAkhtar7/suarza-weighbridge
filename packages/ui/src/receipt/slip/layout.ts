@@ -94,8 +94,8 @@ export const FONTS = {
  *
  * `screen` is the odd one: it is neither the pad's printed design nor a value
  * that belongs on the pad. It is what the soft copy can say and the paper
- * cannot — the operator's name, so far — and it exists because an overprint
- * has nowhere to put it: every square millimetre of that sheet is already
+ * cannot — the operator's name — and it exists because an overprint has
+ * nowhere to put it: every square millimetre of that sheet is already
  * printed, and ink laid over the artwork is a smudge, not a note.
  */
 export type Layer = 'chrome' | 'value' | 'screen';
@@ -219,7 +219,9 @@ export type ValueField =
   | 'net_kg'
   | 'mann'
   /** Soft copy only — see the `screen` layer. */
-  | 'operator';
+  | 'operator'
+  /** The owner's declaration, on both the soft copy and the paper. */
+  | 'declaration';
 
 const green = COLOURS.green;
 const ink = COLOURS.ink;
@@ -591,11 +593,38 @@ export const SLIP: SlipItem[] = [
    * it is a note for whoever looks the slip up later, not a line the customer
    * is meant to read first.
    */
+  /*
+   * The owner's declaration, when the load is the customer's own figure.
+   *
+   * On the `value` layer, so it reaches the PAPER as well as the screen: a
+   * disclaimer that appeared only on the copy nobody keeps would be no
+   * disclaimer at all. `group: 'none'` keeps it off the calibration
+   * offsets, which nudge the three boxes of values into their pre-printed
+   * frames; this sits on open paper with no frame to miss.
+   *
+   * Above the operator line rather than beside it: the two together run to
+   * 500 design pixels on one line, which crosses the SCAN TO VERIFY box.
+   * Measured on a render, both here and at the sizes below.
+   */
+  {
+    kind: 'text',
+    layer: 'value',
+    group: 'none',
+    left: 21,
+    top: 649.5,
+    field: 'declaration',
+    size: 6.6,
+    weight: 600,
+    colour: ink,
+    font: 'label',
+    tracking: 0.05,
+  },
+
   {
     kind: 'text',
     layer: 'screen',
     left: 21,
-    top: 651.5,
+    top: 658,
     field: 'operator',
     size: 7.2,
     weight: 600,
@@ -661,8 +690,8 @@ export const VIEW_ASPECT = {
 } as const;
 
 export const LAYERS: Record<SlipView, readonly Layer[]> = {
-  /* The only view that carries `screen`: the paper has no room for it and the
-     blank template is the pad's design, which this is not part of. */
+  /* The only view that carries `screen`: the paper has no room for an
+     operator line, and the blank template is the pad's own design. */
   soft: ['chrome', 'value', 'screen'],
   overprint: ['value'],
   template: ['chrome'],

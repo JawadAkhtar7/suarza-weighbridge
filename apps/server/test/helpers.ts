@@ -119,6 +119,8 @@ export function weighment(overrides: Partial<Weighment> = {}): Weighment {
     updated_at: at,
     void_reason: null,
     voided_at: null,
+    /* The bridge weighed it, which is the ordinary case. */
+    owner_declared: false,
     ...overrides,
   };
 }

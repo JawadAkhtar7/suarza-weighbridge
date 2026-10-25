@@ -18,7 +18,6 @@ import {
   CardTitle,
   Input,
   Label,
-  NumberInput,
   cn,
   toast,
 } from '@suarza/ui';
@@ -275,24 +274,26 @@ export function ReturnWeighment({ captured, onClearCapture, onNetChange }: Retur
               what they already say is a line the operator reads past. */}
           <Card>
             <CardContent className="space-y-4 pt-6">
-              <div className="space-y-2">
-                <Label htmlFor="complete-amount" className="sr-only">
-                  Amount charged
-                </Label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    Rs
-                  </span>
-                  <NumberInput
-                    id="complete-amount"
-                    value={amount}
-                    min={0}
-                    step="1"
-                    placeholder="Amount charged"
-                    onChange={(event) => setAmount(event.target.value)}
-                    className="h-12 pl-9 text-lg"
-                  />
+              {/*
+               * Shown, not typed.
+               *
+               * The charge was settled when the truck first came in, from
+               * the manager's rate for its vehicle type. Letting it be
+               * retyped here meant the figure on the second half of a
+               * weighing could disagree with the first — and with the rate
+               * card that is supposed to explain it.
+               */}
+              <div className="space-y-1">
+                <Label htmlFor="complete-amount">Amount charged</Label>
+                <div
+                  id="complete-amount"
+                  className="tabular flex h-12 items-center rounded-md border bg-muted/60 px-3 text-lg font-semibold"
+                >
+                  {formatPKR(parseAmount(amount))}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Set when this truck was weighed in, from the rate card.
+                </p>
               </div>
 
               {/* Which way the money went. Asked here because this is the

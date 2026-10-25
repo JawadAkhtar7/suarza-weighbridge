@@ -11,7 +11,13 @@
  * would be a difference the client can see at ten paces.
  */
 
-import { DISPLAY_TIMEZONE, KG_PER_MAUND, netWeightKg, type Weighment } from '@suarza/shared';
+import {
+  DISPLAY_TIMEZONE,
+  KG_PER_MAUND,
+  OWNER_DECLARATION,
+  netWeightKg,
+  type Weighment,
+} from '@suarza/shared';
 import type { SlipValues } from './layout.js';
 
 /** `02-10-2026` in Pakistan time, as the artwork writes it. */
@@ -78,9 +84,16 @@ export function slipOperator(
   return shift ? `Operator: ${name} · ${shift} shift` : `Operator: ${name}`;
 }
 
-/** `PKR 5000/-` — the client's own way of writing a settled amount. */
+/**
+ * `PKR 5000/-` — the client's own way of writing a settled amount.
+ *
+ * Zero PRINTS, as `PKR 0/-`. The container re-weigh charges nothing, and a
+ * blank amount box on that slip would read as a figure somebody forgot to
+ * fill in rather than as the nothing it is. Only a figure that is no figure
+ * at all — negative, or not a number — leaves the box empty.
+ */
 export function slipAmount(amount: number, currency: string): string {
-  if (!Number.isFinite(amount) || amount <= 0) return '';
+  if (!Number.isFinite(amount) || amount < 0) return '';
   /* No thousands separator: the artwork writes "PKR 5000/-", and this one
      figure is the client's own convention rather than the system's. */
   return `${currency} ${Math.round(amount)}/-`;
@@ -176,5 +189,10 @@ export function slipValues({ weighment, printedAt, operator }: SlipValuesOptions
        with no shift — the administrator — is named without one rather than
        being filed under somebody else's hours. */
     operator: slipOperator(operator),
+    /*
+     * On the paper as well as the screen — see the layout. Only when the
+     * load is the customer's own figure, which is the container re-weigh.
+     */
+    declaration: weighment.owner_declared === true ? OWNER_DECLARATION : '',
   };
 }
