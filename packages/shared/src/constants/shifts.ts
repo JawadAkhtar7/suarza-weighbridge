@@ -106,30 +106,21 @@ function minutesOfDay(at: Date, timeZone: string): number {
 }
 
 /**
- * The three people the manager keeps credentials for.
+ * What a weighbridge account may do.
  *
- * Two of them are shifts; the third is the administrator who can be at the
- * bridge at any hour and belongs to neither. Kept as one list rather than
- * "shifts plus an extra", because the Operators screen, the roster table and
- * the login all have to answer the same question — which slot is this? — and
- * a special case in each of them is three chances to disagree.
+ * Two of them, because there are two answers the bridge needs: may this
+ * person change how the station is set up, or only weigh trucks with it.
+ *
+ * This replaced a roster of slots — a morning operator, a night one and an
+ * administrator, one person in each. The yard turned out to have more people
+ * than slots, and which hours somebody works is not a thing an account
+ * should decide: a weighing already records when it happened, and the shift
+ * is read off the clock. See `shiftAt`.
  */
-export const OPERATOR_SLOTS = ['MORNING', 'NIGHT', 'ADMIN'] as const;
-export type OperatorSlot = (typeof OPERATOR_SLOTS)[number];
+export const OPERATOR_ROLES = ['OPERATOR', 'ADMIN'] as const;
+export type OperatorRole = (typeof OPERATOR_ROLES)[number];
 
-export const OPERATOR_SLOT_LABELS: Record<OperatorSlot, string> = {
-  MORNING: 'Morning',
-  NIGHT: 'Night',
+export const OPERATOR_ROLE_LABELS: Record<OperatorRole, string> = {
+  OPERATOR: 'Operator',
   ADMIN: 'Administrator',
 };
-
-/**
- * The shift a slot works, or null for the administrator.
- *
- * Null rather than a default shift: the administrator's hours are not a fact
- * anybody has stated, and picking one would quietly file their weighings
- * under somebody else's shift.
- */
-export function shiftForSlot(slot: OperatorSlot): Shift | null {
-  return slot === 'ADMIN' ? null : slot;
-}

@@ -25,7 +25,7 @@ import {
   WhatsAppShareButton,
   slipValues,
 } from '@suarza/ui';
-import { SHIFT_LABELS, type WeighmentRow } from '@suarza/shared';
+import type { WeighmentRow } from '@suarza/shared';
 import { ExternalLink, Printer } from 'lucide-react';
 import { api, receiptPageUrl } from '../lib/api.js';
 import type { SlipCaptures } from '@suarza/shared';
@@ -93,21 +93,7 @@ export function WeighmentDetail({
     ? `${receiptBaseUrl.replace(/\/+$/, '')}/r/${encodeURIComponent(weighment.slip_number)}`
     : undefined;
 
-  /*
-   * Named on the soft copy only — see the slip's `screen` layer.
-   *
-   * The row already carries both: the name of whoever saved it, and the
-   * shift its own clock falls in.
-   */
-  const values = slipValues({
-    weighment,
-    operator: weighment.operator_name
-      ? {
-          name: weighment.operator_name,
-          shift: weighment.shift ? SHIFT_LABELS[weighment.shift] : null,
-        }
-      : null,
-  });
+  const values = slipValues({ weighment });
 
   /* Served publicly, like the QR page that embeds them — the manager app and
      a driver's phone fetch the very same bytes. */

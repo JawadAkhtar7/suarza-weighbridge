@@ -89,16 +89,8 @@ export const FONTS = {
   label: "'Open Sans', sans-serif",
 } as const;
 
-/**
- * Which of the three views an item belongs to.
- *
- * `screen` is the odd one: it is neither the pad's printed design nor a value
- * that belongs on the pad. It is what the soft copy can say and the paper
- * cannot — the operator's name — and it exists because an overprint has
- * nowhere to put it: every square millimetre of that sheet is already
- * printed, and ink laid over the artwork is a smudge, not a note.
- */
-export type Layer = 'chrome' | 'value' | 'screen';
+/** Which of the three views an item belongs to. */
+export type Layer = 'chrome' | 'value';
 
 interface Placed {
   /** From the left edge, in design pixels. Omitted when `right` is given. */
@@ -218,9 +210,7 @@ export type ValueField =
   | 'second_manual'
   | 'net_kg'
   | 'mann'
-  /** Soft copy only — see the `screen` layer. */
-  | 'operator'
-  /** The owner's declaration, on both the soft copy and the paper. */
+  /** The declaration under the photographs, on the copy and on the paper. */
   | 'declaration';
 
 const green = COLOURS.green;
@@ -584,53 +574,32 @@ export const SLIP: SlipItem[] = [
   },
 
   /* ------------------------------------------------------ the soft copy only */
+  /* ---------------------------------------------------- the footnote line */
   /*
-   * Who weighed it, under the two picture boxes.
+   * The declaration, when a figure on this slip was typed rather than read.
    *
    * The strip between the pictures (which end at 647.91) and the "Thanks"
    * mark (which begins around 665) is the one piece of white left on the
-   * sheet, measured off a render of the artwork. Small and quiet on purpose:
-   * it is a note for whoever looks the slip up later, not a line the customer
-   * is meant to read first.
-   */
-  /*
-   * The owner's declaration, when the load is the customer's own figure.
+   * sheet, measured off a render of the artwork.
    *
    * On the `value` layer, so it reaches the PAPER as well as the screen: a
    * disclaimer that appeared only on the copy nobody keeps would be no
    * disclaimer at all. `group: 'none'` keeps it off the calibration
    * offsets, which nudge the three boxes of values into their pre-printed
    * frames; this sits on open paper with no frame to miss.
-   *
-   * Above the operator line rather than beside it: the two together run to
-   * 500 design pixels on one line, which crosses the SCAN TO VERIFY box.
-   * Measured on a render, both here and at the sizes below.
    */
   {
     kind: 'text',
     layer: 'value',
     group: 'none',
     left: 21,
-    top: 649.5,
+    top: 651.5,
     field: 'declaration',
     size: 6.6,
     weight: 600,
     colour: ink,
     font: 'label',
     tracking: 0.05,
-  },
-
-  {
-    kind: 'text',
-    layer: 'screen',
-    left: 21,
-    top: 658,
-    field: 'operator',
-    size: 7.2,
-    weight: 600,
-    colour: green,
-    font: 'label',
-    tracking: 0.1,
   },
 ];
 
@@ -690,9 +659,7 @@ export const VIEW_ASPECT = {
 } as const;
 
 export const LAYERS: Record<SlipView, readonly Layer[]> = {
-  /* The only view that carries `screen`: the paper has no room for an
-     operator line, and the blank template is the pad's own design. */
-  soft: ['chrome', 'value', 'screen'],
+  soft: ['chrome', 'value'],
   overprint: ['value'],
   template: ['chrome'],
 };

@@ -33,7 +33,7 @@ import {
 import {
   LOG_KINDS,
   LOG_KIND_LABELS,
-  OPERATOR_SLOT_LABELS,
+  OPERATOR_ROLE_LABELS,
   formatDateTimePkt,
   type LogEntry,
   type LogKind,
@@ -56,7 +56,7 @@ function Who({ entry }: { entry: LogEntry }) {
     <div className="min-w-0">
       <p className="truncate font-medium">{entry.actor_name || entry.actor}</p>
       <p className="truncate text-xs text-muted-foreground">
-        {entry.slot ? OPERATOR_SLOT_LABELS[entry.slot] : entry.actor}
+        {entry.role ? OPERATOR_ROLE_LABELS[entry.role] : entry.actor}
       </p>
     </div>
   );

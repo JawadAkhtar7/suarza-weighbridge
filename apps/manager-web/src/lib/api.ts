@@ -8,10 +8,9 @@
 import type {
   Analytics,
   CreateCustomerInput,
-  CreateOperatorInput,
+  SaveOperatorInput,
   Operator,
   Roster,
-  ShiftTimings,
   CustomerRecord,
   VehicleTypeRecord,
   CreateLedgerEntryInput,
@@ -24,8 +23,8 @@ import type {
   LogQuery,
   PaginatedLogs,
   PaginatedWeighments,
-  ShiftAuditPage,
-  ShiftAuditQuery,
+  UserReport,
+  UserReportQuery,
   ViewFrame,
   Weighment,
   WeighmentQuery,
@@ -156,18 +155,16 @@ export const api = {
 
   roster: () => request<Roster>('/api/operators'),
 
-  setOperator: (input: CreateOperatorInput) =>
+  /** Adds somebody, or changes them when the input carries an id. */
+  saveOperator: (input: SaveOperatorInput) =>
     request<Operator>('/api/operators', { method: 'POST', body: JSON.stringify(input) }),
 
   removeOperator: (id: string) =>
     request<void>(`/api/operators/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
-  setShiftTimings: (timings: ShiftTimings) =>
-    request<ShiftTimings>('/api/shift-timings', { method: 'PUT', body: JSON.stringify(timings) }),
-
-  /** Each shift with the money it took over, took in, and handed on. */
-  shiftAudit: (query: Partial<ShiftAuditQuery>) =>
-    request<ShiftAuditPage>(`/api/shift-audit?${toQueryString(query)}`),
+  /** One person's account of a stretch of time. */
+  userReport: (query: UserReportQuery) =>
+    request<UserReport>(`/api/reports/user?${toQueryString(query)}`),
 
   /** The log: shifts starting and ending, slips set aside and brought back. */
   logs: (query: Partial<LogQuery>) => request<PaginatedLogs>(`/api/logs?${toQueryString(query)}`),

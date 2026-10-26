@@ -381,7 +381,7 @@ export class SyncWorker {
             at: entry.at,
             username: entry.username,
             name: entry.name,
-            slot: entry.slot,
+            role: entry.role,
             detail: entry.detail,
             session_id: entry.session_id,
           })),

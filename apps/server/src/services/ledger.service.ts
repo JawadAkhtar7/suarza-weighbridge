@@ -29,7 +29,7 @@ import {
 } from '@suarza/shared';
 import mongoose from 'mongoose';
 import { LedgerCustomerModel, LedgerEntryModel } from '../models/ledger.model.js';
-import { operatorNamesByShift, shiftTimings } from './roster.service.js';
+import { operatorNamesByUsername } from './roster.service.js';
 import type { LedgerEntryDocument } from '../models/ledger.model.js';
 import { ApiError } from '../errors.js';
 
@@ -216,10 +216,9 @@ export async function getCustomer(id: string): Promise<LedgerCustomer> {
  * nothing, so the running balance steps over them.
  */
 export async function listEntries(customerId: string): Promise<LedgerEntryWithBalance[]> {
-  const [docs, timings, names] = await Promise.all([
+  const [docs, names] = await Promise.all([
     LedgerEntryModel.find({ customer_id: customerId }).sort({ at: 1, created_at: 1 }).lean(),
-    shiftTimings(),
-    operatorNamesByShift(),
+    operatorNamesByUsername(),
   ]);
 
   /*
@@ -235,12 +234,14 @@ export async function listEntries(customerId: string): Promise<LedgerEntryWithBa
     const entry = toEntry(doc as LedgerEntryDocument);
     if (!entry.voided) balance = round2(balance + signedAmount(entry.direction, entry.amount_pkr));
 
-    const shift = shiftAt(new Date(entry.at), timings);
+    /* Which half of the day it fell in, read off its own clock — and who
+       made it, by the username on the entry itself rather than by whoever
+       happens to hold a shift today. */
     return {
       ...entry,
       balance_after_pkr: balance,
-      shift,
-      operator_name: names[shift],
+      shift: shiftAt(new Date(entry.at)),
+      operator_name: names.get(entry.created_by.trim().toLowerCase()) ?? null,
     };
   });
 }

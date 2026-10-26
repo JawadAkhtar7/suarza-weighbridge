@@ -12,9 +12,18 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, ThemeToggle, toast } from '@suarza/ui';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  toast,
+  useTheme,
+} from '@suarza/ui';
 import type { NetWeight, Weighment } from '@suarza/shared';
-import { HandCoins, LogOut, Settings } from 'lucide-react';
+import { HandCoins, LogOut, Menu as MenuIcon, Moon, Settings, Sun } from 'lucide-react';
 import { LiveWeightPanel } from './components/live-weight-panel.js';
 import { WeightCapture, type CapturedWeight } from './components/weight-capture.js';
 import { NewWeighmentForm } from './components/new-weighment-form.js';
@@ -55,19 +64,31 @@ function rememberCashAsked(sessionId: string): void {
   }
 }
 
+/**
+ * Open a dialog once the menu that asked for it has closed.
+ *
+ * Radix closes the menu during the same tick the item is chosen; mounting a
+ * dialog in that tick has the two overlays setting up and tearing down over
+ * each other. A frame's wait is imperceptible and keeps them in order.
+ */
+function openAfterMenu(open: () => void): void {
+  requestAnimationFrame(open);
+}
+
 export function App() {
   const live = useLiveWeight();
   const sync = useSyncStatus();
   const shift = useShift();
+  const { theme, toggle: toggleTheme } = useTheme();
 
   /*
-   * The cash form, at both ends of the shift.
+   * The money form.
    *
-   * `null` is the ordinary state — the weighing screen, with nothing in
-   * front of it. The start form appears once when a shift begins and can be
-   * put off; the end form appears when the operator asks to go home.
+   * Closed is the ordinary state — the weighing screen, with nothing in
+   * front of it. It opens once when a shift begins, and whenever the
+   * operator picks "Move money" from the header.
    */
-  const [cashStage, setCashStage] = useState<'start' | 'end' | null>(null);
+  const [cashOpen, setCashOpen] = useState(false);
   const [cashBusy, setCashBusy] = useState(false);
 
   /* Asked once per shift. The flag is kept per session id, so a reload — or
@@ -77,7 +98,7 @@ export function App() {
     const id = shift.session?.session_id;
     if (!id) return;
     if (readCashAsked(id)) return;
-    setCashStage('start');
+    setCashOpen(true);
   }, [shift.session?.session_id]);
 
   /* Who is on the other shift, as the likely person on the other side of the
@@ -96,74 +117,43 @@ export function App() {
     .filter((operator) => operator.username !== shift.session?.username)
     .map((operator) => operator.name);
 
-  const counterpart =
-    directory.data?.operators.find(
-      (operator) => operator.slot !== 'ADMIN' && operator.slot !== shift.session?.slot,
-    )?.name ?? '';
-
   /* What this shift has written down already. Listed in the form, because
      an operator about to type a figure needs to know whether they have
      typed it already. */
   const recorded = useQuery({
     queryKey: ['shift-cash', shift.session?.session_id],
     queryFn: agentApi.shiftCash,
-    enabled: Boolean(shift.session) && cashStage !== null,
+    enabled: Boolean(shift.session) && cashOpen,
     retry: false,
   });
 
-  const closeCash = (id: string | undefined) => {
+  const closeCash = () => {
+    const id = shift.session?.session_id;
     if (id) rememberCashAsked(id);
-    setCashStage(null);
+    setCashOpen(false);
   };
 
   const submitCash = (cash: ShiftCashMovement) => {
-    const id = shift.session?.session_id;
     setCashBusy(true);
 
-    if (cashStage === 'start') {
-      void agentApi
-        .recordShiftCash({ ...cash, stage: 'START' })
-        .then(() => {
-          void recorded.refetch();
-          toast.success('Cash written down');
-        })
-        .catch(() =>
-          toast.error('Could not save the cash', {
-            description: 'Your shift has started; tell the manager what you were given.',
-          }),
-        )
-        .finally(() => {
-          setCashBusy(false);
-          closeCash(id);
-        });
-      return;
-    }
-
-    void shift
-      .endShift(cash)
-      .then(() => toast.success('Shift ended'))
+    void agentApi
+      .recordShiftCash(cash)
+      .then(() => {
+        void recorded.refetch();
+        toast.success('Money written down');
+      })
+      .catch(() =>
+        toast.error('Could not save it', {
+          description: 'Nothing was recorded. Tell the manager what changed hands.',
+        }),
+      )
       .finally(() => {
         setCashBusy(false);
-        setCashStage(null);
+        closeCash();
       });
   };
 
-  /*
-   * The container re-weigh is the administrator's.
-   *
-   * A bridge that signs nobody in has no administrator to be — and no way
-   * to tell one — so it keeps the tab, exactly as it did before anybody
-   * signed in at all.
-   */
-  const canReweigh = !shift.session || shift.session.slot === 'ADMIN';
-
   const [mode, setMode] = useState<WeighingMode>('first');
-
-  /* An administrator who ends their shift must not be left standing in a
-     flow they can no longer use. */
-  useEffect(() => {
-    if (!canReweigh && mode === 'fourth') setMode('first');
-  }, [canReweigh, mode]);
   const [captured, setCaptured] = useState<CapturedWeight | null>(null);
 
   /**
@@ -185,6 +175,32 @@ export function App() {
   }, []);
   const [saved, setSaved] = useState<Weighment | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  /*
+   * A safety net for the lock described on the menu below.
+   *
+   * The menu is non-modal and the dialogs open a frame later, which should
+   * be enough on its own. This is the belt: whenever nothing is open, a
+   * `pointer-events: none` still sitting on the body belongs to an overlay
+   * that has gone, and the screen would ignore every click until the page
+   * was reloaded. Clearing it costs nothing and cannot hide a real overlay,
+   * because a real one is open while this says nothing is.
+   */
+  useEffect(() => {
+    if (settingsOpen || cashOpen) return;
+
+    const stuck = () => {
+      if (document.body.style.pointerEvents === 'none') {
+        document.body.style.pointerEvents = '';
+      }
+    };
+
+    /* After the closing animation, which is when the overlay removes its
+       own lock — clearing it before that would fight with it. */
+    const timer = window.setTimeout(stuck, 350);
+    return () => window.clearTimeout(timer);
+  }, [settingsOpen, cashOpen]);
+
   /* The pass-two net, reported up by ReturnWeighment so it can be shown in
      the left column directly under the capture card — the net belongs beside
      the weight it is computed from, not further down a separate column.
@@ -248,38 +264,80 @@ export function App() {
             </div>
           )}
 
-          <ThemeToggle />
+          {/*
+           * One menu rather than a row of buttons.
+           *
+           * The header had four controls competing for the corner, three of
+           * them used a handful of times a day. A single button keeps the
+           * weighing screen uncluttered and puts the rare things one press
+           * away, with their names on them instead of icons to decode.
+           */}
+          {/*
+           * `modal={false}` is load-bearing, not a preference.
+           *
+           * A modal menu and a modal dialog both take the page away from
+           * the mouse while they are open — each sets `pointer-events:
+           * none` on the body and puts it back on close. Opening the
+           * dialog from inside the menu makes those two overlap: the menu
+           * unmounts, the dialog mounts, and when the dialog finally
+           * closes the menu's lock is the one left behind. The screen then
+           * ignores every click until the page is reloaded.
+           *
+           * A non-modal menu takes no such lock. It still closes on an
+           * outside click and on Escape, which is all a menu of five items
+           * needs.
+           */}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" aria-label="Menu">
+                <MenuIcon className="h-4 w-4" />
+                Menu
+              </Button>
+            </DropdownMenuTrigger>
 
-          {/* Opens the same form the shift started with. The start form can
-              be put off, and an operator who put it off needs a way back to
-              it that is not signing out and in again. */}
-          {shift.session && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setCashStage('start')}
-              title="Write down the cash you took or gave at the start of your shift"
-            >
-              <HandCoins className="h-4 w-4" />
-              Shift cash
-            </Button>
-          )}
+            <DropdownMenuContent align="end">
+              {/* Opened on the next frame, after the menu has gone: two
+                  overlays mounting in the same tick is what the lock above
+                  is about, and this keeps them apart as well. */}
+              <DropdownMenuItem onSelect={() => openAfterMenu(() => setSettingsOpen(true))}>
+                <Settings />
+                Settings
+              </DropdownMenuItem>
 
-          {shift.session && (
-            <Button variant="outline" size="sm" onClick={() => setCashStage('end')}>
-              <LogOut className="h-4 w-4" />
-              End shift
-            </Button>
-          )}
+              {shift.session && (
+                <DropdownMenuItem onSelect={() => openAfterMenu(() => setCashOpen(true))}>
+                  <HandCoins />
+                  Move money
+                </DropdownMenuItem>
+              )}
 
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Printing and receipt settings"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="h-5 w-5" />
-          </Button>
+              <DropdownMenuItem onSelect={() => toggleTheme()}>
+                {theme === 'light' ? <Moon /> : <Sun />}
+                {theme === 'light' ? 'Dark mode' : 'Light mode'}
+              </DropdownMenuItem>
+
+              {shift.session && (
+                <>
+                  <DropdownMenuSeparator />
+                  {/*
+                   * Straight out, with no form in the way.
+                   *
+                   * Money is written down when it moves, from the item
+                   * above — asking again on the way out taught operators to
+                   * dismiss a dialog standing between them and going home.
+                   */}
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      void shift.endShift().then(() => toast.success('Shift ended'));
+                    }}
+                  >
+                    <LogOut />
+                    Log out
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -347,7 +405,7 @@ export function App() {
             {/* Heading this column rather than the whole page. Switching pass
                 is something an operator does once a truck, not once a glance,
                 so it does not deserve a full-width row above the readout. */}
-            <ModeSwitch mode={mode} onChange={switchMode} showFourth={canReweigh} />
+            <ModeSwitch mode={mode} onChange={switchMode} />
 
             {mode === 'second' ? (
               <ReturnWeighment
@@ -375,23 +433,13 @@ export function App() {
       </main>
 
       <ShiftCashDialog
-        open={cashStage !== null}
-        stage={cashStage ?? 'start'}
+        open={cashOpen}
         operatorNames={operatorNames}
-        counterpartName={counterpart}
         recorded={recorded.data?.entries ?? []}
         busy={cashBusy}
         onSubmit={submitCash}
-        onSkip={() => {
-          /* At the start this is "later"; at the end it is "go home anyway".
-             Neither is a failure, and neither keeps the operator here. */
-          if (cashStage === 'end') {
-            void shift.endShift().then(() => toast.success('Shift ended'));
-            setCashStage(null);
-            return;
-          }
-          closeCash(shift.session?.session_id);
-        }}
+        /* "Later" is not a failure, and never keeps the operator here. */
+        onSkip={closeCash}
       />
 
       <SettingsPanel open={settingsOpen} onOpenChange={setSettingsOpen} />

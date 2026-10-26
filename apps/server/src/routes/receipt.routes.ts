@@ -11,13 +11,11 @@
  */
 
 import { Router, type Response } from 'express';
-import { COMPANY, SHIFT_LABELS, normalizeSlipNumber, shiftAt } from '@suarza/shared';
-import type { Weighment } from '@suarza/shared';
+import { COMPANY, normalizeSlipNumber } from '@suarza/shared';
 import type { ServerConfig } from '../config.js';
 import { findBySlip } from '../services/weighment.service.js';
 import { renderNotFoundPage } from '../receipt/render-page.js';
 import { cameraFramingForStation } from '../services/station.service.js';
-import { operatorNamesByUsername, shiftTimings } from '../services/roster.service.js';
 import { renderSlipPage, slipValues } from '@suarza/ui';
 import { createReadStream, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -55,25 +53,6 @@ const SLIP_SHARE_FILE = (() => {
     ].find((path) => existsSync(path)) ?? null
   );
 })();
-
-/**
- * Who weighed this slip, as the soft copy names them.
- *
- * Two lookups rather than one because they answer different questions: the
- * roster turns the record's username into a person, and the shift hours turn
- * the record's own clock into a shift. Null for a slip from before anybody
- * signed in at the bridge, and the line is then simply absent.
- */
-async function operatorForSlip(
-  weighment: Weighment,
-): Promise<{ name: string; shift: string } | null> {
-  const names = await operatorNamesByUsername();
-  const name = names.get(weighment.operator_username.trim().toLowerCase());
-  if (!name) return null;
-
-  const hours = await shiftTimings();
-  return { name, shift: SHIFT_LABELS[shiftAt(new Date(weighment.first_weight_at), hours)] };
-}
 
 export function receiptRouter(config: ServerConfig): Router {
   const router = Router();
@@ -184,10 +163,7 @@ export function receiptRouter(config: ServerConfig): Router {
         renderSlipPage({
           view: 'soft',
           title: `${weighment.slip_number} — Weight Bridge Slip`,
-          /* Who weighed it, on the soft copy the customer scans — resolved
-             from the roster, because the record keeps a username and a
-             username is not a thing to put in front of a customer. */
-          values: slipValues({ weighment, operator: await operatorForSlip(weighment) }),
+          values: slipValues({ weighment }),
           verifyUrl: pageUrl(weighment.slip_number),
           frontImageUrl: images.front ? `/captures/${images.front}` : undefined,
           sideImageUrl: images.side ? `/captures/${images.side}` : undefined,

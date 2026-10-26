@@ -55,9 +55,9 @@ const OPTIONS: ModeOption[] = [
   },
   {
     /*
-     * A truck that has been here before. Its empty and loaded weights are
-     * already on an earlier slip, so neither is weighed again — they are
-     * fetched, adjusted if need be, and a fresh slip is issued.
+     * A container whose load the customer declares. The truck's two weights
+     * are already on an earlier slip, so neither is weighed again: they are
+     * fetched, the payload is typed, and a fresh slip is issued.
      *
      * Same icon as step 3 on purpose: both are weights that did not come off
      * the indicator just now, and inventing a fourth truck drawing to say
@@ -65,7 +65,7 @@ const OPTIONS: ModeOption[] = [
      */
     key: 'fourth',
     step: '4',
-    title: 'Fourth Weight',
+    title: 'Payload',
     icon: TypedWeightTruckIcon,
   },
 ];
@@ -73,22 +73,10 @@ const OPTIONS: ModeOption[] = [
 export function ModeSwitch({
   mode,
   onChange,
-  showFourth = true,
 }: {
   mode: WeighingMode;
   onChange: (mode: WeighingMode) => void;
-  /**
-   * Whether the container re-weigh is offered.
-   *
-   * It issues a slip against a customer's own declaration rather than
-   * against anything the bridge weighed, so it belongs to the
-   * administrator. Hidden rather than disabled: a button an operator can
-   * see and cannot press is a question they will ask once a week.
-   */
-  showFourth?: boolean;
 }) {
-  const options = showFourth ? OPTIONS : OPTIONS.filter((option) => option.key !== 'fourth');
-
   return (
     <div
       // A radiogroup, not a tablist: these are two answers to one question, and
@@ -101,7 +89,7 @@ export function ModeSwitch({
          each — not enough for a step number, an icon and "Second Weight". */
       className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
     >
-      {options.map((option) => {
+      {OPTIONS.map((option) => {
         const active = mode === option.key;
         const Icon = option.icon;
 

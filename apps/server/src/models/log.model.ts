@@ -14,7 +14,7 @@
 
 import mongoose from 'mongoose';
 import type { InferSchemaType, Model } from 'mongoose';
-import { LOG_KINDS, OPERATOR_SLOTS } from '@suarza/shared';
+import { LOG_KINDS, OPERATOR_ROLES } from '@suarza/shared';
 
 // Mongoose is CommonJS: Node's ESM interop does not expose every named
 // export, so the runtime values come off the default export.
@@ -27,7 +27,12 @@ const logSchema = new Schema(
     at: { type: Date, required: true },
     actor: { type: String, required: true },
     actor_name: { type: String, required: true, default: '' },
-    slot: { type: String, default: null, enum: [...OPERATOR_SLOTS, null] },
+    /*
+     * What the person was allowed to do. Loosely typed on purpose: entries
+     * written before the roster became a plain list of accounts hold a
+     * shift slot here instead, and an enum would refuse to read them back.
+     */
+    role: { type: String, default: null },
     /** The slip number, for the two weighment kinds. */
     subject: { type: String, default: null },
     detail: { type: String, default: null },

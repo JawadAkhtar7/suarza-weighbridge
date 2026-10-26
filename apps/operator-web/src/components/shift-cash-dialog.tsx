@@ -1,11 +1,11 @@
 /**
- * The money an operator takes and gives at each end of their shift.
+ * Money changing hands, written down as it happens.
  *
- * FOUR FIGURES AT EACH END. Cash moves both ways at a handover: an operator
- * arriving may be handed the night's takings and hand back a float in the
- * same minute, and the same is true when they leave. Asking only "what did
- * you take" at the start and only "what did you give" at the end produced a
- * record that looked wrong whenever the yard did something ordinary.
+ * FOUR FIGURES, because cash moves both ways and with two sorts of people:
+ * an operator can be handed the night's takings and hand back a float in
+ * the same minute, and the manager collects at noon. Asking only "what did
+ * you take" produced a record that looked wrong whenever the yard did
+ * something ordinary.
  *
  * THE WORDING IS THE FEATURE. The people filling this in are weighbridge
  * operators, not accountants, and "received" and "disbursed" would be
@@ -18,14 +18,14 @@
  * stand-in nobody has entered must never be unenterable.
  *
  * EVERY SUBMISSION IS A NEW ENTRY, not a correction of the last one. Money
- * changes hands more than twice in a day — the manager collects at noon, a
- * colleague covers an hour — so the form opens empty each time and what has
- * already been written down is listed above it, with the time on each line.
+ * changes hands more than twice in a day, so the form opens empty each time
+ * and what has already been written down is listed above it, with the time
+ * on each line.
  *
- * Nothing here blocks the weighing screen. At the start it can be left for
- * later and opened again from the header; at the end the shift ends whether
- * or not it is filled in. A form standing between an operator and a truck is
- * a form that gets filled with zeroes.
+ * Nothing here blocks the weighing screen. It opens once when a shift
+ * starts, can be left for later, and is reachable from the header menu
+ * whenever money actually moves. A form standing between an operator and a
+ * truck is a form that gets filled with zeroes.
  */
 
 import * as React from 'react';
@@ -237,31 +237,24 @@ function AlreadyRecorded({ entries }: { entries: ShiftCashEntry[] }) {
 
 export interface ShiftCashDialogProps {
   open: boolean;
-  /** Which end of the shift this is. */
-  stage: 'start' | 'end';
   /** Names to choose from: the other operators on the roster. */
   operatorNames: string[];
-  /** The likeliest counterpart, filled in until the operator says otherwise. */
-  counterpartName?: string;
   /** What this shift has written down already, oldest first. */
   recorded?: ShiftCashEntry[];
   busy?: boolean;
   onSubmit: (cash: ShiftCashMovement) => void;
-  /** Start: "I will do it later". End: end the shift without the figures. */
+  /** "I will do it later" — the form never stands in anybody's way. */
   onSkip: () => void;
 }
 
 export function ShiftCashDialog({
   open,
-  stage,
   operatorNames,
-  counterpartName = '',
   recorded = [],
   busy = false,
   onSubmit,
   onSkip,
 }: ShiftCashDialogProps) {
-  const starting = stage === 'start';
   const managerNames = React.useMemo(readManagerNames, [open]);
 
   const [personName, setPersonName] = React.useState('');
@@ -272,29 +265,24 @@ export function ShiftCashDialog({
   const [managerGiven, setManagerGiven] = React.useState('');
 
   /*
-   * Empty figures each time the form opens, because each submission is a NEW
-   * handing-over rather than a correction of the last. Only the names carry
-   * over — they are the same two people most of the day.
+   * Empty each time the form opens, because each submission is a NEW
+   * handing-over rather than a correction of the last. The manager's name
+   * is the exception: it is the same person nearly every day, and the list
+   * remembers who was typed last.
    *
-   * Keyed on `open` alone: the roster arrives after the first render, and
-   * re-running this when it does would wipe whatever the operator had begun
+   * Keyed on `open` alone: the names arrive after the first render, and
+   * re-running this when they do would wipe whatever the operator had begun
    * typing.
    */
   React.useEffect(() => {
     if (!open) return;
-    setPersonName(counterpartName);
+    setPersonName('');
     setPersonTaken('');
     setPersonGiven('');
     setManagerName(managerNames[0] ?? '');
     setManagerTaken('');
     setManagerGiven('');
   }, [open]);
-
-  /* The counterpart arrives with the roster, a moment after the form opens —
-     but never over a name the operator has chosen. */
-  React.useEffect(() => {
-    setPersonName((current) => current || counterpartName);
-  }, [counterpartName]);
 
   const submit = () => {
     rememberManagerName(managerName);
@@ -313,9 +301,7 @@ export function ShiftCashDialog({
     <Dialog open={open} onOpenChange={(next) => !next && onSkip()}>
       <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {starting ? 'Cash at the start of your shift' : 'Cash at the end of your shift'}
-          </DialogTitle>
+          <DialogTitle>Move money</DialogTitle>
           <DialogDescription>
             Write down the money that changed hands. Put 0 where nothing did.
           </DialogDescription>
@@ -329,7 +315,7 @@ export function ShiftCashDialog({
         <div className="space-y-3">
           <CounterpartBlock
             id="shift-cash-person"
-            heading={starting ? 'The operator before you' : 'The operator after you'}
+            heading="Another operator"
             whoLabel="Their name"
             names={operatorNames}
             who={personName}
@@ -356,10 +342,10 @@ export function ShiftCashDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onSkip} disabled={busy}>
-            {starting ? 'Not now' : 'End shift without this'}
+            Not now
           </Button>
           <Button variant="brand" onClick={submit} disabled={busy}>
-            {busy ? 'Saving…' : starting ? 'Save' : 'Save and end shift'}
+            {busy ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>

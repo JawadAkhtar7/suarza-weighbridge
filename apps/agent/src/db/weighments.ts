@@ -275,7 +275,7 @@ export class WeighmentRepository {
    * filter than the rows would make a "Load more" button that never stops, or
    * one that hides records.
    */
-  private listFilter(options: { status?: WeighmentStatus; q?: string }): {
+  private listFilter(options: { status?: WeighmentStatus; q?: string; vehicle_type?: string }): {
     sql: string;
     params: unknown[];
   } {
@@ -285,6 +285,13 @@ export class WeighmentRepository {
     if (options.status) {
       clauses.push('status = ?');
       params.push(options.status);
+    }
+
+    /* The payload screen only re-issues against containers, so offering it
+       a list of tippers would be offering it slips it will refuse. */
+    if (options.vehicle_type) {
+      clauses.push('vehicle_type = ?');
+      params.push(options.vehicle_type);
     }
 
     const q = options.q?.trim();
@@ -315,7 +322,13 @@ export class WeighmentRepository {
   }
 
   list(
-    options: { status?: WeighmentStatus; q?: string; limit?: number; offset?: number } = {},
+    options: {
+      status?: WeighmentStatus;
+      q?: string;
+      vehicle_type?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
   ): WeighmentWithSync[] {
     const { limit = 50, offset = 0 } = options;
     const filter = this.listFilter(options);
@@ -340,7 +353,7 @@ export class WeighmentRepository {
   }
 
   /** How many records the same filter matches, so a pager knows when to stop. */
-  count(options: { status?: WeighmentStatus; q?: string } = {}): number {
+  count(options: { status?: WeighmentStatus; q?: string; vehicle_type?: string } = {}): number {
     const filter = this.listFilter(options);
     const row = this.db
       .prepare(`SELECT COUNT(*) AS n FROM weighments ${filter.sql}`)

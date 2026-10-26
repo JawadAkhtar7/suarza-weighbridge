@@ -12,8 +12,9 @@
  */
 
 import * as React from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button, Input, Label, toast } from '@suarza/ui';
-import { LogIn } from 'lucide-react';
+import { CloudDownload, LogIn } from 'lucide-react';
 import { agentApi, AgentApiError } from '../lib/api.js';
 import { useShift } from './shift-provider.js';
 
@@ -29,6 +30,37 @@ function readLastUsername(): string {
 
 export function ShiftLogin() {
   const { signIn } = useShift();
+  const queryClient = useQueryClient();
+  const [fetching, setFetching] = React.useState(false);
+
+  /**
+   * Fetch the accounts, from the sign-in screen.
+   *
+   * The only way past this door for a bridge that has none — and it has to
+   * be here, because the Settings screen it would otherwise live behind is
+   * on the other side of the door.
+   */
+  const fetchAccounts = async () => {
+    setFetching(true);
+    try {
+      const outcome = await agentApi.syncOperators();
+      await queryClient.invalidateQueries({ queryKey: ['operator-auth'] });
+      toast.success(
+        outcome.total > 0
+          ? `${outcome.total} account(s) fetched — sign in now`
+          : 'The manager has set up nobody yet',
+      );
+    } catch (error) {
+      toast.error('Could not fetch the accounts', {
+        description:
+          error instanceof AgentApiError
+            ? error.message
+            : 'Check this PC\u2019s internet connection.',
+      });
+    } finally {
+      setFetching(false);
+    }
+  };
   const [username, setUsername] = React.useState(readLastUsername);
   const [password, setPassword] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -71,12 +103,7 @@ export function ShiftLogin() {
             alt="Suarza International"
             className="mx-auto h-14 w-auto"
           />
-          <div>
-            <h1 className="text-lg font-semibold">Start your shift</h1>
-            <p className="text-sm text-muted-foreground">
-              Sign in with the username and password your manager set.
-            </p>
-          </div>
+          <h1 className="text-lg font-semibold">Login</h1>
         </div>
 
         <div className="space-y-3">
@@ -118,6 +145,27 @@ export function ShiftLogin() {
         >
           <LogIn className="h-4 w-4" />
           {busy ? 'Starting…' : 'Start shift'}
+        </Button>
+
+        {/*
+         * The one thing this screen can do besides sign somebody in.
+         *
+         * It has to be here rather than in Settings, because Settings is on
+         * the other side of this door: a bridge that has never fetched the
+         * accounts has nobody to sign in as, and an operator whose password
+         * the manager changed an hour ago has a stale copy of it. Both are
+         * answered by the same press.
+         */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-full text-muted-foreground"
+          onClick={() => void fetchAccounts()}
+          disabled={fetching}
+        >
+          <CloudDownload className="h-4 w-4" />
+          {fetching ? 'Syncing…' : 'Sync accounts'}
         </Button>
       </form>
     </div>

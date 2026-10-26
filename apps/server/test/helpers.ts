@@ -12,7 +12,7 @@ import { buildApp } from '../src/app.js';
 import { loadConfig, type ServerConfig } from '../src/config.js';
 import { WeighmentModel } from '../src/models/weighment.model.js';
 import { StationModel } from '../src/models/station.model.js';
-import { OperatorModel, ShiftTimingsModel } from '../src/models/operator.model.js';
+import { OperatorModel } from '../src/models/operator.model.js';
 import { ManagerVoidModel } from '../src/models/manager-void.model.js';
 import { AuditModel } from '../src/models/audit.model.js';
 import { LogModel } from '../src/models/log.model.js';
@@ -51,11 +51,10 @@ export async function clearDatabase(): Promise<void> {
     // Station profiles outlive a weighment, so leaving them would let one
     // test's company details brand the next test's receipt.
     StationModel.deleteMany({}),
-    /* The roster and the shift hours outlive one too, and both decide what a
-       weighing's shift is called — so one test's operator would end up
-       labelling the next test's records. */
+    /* The accounts outlive a weighment too, and they are what turns the
+       username on a record into a name — so one test's operator would end
+       up labelling the next test's records. */
     OperatorModel.deleteMany({}),
-    ShiftTimingsModel.deleteMany({}),
     /* And a manager's void would hold the next test's weighing at VOID
        however it arrived, which is a confusing way to fail. */
     ManagerVoidModel.deleteMany({}),

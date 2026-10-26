@@ -2,11 +2,10 @@
 
 import { Router } from 'express';
 import {
-  createOperatorSchema,
   logQuerySchema,
-  shiftAuditQuerySchema,
   managerVoidWeighmentSchema,
-  shiftTimingsSchema,
+  saveOperatorSchema,
+  userReportQuerySchema,
   weighmentQuerySchema,
 } from '@suarza/shared';
 import { z } from 'zod';
@@ -16,14 +15,9 @@ import { cameraFramingForStation } from '../services/station.service.js';
 import { listWeighments, requireBySlip, suggestValues } from '../services/weighment.service.js';
 import { getAnalytics } from '../services/analytics.service.js';
 import { restoreWeighmentBySlip, voidWeighmentBySlip } from '../services/void-weighment.service.js';
-import {
-  listRoster,
-  removeOperator,
-  setOperator,
-  setShiftTimings,
-} from '../services/roster.service.js';
+import { listRoster, removeOperator, saveOperator } from '../services/roster.service.js';
 import { listLogs } from '../services/log.service.js';
-import { listShiftAudit } from '../services/shift-audit.service.js';
+import { buildUserReport } from '../services/user-report.service.js';
 import { parse } from './helpers.js';
 
 export function managerRouter(jwtSecret: string): Router {
@@ -120,22 +114,26 @@ export function managerRouter(jwtSecret: string): Router {
    * the app. Namespacing is what keeps the two from ever colliding.
    */
 
-  /** Read by the dashboard's filter as well as the Operators screen. */
+  /** Everyone who may sign in at the weighbridge. */
   router.get('/api/operators', ...guard, async (_req, res) => {
     res.json(await listRoster());
   });
 
   /**
-   * Put somebody on a shift. Replaces whoever was on it — a yard runs one
-   * person per shift, and naming a second plainly means the first has left.
+   * Add somebody, or change them.
+   *
+   * One route for both, because they differ in one thing — whether the body
+   * carries an id — and two routes would mean two copies of the username
+   * check and the hashing behind it.
    */
   router.post(
     '/api/operators',
     requireAuth(jwtSecret),
     requireCapability('settings'),
     async (req, res) => {
-      const input = parse(createOperatorSchema, req.body);
-      res.status(201).json(await setOperator(input));
+      const input = parse(saveOperatorSchema, req.body);
+      const saved = await saveOperator(input);
+      res.status(input.id ? 200 : 201).json(saved);
     },
   );
 
@@ -149,15 +147,17 @@ export function managerRouter(jwtSecret: string): Router {
     },
   );
 
-  router.put(
-    '/api/shift-timings',
-    requireAuth(jwtSecret),
-    requireCapability('settings'),
-    async (req, res) => {
-      const input = parse(shiftTimingsSchema, req.body);
-      res.json(await setShiftTimings(input));
-    },
-  );
+  /**
+   * One person's account of a stretch of time.
+   *
+   * Behind the dashboard guard like the log beside it: every figure in it
+   * is counted from records a manager can already read, gathered into the
+   * questions they actually ask — how many trucks, how much money, and
+   * which of it changed hands.
+   */
+  router.get('/api/reports/user', ...guard, async (req, res) => {
+    res.json(await buildUserReport(parse(userReportQuerySchema, req.query)));
+  });
 
   /**
    * The log: shifts starting and ending, slips set aside and brought back.
@@ -169,17 +169,6 @@ export function managerRouter(jwtSecret: string): Router {
    */
   router.get('/api/logs', ...guard, async (req, res) => {
     res.json(await listLogs(parse(logQuerySchema, req.query)));
-  });
-
-  /**
-   * The shifts, with the money each one handed over.
-   *
-   * Behind the dashboard guard like the log beside it: it says what the
-   * records already say, assembled into the one question a manager asks of a
-   * shift — does it add up.
-   */
-  router.get('/api/shift-audit', ...guard, async (req, res) => {
-    res.json(await listShiftAudit(parse(shiftAuditQuerySchema, req.query)));
   });
 
   /** Typeahead for the dashboard's customer, company and plate filters. */

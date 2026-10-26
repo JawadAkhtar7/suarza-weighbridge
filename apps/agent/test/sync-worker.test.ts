@@ -57,14 +57,27 @@ function fakeCloud() {
   };
 }
 
+/**
+ * Every worker a test makes, so teardown can stop them.
+ *
+ * A worker that was asked to sync while one was already running queues a
+ * rerun and starts it AFTER the call being awaited has returned. Closing the
+ * database on the next line then pulls the floor out from under a run that
+ * is still going, which surfaces as an unhandled rejection attributed to
+ * whichever test happened to be last.
+ */
+const workers: SyncWorker[] = [];
+
 function newWorker(client: CloudClient, overrides = {}) {
-  return new SyncWorker({
+  const worker = new SyncWorker({
     weighments,
     audit,
     client,
     periodicMs: 1_000_000, // The backstop is tested separately.
     ...overrides,
   });
+  workers.push(worker);
+  return worker;
 }
 
 const firstWeight = (plate = 'LES-1234') => ({
@@ -86,7 +99,15 @@ beforeEach(() => {
   service = new WeighmentService(db, { stationId: 'A' });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  /* Stop first, then wait for anything mid-flight to finish, and only then
+     close: a run still draining has prepared statements against this
+     connection. */
+  for (const worker of workers.splice(0)) {
+    worker.stop();
+    await vi.waitFor(() => expect(worker.getStatus().syncing).toBe(false));
+  }
+
   db.close();
   vi.useRealTimers();
 });

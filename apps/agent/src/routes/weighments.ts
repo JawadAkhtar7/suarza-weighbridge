@@ -63,12 +63,14 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
     const query = request.query as {
       status?: string;
       q?: string;
+      vehicle_type?: string;
       limit?: string;
       offset?: string;
     };
     const rows = deps.service.list({
       status: query.status as never,
       q: query.q,
+      vehicle_type: query.vehicle_type,
       limit: query.limit ? Number(query.limit) : undefined,
       offset: query.offset ? Number(query.offset) : undefined,
     });
@@ -77,7 +79,11 @@ export function registerWeighmentRoutes(app: FastifyInstance, deps: AgentDeps): 
     return {
       rows: rows.map(toDto),
       count: rows.length,
-      total: deps.service.countWeighments({ status: query.status as never, q: query.q }),
+      total: deps.service.countWeighments({
+        status: query.status as never,
+        q: query.q,
+        vehicle_type: query.vehicle_type,
+      }),
     };
   });
 

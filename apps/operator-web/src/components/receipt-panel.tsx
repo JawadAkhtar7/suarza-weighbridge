@@ -29,7 +29,6 @@ import type { Weighment } from '@suarza/shared';
 import { Printer } from 'lucide-react';
 import { useReceiptSettings } from '../hooks/use-receipt-settings.js';
 import { buildReceiptUrl } from '../lib/receipt-settings.js';
-import { useSlipOperator } from '../hooks/use-slip-operator.js';
 import { agentApi, captureImageUrl, printPageUrl } from '../lib/api.js';
 
 interface ReceiptPanelProps {
@@ -48,8 +47,6 @@ interface ReceiptPanelProps {
 
 export function ReceiptPanel({ weighment, variant, title, autoPrint = false }: ReceiptPanelProps) {
   const { settings } = useReceiptSettings();
-  /* Named on the soft copy only — see the slip's `screen` layer. */
-  const operator = useSlipOperator(weighment.operator_username);
   const autoOpenedFor = useRef<string | null>(null);
   /* The slip itself, for WhatsApp: the picture sent is drawn from this very
      element, so it is the preview the operator just looked at. */
@@ -122,7 +119,7 @@ export function ReceiptPanel({ weighment, variant, title, autoPrint = false }: R
           <div ref={slipRef}>
             <SlipA5
               view="soft"
-              values={slipValues({ weighment, operator })}
+              values={slipValues({ weighment })}
               verifyUrl={receiptUrl ?? undefined}
               frontImageUrl={
                 captures.data?.front ? captureImageUrl(captures.data.front) : undefined

@@ -10,6 +10,7 @@ import type {
 } from '@suarza/shared';
 import {
   DEFAULT_FRONT_VIEW_FRAME,
+  DEFAULT_SHIFT_START_MINUTES,
   DEFAULT_SIDE_VIEW_FRAME,
   DISPLAY_TIMEZONE,
   customerKey,
@@ -19,7 +20,7 @@ import { WeighmentModel, type WeighmentDocument } from '../models/weighment.mode
 import { LedgerCustomerModel } from '../models/ledger.model.js';
 import { imagesForWeighments } from './capture.service.js';
 import { cameraFramingForStations } from './station.service.js';
-import { operatorNamesByShift, operatorNamesByUsername, shiftTimings } from './roster.service.js';
+import { operatorNamesByUsername } from './roster.service.js';
 
 import { ApiError } from '../errors.js';
 
@@ -172,7 +173,15 @@ export async function buildQueryFilter(
   const filter = buildFilter(query);
   if (!query.shift) return { filter, timings: null };
 
-  const timings = await shiftTimings();
+  /*
+   * The yard's own hours, which nobody configures any more.
+   *
+   * They were a screen of their own when accounts were filed under shifts;
+   * accounts are just accounts now, and a shift is only how the dashboard
+   * divides a day. Morning from eight, night from eight — the client's own
+   * hours, and the ones the bridge has always defaulted to.
+   */
+  const timings = { ...DEFAULT_SHIFT_START_MINUTES };
   return { filter: { ...filter, ...shiftMatch(query.shift, timings) }, timings };
 }
 
@@ -224,16 +233,16 @@ async function annotate(
    * the first byte of a real photograph moved. The ids are a hundred bytes a
    * row and the dialog has them the moment it opens.
    */
-  const [accounts, images, framings, hours, names, namesByUsername] = await Promise.all([
+  const [accounts, images, framings, namesByUsername] = await Promise.all([
     LedgerCustomerModel.find({ match_key: { $in: keys } })
       .select({ _id: 1, match_key: 1 })
       .lean(),
     imagesForWeighments(dtos.map((w) => w.id)),
     cameraFramingForStations(dtos.map((w) => w.station_id)),
-    timings ? Promise.resolve(timings) : shiftTimings(),
-    operatorNamesByShift(),
     operatorNamesByUsername(),
   ]);
+
+  const hours = timings ?? { ...DEFAULT_SHIFT_START_MINUTES };
 
   const idByKey = new Map(accounts.map((doc) => [doc.match_key, String(doc._id)]));
   const defaultFraming = { front: DEFAULT_FRONT_VIEW_FRAME, side: DEFAULT_SIDE_VIEW_FRAME };
@@ -253,15 +262,12 @@ async function annotate(
         /*
          * Whoever SAVED it, by the username they signed in with.
          *
-         * The roster is the fallback, not the answer. It says who holds a
-         * shift now, which was all there was before the operators signed in
-         * at the bridge — and it reads wrong in the two cases that matter:
-         * a weighing saved by the administrator, or by whoever covered the
-         * night, was labelled with the name of the person rostered to the
-         * hour it happened to fall in. Null only when neither knows.
+         * Not by shift: a weighing saved by somebody covering an hour of
+         * the night used to be labelled with the name of whoever was
+         * rostered to that hour, which was a different person.
          */
         operator_name:
-          namesByUsername.get(weighment.operator_username.trim().toLowerCase()) ?? names[shift],
+          namesByUsername.get(weighment.operator_username.trim().toLowerCase()) ?? null,
         captures: {
           // A weighing with no pictures is a pair of nulls, not an absence:
           // the dialog must be able to tell "this bridge has no cameras" from

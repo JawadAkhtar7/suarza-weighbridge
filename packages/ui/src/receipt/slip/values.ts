@@ -74,16 +74,6 @@ export function slipMann(kg: number): string {
   }).format(kg / KG_PER_MAUND);
 }
 
-/** `Operator: Imran Shah · Morning shift`, or nothing at all. */
-export function slipOperator(
-  operator: { name: string; shift?: string | null } | null | undefined,
-): string {
-  const name = operator?.name.trim();
-  if (!name) return '';
-  const shift = operator?.shift?.trim();
-  return shift ? `Operator: ${name} · ${shift} shift` : `Operator: ${name}`;
-}
-
 /**
  * `PKR 5000/-` — the client's own way of writing a settled amount.
  *
@@ -112,6 +102,22 @@ export const SLIP_PENDING = 'Pending';
 export const MANUAL_MARK = '(MANUAL)';
 
 /**
+ * Does this slip carry a figure nobody weighed?
+ *
+ * Three ways in: the owner declared the load (the payload flow), or either
+ * weight was typed by the operator. The slip says the same thing in all
+ * three, because for the person reading it they are the same thing — a
+ * number on this slip did not come off the scale.
+ */
+export function declaresManualWeight(weighment: Weighment): boolean {
+  return (
+    weighment.owner_declared === true ||
+    weighment.first_weight_src === 'MANUAL' ||
+    weighment.second_weight_src === 'MANUAL'
+  );
+}
+
+/**
  * Is this a first-weight slip, still waiting on the truck?
  *
  * Derived from the values rather than passed in as a prop. Every caller
@@ -127,15 +133,6 @@ export interface SlipValuesOptions {
   weighment: Weighment;
   /** When the slip was printed. Defaults to now, which is what a reprint wants. */
   printedAt?: Date | string | number;
-  /**
-   * Who was at the window, for the soft copy only.
-   *
-   * Passed in rather than read off the weighment: the record carries a
-   * username, and a username is not a thing to put in front of a customer.
-   * Omitted — a bridge where nobody signs in, or a slip from before anybody
-   * did — and the line simply does not appear.
-   */
-  operator?: { name: string; shift?: string | null } | null;
 }
 
 /**
@@ -148,7 +145,7 @@ export interface SlipValuesOptions {
  * The second weight and the net are the exception: before the truck comes
  * back they read `Pending` rather than blank. See SLIP_PENDING.
  */
-export function slipValues({ weighment, printedAt, operator }: SlipValuesOptions): SlipValues {
+export function slipValues({ weighment, printedAt }: SlipValuesOptions): SlipValues {
   const net = netWeightKg(weighment.first_weight_kg, weighment.second_weight_kg);
   const hasSecond = weighment.second_weight_kg !== null && weighment.second_weight_kg !== undefined;
 
@@ -185,14 +182,15 @@ export function slipValues({ weighment, printedAt, operator }: SlipValuesOptions
     net_kg: hasSecond ? slipKg(net) : SLIP_PENDING,
     mann: hasSecond ? slipMann(net) : '',
 
-    /* Soft copy only; the overprint has no layer that draws it. An operator
-       with no shift — the administrator — is named without one rather than
-       being filed under somebody else's hours. */
-    operator: slipOperator(operator),
     /*
-     * On the paper as well as the screen — see the layout. Only when the
-     * load is the customer's own figure, which is the container re-weigh.
+     * On the paper as well as the screen — see the layout.
+     *
+     * Shown whenever a figure on this slip was TYPED rather than read off
+     * the indicator: the payload flow, where the customer declares his
+     * load, and any weighing where the operator keyed a weight in by hand.
+     * Both produce a slip whose number nobody measured, and the disclaimer
+     * is the slip saying so.
      */
-    declaration: weighment.owner_declared === true ? OWNER_DECLARATION : '',
+    declaration: declaresManualWeight(weighment) ? OWNER_DECLARATION : '',
   };
 }

@@ -361,6 +361,68 @@ MIGRATIONS.push({
   `,
 });
 
+MIGRATIONS.push({
+  version: 12,
+  name: 'accounts have roles, not shift slots',
+  up: `
+    -- The roster is gone: a person has a role, not a slot in a two-shift
+    -- rota the yard turned out not to run. Three tables named the slot, and
+    -- all three are rebuilt here rather than altered, because each declared
+    -- the column NOT NULL and SQLite cannot drop a constraint.
+
+    -- The accounts are a COPY of the manager's list, refreshed on demand, so
+    -- nothing is carried across; the next sync fills it.
+    DROP TABLE IF EXISTS operator_accounts;
+    CREATE TABLE operator_accounts (
+      username      TEXT PRIMARY KEY,
+      name          TEXT NOT NULL,
+      role          TEXT NOT NULL CHECK (role IN ('OPERATOR', 'ADMIN')),
+      password_hash TEXT NOT NULL,
+      updated_at    TEXT NOT NULL,
+      synced_at     TEXT NOT NULL
+    );
+
+    -- A session is one person's afternoon on one PC. Whoever is signed in
+    -- when this runs signs in again; there is nothing here worth migrating.
+    DROP TABLE IF EXISTS operator_sessions;
+    CREATE TABLE operator_sessions (
+      token        TEXT PRIMARY KEY,
+      session_id   TEXT NOT NULL,
+      username     TEXT NOT NULL,
+      name         TEXT NOT NULL,
+      role         TEXT NOT NULL,
+      started_at   TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL
+    );
+
+    -- The log IS worth migrating: rows in it may not have reached the cloud,
+    -- and a shift that happened should not stop existing because the words
+    -- for it changed. The two shift slots were operators; the third was an
+    -- administrator and stays one.
+    CREATE TABLE operator_logs_v2 (
+      id         TEXT PRIMARY KEY,
+      kind       TEXT NOT NULL CHECK (kind IN ('SHIFT_START', 'SHIFT_END')),
+      username   TEXT NOT NULL,
+      name       TEXT NOT NULL,
+      role       TEXT NOT NULL,
+      detail     TEXT,
+      at         TEXT NOT NULL,
+      session_id TEXT,
+      synced     INTEGER NOT NULL DEFAULT 0
+    );
+
+    INSERT INTO operator_logs_v2 (id, kind, username, name, role, detail, at, session_id, synced)
+      SELECT id, kind, username, name,
+             CASE slot WHEN 'ADMIN' THEN 'ADMIN' ELSE 'OPERATOR' END,
+             detail, at, session_id, synced
+        FROM operator_logs;
+
+    DROP TABLE operator_logs;
+    ALTER TABLE operator_logs_v2 RENAME TO operator_logs;
+    CREATE INDEX idx_operator_logs_unsynced ON operator_logs (synced) WHERE synced = 0;
+  `,
+});
+
 export function migrate(db: Database): number {
   const current = db.pragma('user_version', { simple: true }) as number;
   const pending = MIGRATIONS.filter((m) => m.version > current).sort(

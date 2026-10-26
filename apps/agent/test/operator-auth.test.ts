@@ -26,7 +26,7 @@ let operators: OperatorRepository;
 const account = (overrides: Record<string, unknown> = {}) => ({
   username: 'imran',
   name: 'Imran Shah',
-  slot: 'MORNING' as const,
+  role: 'OPERATOR' as const,
   password_hash: bcrypt.hashSync('morning-pass', 8),
   updated_at: '2026-10-16T03:00:00.000Z',
   ...overrides,
@@ -81,8 +81,7 @@ describe('starting a shift', () => {
     const { session } = response.json() as { session: Record<string, unknown> };
     expect(session.username).toBe('imran');
     expect(session.name).toBe('Imran Shah');
-    expect(session.slot).toBe('MORNING');
-    expect(session.shift).toBe('MORNING');
+    expect(session.role).toBe('OPERATOR');
     expect(session.token).toEqual(expect.any(String));
   });
 
@@ -112,22 +111,21 @@ describe('starting a shift', () => {
     expect(response.json()).toMatchObject({ required: true, session: { username: 'imran' } });
   });
 
-  it('gives the administrator no shift, because they work none', async () => {
+  it('carries the role the manager gave them', async () => {
     operators.applySync([
       account({
         username: 'boss',
         name: 'Mr Khan',
-        slot: 'ADMIN',
+        role: 'ADMIN',
         password_hash: bcrypt.hashSync('admin-pass', 8),
       }),
     ]);
 
     const { session } = (await login('boss', 'admin-pass')).json() as {
-      session: { slot: string; shift: string | null };
+      session: { role: string };
     };
 
-    expect(session.slot).toBe('ADMIN');
-    expect(session.shift).toBeNull();
+    expect(session.role).toBe('ADMIN');
   });
 });
 
@@ -201,7 +199,7 @@ describe('the copy of the accounts', () => {
      * A merge would leave a removed account signing in for ever on the one
      * machine where it matters. The list IS the manager's.
      */
-    operators.applySync([account(), account({ username: 'bilal', slot: 'NIGHT' })]);
+    operators.applySync([account(), account({ username: 'bilal', name: 'Bilal Khan' })]);
     operators.applySync([account()]);
 
     expect(operators.count()).toBe(1);
@@ -214,7 +212,7 @@ describe('the copy of the accounts', () => {
       session: { token: string };
     };
 
-    operators.applySync([account({ username: 'bilal', slot: 'NIGHT' })]);
+    operators.applySync([account({ username: 'bilal', name: 'Bilal Khan' })]);
 
     expect(operators.session(session.token)).toBeUndefined();
   });

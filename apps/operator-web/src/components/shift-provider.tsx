@@ -7,11 +7,13 @@
  * the same reason, and it is worth nothing anywhere else: it opens one
  * screen, on one machine, over loopback.
  *
- * A BRIDGE WITH NO ACCOUNTS LETS EVERYBODY IN. That is deliberate. A yard
- * whose agent has never pulled the operator list down — a new install, a
- * bridge whose cloud is not configured — must still be able to weigh a
- * truck; locking the screen until a manager can be reached would be a worse
- * failure than no sign-in at all.
+ * NOBODY GETS PAST WITHOUT SIGNING IN. A bridge that has never pulled the
+ * operator list down used to let everybody through, so that a new install
+ * could still weigh a truck — but that meant an unsynced weighbridge was an
+ * open one, which is not what "operators sign in" can be allowed to mean.
+ *
+ * The way out for a bridge with no accounts is to fetch them, not to walk
+ * past the door: the sign-in screen carries the button that does it.
  */
 
 import * as React from 'react';
@@ -41,10 +43,8 @@ function writeToken(token: string | null): void {
 }
 
 export interface ShiftState {
-  /** Null when nobody is signed in, or when this bridge asks nobody to. */
+  /** Null when nobody is signed in. The weighing screen is then not shown. */
   session: OperatorSession | null;
-  /** False on a bridge with no operator accounts: the screen is open.  */
-  required: boolean;
   loading: boolean;
   signIn: (session: OperatorSession) => void;
   /** With the closing handover, when the operator filled the form in. */
@@ -117,15 +117,11 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
   const value = React.useMemo<ShiftState>(
     () => ({
       session,
-      /* On a bridge the screen cannot reach, nothing is required — the error
-         belongs to the weighing screen, which says it far better than a
-         sign-in box refusing to let anybody past. */
-      required: auth.data?.required ?? false,
       loading: auth.isLoading,
       signIn,
       endShift,
     }),
-    [session, auth.data?.required, auth.isLoading, signIn, endShift],
+    [session, auth.isLoading, signIn, endShift],
   );
 
   return <ShiftContext.Provider value={value}>{children}</ShiftContext.Provider>;

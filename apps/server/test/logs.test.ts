@@ -60,7 +60,7 @@ const shiftEntry = (overrides: Record<string, unknown> = {}) => ({
   at: '2026-10-16T03:00:00.000Z',
   username: 'imran',
   name: 'Imran Shah',
-  slot: 'MORNING',
+  role: 'OPERATOR',
   detail: null,
   ...overrides,
 });
@@ -102,7 +102,11 @@ describe('what the bridge pushes up', () => {
     expect(response.status).toBe(200);
     const { rows, total } = await listLogs(page());
     expect(total).toBe(2);
-    expect(rows[0]).toMatchObject({ actor: 'imran', actor_name: 'Imran Shah', slot: 'MORNING' });
+    expect(rows[0]).toMatchObject({
+      actor: 'imran',
+      actor_name: 'Imran Shah',
+      role: 'OPERATOR',
+    });
   });
 
   it('records one shift when the same batch arrives twice', async () => {

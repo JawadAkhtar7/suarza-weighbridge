@@ -10,6 +10,7 @@ import { loadConfig } from './config.js';
 import { connectDatabase, describeConnection, disconnectDatabase } from './db/connection.js';
 import { removeDefaultUsers, seedUsers } from './services/auth.service.js';
 import { syncLedgerIndexes } from './models/ledger.model.js';
+import { migrateOperators } from './models/operator.model.js';
 import { seedVehicleTypes } from './services/catalogue.service.js';
 import { buildApp } from './app.js';
 
@@ -29,6 +30,10 @@ async function main(): Promise<void> {
   // Before anything can write to the ledger: a stale index here silently
   // rejects entries and the balances go quietly wrong.
   await syncLedgerIndexes();
+  /* Retires the old roster: drops the unique index on the shift slot and
+     gives the accounts already there the role their slot implied. A no-op
+     once it has run, and on a database that never had one. */
+  await migrateOperators();
 
   // A database with no rate card would hand every bridge an empty dropdown.
   const seededTypes = await seedVehicleTypes();
@@ -40,7 +45,9 @@ async function main(): Promise<void> {
    */
   const retired = await removeDefaultUsers();
   if (retired.length > 0) {
-    console.info(`Removed the default account(s) still using their shipped password: ${retired.join(', ')}`);
+    console.info(
+      `Removed the default account(s) still using their shipped password: ${retired.join(', ')}`,
+    );
   }
 
   const created = await seedUsers();
@@ -76,7 +83,7 @@ main().catch((error: unknown) => {
   if (/Server selection timed out/i.test(message)) {
     console.error(
       'MongoDB could not be reached. Usual causes: this machine is not in the\n' +
-        "Atlas IP access list, the cluster is paused, or there is no network.",
+        'Atlas IP access list, the cluster is paused, or there is no network.',
     );
   }
   process.exit(1);

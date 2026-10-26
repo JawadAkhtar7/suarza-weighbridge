@@ -10,9 +10,8 @@
 import type {
   AuditEntry,
   OperatorSession,
-  OperatorSlot,
+  OperatorRole,
   ShiftCashEntry,
-  ShiftCashInput,
   ShiftCashMovement,
   Customer,
   FramingUpdate,
@@ -226,7 +225,7 @@ export const agentApi = {
    */
   /** Usernames to names, so a slip can say who weighed it. */
   operatorDirectory: () =>
-    request<{ operators: { username: string; name: string; slot: OperatorSlot }[] }>(
+    request<{ operators: { username: string; name: string; role: OperatorRole }[] }>(
       '/operator/directory',
     ),
 
@@ -249,7 +248,7 @@ export const agentApi = {
   /** What this shift has already written down, for reopening the form. */
   shiftCash: () => request<{ entries: ShiftCashEntry[] }>('/operator/shift/cash'),
 
-  recordShiftCash: (cash: ShiftCashInput) =>
+  recordShiftCash: (cash: ShiftCashMovement) =>
     request<{ entry: ShiftCashEntry }>('/operator/shift/cash', {
       method: 'POST',
       body: JSON.stringify(cash),
@@ -310,10 +309,18 @@ export const agentApi = {
 
   /** Recent weighments for the quick-pick list. */
   listWeighments: (
-    options: { status?: string; q?: string; limit?: number; offset?: number } = {},
+    options: {
+      status?: string;
+      q?: string;
+      /** Narrows the list to one kind of truck — the payload screen wants containers. */
+      vehicleType?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
   ) => {
     const params = new URLSearchParams();
     if (options.status) params.set('status', options.status);
+    if (options.vehicleType) params.set('vehicle_type', options.vehicleType);
     // Searched by the weighbridge across every record, not filtered in the
     // browser across the page that happens to be loaded.
     if (options.q?.trim()) params.set('q', options.q.trim());

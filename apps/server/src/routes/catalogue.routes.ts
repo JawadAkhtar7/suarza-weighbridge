@@ -33,7 +33,7 @@ import {
 } from '../services/catalogue.service.js';
 import { operatorAccountsForSync } from '../services/roster.service.js';
 import { recordLogs } from '../services/log.service.js';
-import { recordShiftCash } from '../services/shift-audit.service.js';
+import { recordShiftCash } from '../services/shift-cash.service.js';
 import { parse } from './helpers.js';
 
 export function catalogueRouter(jwtSecret: string, apiKey: string): Router {
@@ -118,7 +118,7 @@ export function catalogueRouter(jwtSecret: string, apiKey: string): Router {
         at: entry.at,
         actor: entry.username,
         actor_name: entry.name || entry.username,
-        slot: entry.slot,
+        role: entry.role,
         subject: null,
         detail: entry.detail,
         session_id: entry.session_id,

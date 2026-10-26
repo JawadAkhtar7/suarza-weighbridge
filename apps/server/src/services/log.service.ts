@@ -9,14 +9,14 @@
  */
 
 import { newId, nowUtc, type LogEntry, type LogQuery, type PaginatedLogs } from '@suarza/shared';
-import type { LogKind, OperatorSlot } from '@suarza/shared';
+import type { LogKind, OperatorRole } from '@suarza/shared';
 import { LogModel, type LogDocument } from '../models/log.model.js';
 
 export interface RecordLogInput {
   kind: LogKind;
   actor: string;
   actor_name?: string;
-  slot?: OperatorSlot | null;
+  role?: OperatorRole | null;
   subject?: string | null;
   detail?: string | null;
   /** Supplied by the bridge, whose events may be delivered twice. */
@@ -33,7 +33,10 @@ function toDto(doc: LogDocument & { _id: string }): LogEntry {
     at: new Date(doc.at).toISOString(),
     actor: doc.actor,
     actor_name: doc.actor_name ?? '',
-    slot: (doc.slot as OperatorSlot | null) ?? null,
+    /* An entry from the roster days carries a shift slot here. MORNING and
+       NIGHT were operators; anything else unrecognised is treated the same,
+       because the alternative is a screen that cannot render its own log. */
+    role: doc.role === 'ADMIN' ? 'ADMIN' : doc.role ? 'OPERATOR' : null,
     subject: doc.subject ?? null,
     detail: doc.detail ?? null,
     session_id: doc.session_id ?? null,
@@ -57,7 +60,7 @@ export async function recordLog(input: RecordLogInput): Promise<void> {
           at: new Date(input.at ?? nowUtc()),
           actor: input.actor,
           actor_name: input.actor_name ?? input.actor,
-          slot: input.slot ?? null,
+          role: input.role ?? null,
           subject: input.subject ?? null,
           detail: input.detail ?? null,
           session_id: input.session_id ?? null,

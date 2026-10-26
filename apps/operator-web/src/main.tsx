@@ -40,18 +40,19 @@ const measuring = window.location.pathname === MEASURE_PICTURES_PATH;
 /**
  * The weighing screen, once somebody has started a shift.
  *
- * Only this screen is gated. The print tab and the measuring sheet are leaves
- * opened BY the weighing screen, in a window that already belongs to a signed
- * -in operator, and a sign-in box appearing in the print tab with a driver
- * waiting for his slip would be an obstacle with nothing behind it.
+ * No session, no screen — there is no bridge state that lets somebody past
+ * this. A bridge holding no accounts is not an open one: the sign-in screen
+ * says it has none and offers to fetch them.
  *
- * `required` is false on a bridge that holds no operator accounts; see
- * ShiftProvider for why that lets everybody straight through.
+ * Only this screen is gated. The print tab and the measuring sheet are
+ * leaves opened BY the weighing screen, in a window that already belongs to
+ * a signed-in operator, and a sign-in box appearing in the print tab with a
+ * driver waiting for his slip would be an obstacle with nothing behind it.
  */
 function WeighingScreen() {
-  const { session, required, loading } = useShift();
+  const { session, loading } = useShift();
   if (loading) return null;
-  if (required && !session) return <ShiftLogin />;
+  if (!session) return <ShiftLogin />;
   return <App />;
 }
 

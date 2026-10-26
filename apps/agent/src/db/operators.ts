@@ -13,10 +13,10 @@
 
 import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { newId, nowUtc, shiftForSlot } from '@suarza/shared';
+import { newId, nowUtc } from '@suarza/shared';
 import type {
+  OperatorRole,
   OperatorSession,
-  OperatorSlot,
   ShiftCashEntry,
   ShiftCashMovement,
   ShiftCashStage,
@@ -26,7 +26,7 @@ import type { Db } from './connection.js';
 export interface OperatorAccountRow {
   username: string;
   name: string;
-  slot: OperatorSlot;
+  role: OperatorRole;
   password_hash: string;
   updated_at: string;
   synced_at: string;
@@ -38,7 +38,7 @@ export interface OperatorSessionRow {
   session_id: string;
   username: string;
   name: string;
-  slot: OperatorSlot;
+  role: OperatorRole;
   started_at: string;
   last_seen_at: string;
 }
@@ -48,7 +48,7 @@ export interface OperatorLogRow {
   kind: 'SHIFT_START' | 'SHIFT_END';
   username: string;
   name: string;
-  slot: OperatorSlot;
+  role: OperatorRole;
   detail: string | null;
   at: string;
   session_id: string | null;
@@ -58,7 +58,7 @@ export interface OperatorLogRow {
 export interface IncomingOperatorAccount {
   username: string;
   name: string;
-  slot: OperatorSlot;
+  role: OperatorRole;
   password_hash: string;
   updated_at: string;
 }
@@ -73,8 +73,7 @@ export function toSession(row: OperatorSessionRow): OperatorSession {
     session_id: row.session_id,
     username: row.username,
     name: row.name,
-    slot: row.slot,
-    shift: shiftForSlot(row.slot),
+    role: row.role,
     started_at: row.started_at,
   };
 }
@@ -90,11 +89,11 @@ export class OperatorRepository {
       .get(normalise(username));
   }
 
-  /** Every account's name and slot — no hashes. For naming a slip. */
-  list(): { username: string; name: string; slot: OperatorSlot }[] {
+  /** Every account's name and role — no hashes. */
+  list(): { username: string; name: string; role: OperatorRole }[] {
     return this.db
-      .prepare<[], { username: string; name: string; slot: OperatorSlot }>(
-        'SELECT username, name, slot FROM operator_accounts ORDER BY slot',
+      .prepare<[], { username: string; name: string; role: OperatorRole }>(
+        'SELECT username, name, role FROM operator_accounts ORDER BY name',
       )
       .all();
   }
@@ -118,14 +117,14 @@ export class OperatorRepository {
     const apply = this.db.transaction((rows: readonly IncomingOperatorAccount[]) => {
       this.db.prepare('DELETE FROM operator_accounts').run();
       const insert = this.db.prepare(
-        `INSERT INTO operator_accounts (username, name, slot, password_hash, updated_at, synced_at)
+        `INSERT INTO operator_accounts (username, name, role, password_hash, updated_at, synced_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
       );
       for (const row of rows) {
         insert.run(
           normalise(row.username),
           row.name,
-          row.slot,
+          row.role,
           row.password_hash,
           row.updated_at,
           at,
@@ -188,15 +187,15 @@ export class OperatorRepository {
       this.db.prepare('DELETE FROM operator_sessions WHERE username = ?').run(account.username);
       this.db
         .prepare(
-          `INSERT INTO operator_sessions (token, session_id, username, name, slot, started_at, last_seen_at)
+          `INSERT INTO operator_sessions (token, session_id, username, name, role, started_at, last_seen_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(token, sessionId, account.username, account.name, account.slot, at, at);
+        .run(token, sessionId, account.username, account.name, account.role, at, at);
       this.appendLog({
         kind: 'SHIFT_START',
         username: account.username,
         name: account.name,
-        slot: account.slot,
+        role: account.role,
         detail: null,
         at,
         session_id: sessionId,
@@ -210,7 +209,7 @@ export class OperatorRepository {
       session_id: sessionId,
       username: account.username,
       name: account.name,
-      slot: account.slot,
+      role: account.role,
       started_at: at,
       last_seen_at: at,
     });
@@ -240,7 +239,7 @@ export class OperatorRepository {
         kind: 'SHIFT_END',
         username: row.username,
         name: row.name,
-        slot: row.slot,
+        role: row.role,
         detail: describeLength(row.started_at, at),
         at,
         session_id: row.session_id,
@@ -337,7 +336,7 @@ export class OperatorRepository {
   appendLog(entry: Omit<OperatorLogRow, 'id'> & { id?: string }): void {
     this.db
       .prepare(
-        `INSERT INTO operator_logs (id, kind, username, name, slot, detail, at, session_id, synced)
+        `INSERT INTO operator_logs (id, kind, username, name, role, detail, at, session_id, synced)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       )
       .run(
@@ -345,7 +344,7 @@ export class OperatorRepository {
         entry.kind,
         entry.username,
         entry.name,
-        entry.slot,
+        entry.role,
         entry.detail,
         entry.at,
         entry.session_id ?? null,
@@ -355,7 +354,7 @@ export class OperatorRepository {
   unsyncedLogs(limit = 100): OperatorLogRow[] {
     return this.db
       .prepare<[number], OperatorLogRow>(
-        `SELECT id, kind, username, name, slot, detail, at, session_id
+        `SELECT id, kind, username, name, role, detail, at, session_id
            FROM operator_logs WHERE synced = 0 ORDER BY at LIMIT ?`,
       )
       .all(limit);

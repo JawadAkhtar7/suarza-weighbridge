@@ -5,7 +5,7 @@ import { vehicleTypeSchema, weighmentSchema } from './weighment.js';
 import { auditEntrySchema } from './audit.js';
 import { WEIGHMENT_STATUSES, USER_ROLES } from '../constants/domain.js';
 import { FRONT_VIEW_ZOOM } from '../constants/paper.js';
-import { OPERATOR_SLOTS, SHIFTS } from '../constants/shifts.js';
+import { OPERATOR_ROLES, SHIFTS } from '../constants/shifts.js';
 import { frontViewFrameSchema, sideViewFrameSchema } from './settings.js';
 
 /**
@@ -259,21 +259,27 @@ export type ApiError = z.infer<typeof apiErrorSchema>;
  * is at the window; this is the manager's note of who that is, so a day's
  * takings can be read back against a name.
  */
+/**
+ * One person who may sign in at the weighbridge.
+ *
+ * A plain list of accounts, as many as the yard has people. It began as a
+ * roster of two shifts plus an administrator, which could not hold a third
+ * operator or a relief driver, and tied a question about hours to a question
+ * about access. Hours are read off the clock now; this answers only who may
+ * sign in and what they may do.
+ */
 export const operatorSchema = z.object({
   id: z.string(),
   name: z.string().trim().min(1).max(80),
-  /** MORNING, NIGHT, or the administrator who belongs to neither. */
-  slot: z.enum(OPERATOR_SLOTS),
-  /** The shift this slot works; null for the administrator. */
-  shift: z.enum(SHIFTS).nullable(),
+  role: z.enum(OPERATOR_ROLES),
   /** What they sign in to the weighbridge with; null until one is set. */
   username: z.string().nullable(),
   /**
    * Whether a password is set — never the password, and never its hash.
    *
-   * The manager's screen needs to show "this account can sign in" without the
-   * hash travelling to a browser, and the hash the bridge needs travels on a
-   * different route, behind the ingest key.
+   * The manager's screen needs to show "this account can sign in" without
+   * the hash travelling to a browser, and the hash the bridge needs travels
+   * on a different route, behind the ingest key.
    */
   has_password: z.boolean(),
   created_at: z.string().datetime({ offset: true }),
@@ -283,26 +289,29 @@ export const operatorSchema = z.object({
 export type Operator = z.infer<typeof operatorSchema>;
 
 /**
- * Put somebody in a slot, with or without credentials.
+ * Add somebody, or change them.
  *
- * The password is optional on purpose: renaming the morning operator must not
- * force the manager to retype a password they may not remember. Omitted means
- * "leave whatever is there", and the screen says so.
+ * The password is optional on purpose: renaming somebody, or making them an
+ * administrator, must not force the manager to retype a password they may
+ * not remember. Omitted means "leave whatever is there", and the screen says
+ * so.
  */
-export const createOperatorSchema = z.object({
-  name: z.string().trim().min(1, 'Give the operator a name').max(80),
-  slot: z.enum(OPERATOR_SLOTS),
+export const saveOperatorSchema = z.object({
+  /** Absent when adding; present when editing an account that exists. */
+  id: z.string().min(1).max(64).optional(),
+  name: z.string().trim().min(1, 'Give this person a name').max(80),
   username: z
     .string()
     .trim()
     .toLowerCase()
+    .min(1, 'A username is needed to sign in')
     .max(64)
-    .regex(/^[a-z0-9._-]*$/, 'Letters, numbers, dot, dash and underscore only')
-    .optional(),
+    .regex(/^[a-z0-9._-]+$/, 'Letters, numbers, dot, dash and underscore only'),
   password: z.string().min(4, 'Use at least four characters').max(200).optional(),
+  role: z.enum(OPERATOR_ROLES).default('OPERATOR'),
 });
 
-export type CreateOperatorInput = z.infer<typeof createOperatorSchema>;
+export type SaveOperatorInput = z.infer<typeof saveOperatorSchema>;
 
 /**
  * When each shift begins, as minutes from midnight.
@@ -320,7 +329,6 @@ export type ShiftTimings = z.infer<typeof shiftTimingsSchema>;
 
 export const rosterSchema = z.object({
   operators: z.array(operatorSchema),
-  shift_timings: shiftTimingsSchema,
 });
 
 export type Roster = z.infer<typeof rosterSchema>;
@@ -364,9 +372,7 @@ export const operatorSessionSchema = z.object({
   session_id: z.string(),
   username: z.string(),
   name: z.string(),
-  slot: z.enum(OPERATOR_SLOTS),
-  /** Null for the administrator, who works no particular shift. */
-  shift: z.enum(SHIFTS).nullable(),
+  role: z.enum(OPERATOR_ROLES),
   started_at: z.string().datetime({ offset: true }),
 });
 
@@ -378,7 +384,7 @@ export const operatorAccountSyncSchema = z.object({
     z.object({
       username: z.string(),
       name: z.string(),
-      slot: z.enum(OPERATOR_SLOTS),
+      role: z.enum(OPERATOR_ROLES),
       /** bcrypt, as the cloud stores it. The bridge only ever compares it. */
       password_hash: z.string(),
       updated_at: z.string(),
@@ -417,7 +423,14 @@ export const shiftCashMovementSchema = z.object({
 
 export type ShiftCashMovement = z.infer<typeof shiftCashMovementSchema>;
 
-/** Which end of the shift a movement was written down at. */
+/**
+ * Which end of the shift a movement was written down at.
+ *
+ * The screen no longer asks: money moves at any hour, every movement
+ * carries its own time, and the shift's start and end are already in the
+ * log. The field stays because records already written have it, and it
+ * defaults to START for anything written from now on.
+ */
 export const SHIFT_CASH_STAGES = ['START', 'END'] as const;
 export type ShiftCashStage = (typeof SHIFT_CASH_STAGES)[number];
 
@@ -461,52 +474,62 @@ export const shiftCashPushSchema = z.object({
 export type ShiftCashPush = z.infer<typeof shiftCashPushSchema>;
 
 /**
- * One shift, as the manager reviews it afterwards.
+ * One person's account of a stretch of time.
  *
- * The two log entries of a shift read back as one thing, with the weighing
- * it did in between and every movement of money that was written down. No
- * totals are stored anywhere — they are counted from the records each time —
- * so nothing here can drift from what the records say.
+ * Replaced a screen that laid two shifts side by side and asked the manager
+ * to work out whether the money added up. This asks a simpler question and
+ * answers it in full: for this person, between these two moments — how many
+ * trucks, how much charged, what money came in, what went out, and when.
+ *
+ * Nothing is stored. Every figure is counted from the records each time, so
+ * a report cannot drift from what the records say.
  */
-export const shiftAuditSchema = z.object({
-  session_id: z.string(),
+export const userReportSchema = z.object({
   operator: z.string(),
   operator_name: z.string(),
-  slot: z.enum(OPERATOR_SLOTS),
-  started_at: z.string().datetime({ offset: true }),
-  /** Null while the shift is still running. */
-  ended_at: z.string().datetime({ offset: true }).nullable(),
-  /** Every movement written down during this shift, oldest first. */
-  cash_entries: z.array(shiftCashEntrySchema),
-  /** Weighings saved by this operator between those two moments. */
+  role: z.enum(OPERATOR_ROLES),
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
+
+  /** Weighings this person saved in the range; voided ones excluded. */
   weighments: z.number().int().min(0),
-  /** What those weighings charged — voided ones excluded. */
+  /** What those weighings charged. */
   takings: z.number(),
+
+  /** Money handed TO them, and money they handed on. */
+  money_taken: z.number(),
+  money_given: z.number(),
+  /** Every movement they wrote down, oldest first. */
+  movements: z.array(shiftCashEntrySchema),
+
+  /** A line per day they worked, for the body of the report. */
+  days: z.array(
+    z.object({
+      date: z.string(),
+      weighments: z.number().int().min(0),
+      takings: z.number(),
+    }),
+  ),
+
+  /** When they were signed in, from the shift log. */
+  sessions: z.array(
+    z.object({
+      started_at: z.string().datetime({ offset: true }),
+      ended_at: z.string().datetime({ offset: true }).nullable(),
+    }),
+  ),
 });
 
-export type ShiftAudit = z.infer<typeof shiftAuditSchema>;
+export type UserReport = z.infer<typeof userReportSchema>;
 
-export const shiftAuditPageSchema = z.object({
-  rows: z.array(shiftAuditSchema),
+export const userReportQuerySchema = z.object({
+  /** Whose report. A username, as the records carry it. */
+  operator: z.string().trim().min(1).max(64),
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
 });
 
-export type ShiftAuditPage = z.infer<typeof shiftAuditPageSchema>;
-
-/**
- * One day of shifts.
- *
- * A day rather than a page: the screen shows the morning beside the night,
- * which is a question about a day and not about the most recent twenty
- * shifts. The window is passed as two instants because the manager's own
- * clock decides where a Pakistan day begins — the same way the dashboard's
- * date filters already work.
- */
-export const shiftAuditQuerySchema = z.object({
-  from: z.string().datetime({ offset: true }).optional(),
-  to: z.string().datetime({ offset: true }).optional(),
-});
-
-export type ShiftAuditQuery = z.infer<typeof shiftAuditQuerySchema>;
+export type UserReportQuery = z.infer<typeof userReportQuerySchema>;
 
 // ---------------------------------------------------------------------------
 // The log (client request, October 2026)
@@ -541,8 +564,8 @@ export const logEntrySchema = z.object({
   /** Who did it — an operator's username, or the manager's. */
   actor: z.string(),
   actor_name: z.string(),
-  /** The operator's slot, where the event has one. */
-  slot: z.enum(OPERATOR_SLOTS).nullable(),
+  /** What the person was allowed to do, where the event names a person. */
+  role: z.enum(OPERATOR_ROLES).nullable(),
   /** What it was done to: a slip number, for the two weighment kinds. */
   subject: z.string().nullable(),
   /** A reason, or anything else worth reading beside the event. */
@@ -592,7 +615,7 @@ export const operatorLogPushSchema = z.object({
         at: z.string(),
         username: z.string().min(1).max(64),
         name: z.string().max(80).default(''),
-        slot: z.enum(OPERATOR_SLOTS),
+        role: z.enum(OPERATOR_ROLES).default('OPERATOR'),
         detail: z.string().max(200).nullable().default(null),
         /* The two entries of one shift carry the same id, which is how the
            audit screen reads a start and an end back as one shift. */

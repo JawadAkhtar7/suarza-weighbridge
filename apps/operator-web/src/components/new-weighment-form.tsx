@@ -154,6 +154,19 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
   const vehicleType = form.watch('vehicle_type') as VehicleType;
 
   /*
+   * Once a slip is fetched, its details are read-only.
+   *
+   * They describe a weighing that already happened, and this screen is not
+   * where it gets corrected: a payload slip that disagrees with the slip it
+   * was issued against is two records of one truck that cannot both be
+   * right. The container number is the one exception, and only when the
+   * earlier slip had none — the number is required, so locking an empty box
+   * would make the weighing unsaveable.
+   */
+  const detailsLocked = isRepeat && source !== null;
+  const containerLocked = detailsLocked && Boolean(source?.container_number?.trim());
+
+  /*
    * The charge, which nobody types.
    *
    * It is the manager's rate for the vehicle type, full stop — one figure
@@ -579,7 +592,12 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
              * the paper in his hand is missing from the screen; picking
              * one says plainly why it cannot be used here.
              */}
-            {!sourceSlip && <RecentWeighments onPick={(slip) => lookup.mutate(slip)} />}
+            {!sourceSlip && (
+              <RecentWeighments
+                onPick={(slip) => lookup.mutate(slip)}
+                vehicleType={CONTAINER_VEHICLE_TYPE}
+              />
+            )}
           </div>
         )}
 
@@ -749,6 +767,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
                 id="customer_name"
                 autoFocus
                 {...form.register('customer_name')}
+                readOnly={detailsLocked}
                 placeholder="Customer name"
               />
             </Field>
@@ -761,6 +780,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               <Input
                 id="customer_company"
                 {...form.register('customer_company')}
+                readOnly={detailsLocked}
                 placeholder="Company"
               />
             </Field>
@@ -810,6 +830,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               <Input
                 id="vehicle_plate"
                 {...form.register('vehicle_plate')}
+                readOnly={detailsLocked}
                 placeholder="Number Plate"
                 /* pr-8 keeps a long plate from running under the asterisk. */
                 className="uppercase placeholder:normal-case pr-8"
@@ -817,7 +838,12 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
             </Field>
 
             <Field htmlFor="product" label="Product" error={errors.product?.message}>
-              <Input id="product" {...form.register('product')} placeholder="Product" />
+              <Input
+                id="product"
+                {...form.register('product')}
+                readOnly={detailsLocked}
+                placeholder="Product"
+              />
             </Field>
 
             {/* Only a container has one, and every container must have one:
@@ -832,6 +858,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
                 <Input
                   id="container_number"
                   {...form.register('container_number')}
+                  readOnly={containerLocked}
                   placeholder="Container number"
                   className="uppercase placeholder:normal-case"
                 />
@@ -842,6 +869,7 @@ export function NewWeighmentForm({ captured, onSaved, flow = 'first' }: NewWeigh
               <Input
                 id="customer_phone"
                 {...form.register('customer_phone')}
+                readOnly={detailsLocked}
                 placeholder="Phone"
                 inputMode="tel"
               />

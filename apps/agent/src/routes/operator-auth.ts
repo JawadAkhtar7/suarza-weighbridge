@@ -70,7 +70,7 @@ export function registerOperatorAuthRoutes(app: FastifyInstance, deps: AgentDeps
     }
 
     const session = operators.startShift(account);
-    request.log.info({ username: account.username, slot: account.slot }, 'Shift started');
+    request.log.info({ username: account.username, role: account.role }, 'Shift started');
     // Not awaited and not required: the manager's log can catch up.
     deps.onOperatorLog?.();
     return { session };

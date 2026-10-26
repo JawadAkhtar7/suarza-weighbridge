@@ -55,9 +55,16 @@ const PAGE_SIZE = 20;
 
 interface RecentWeighmentsProps {
   onPick: (slipNumber: string) => void;
+  /**
+   * Show only this kind of truck.
+   *
+   * The payload screen re-issues against containers and nothing else, so a
+   * list including tippers would be a list of slips it will refuse.
+   */
+  vehicleType?: string;
 }
 
-export function RecentWeighments({ onPick }: RecentWeighmentsProps) {
+export function RecentWeighments({ onPick, vehicleType }: RecentWeighmentsProps) {
   const [search, setSearch] = useState('');
   // Debounced: this hits the weighbridge on every keystroke otherwise, and a
   // slip number is six digits typed quickly.
@@ -66,10 +73,15 @@ export function RecentWeighments({ onPick }: RecentWeighmentsProps) {
   const query = useInfiniteQuery({
     // The search is part of the key, so changing it starts the paging again
     // rather than appending results from a different question.
-    queryKey: ['recent-weighments', q],
+    queryKey: ['recent-weighments', q, vehicleType ?? 'all'],
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
-      agentApi.listWeighments({ q, limit: PAGE_SIZE, offset: pageParam as number }),
+      agentApi.listWeighments({
+        q,
+        ...(vehicleType ? { vehicleType } : {}),
+        limit: PAGE_SIZE,
+        offset: pageParam as number,
+      }),
     getNextPageParam: (lastPage, pages) => {
       const loaded = pages.reduce((sum, page) => sum + page.rows.length, 0);
       return loaded < lastPage.total ? loaded : undefined;
@@ -99,7 +111,9 @@ export function RecentWeighments({ onPick }: RecentWeighmentsProps) {
         <CardTitle className="flex items-center gap-2 text-base">
           <Clock className="h-4 w-4" />
           Recent weighments
-          {total > 0 && <span className="text-xs font-normal text-muted-foreground">({total})</span>}
+          {total > 0 && (
+            <span className="text-xs font-normal text-muted-foreground">({total})</span>
+          )}
         </CardTitle>
 
         <div className="relative ml-auto min-w-[10rem] flex-1">
@@ -214,7 +228,8 @@ function RecentRow({
 
         <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
           <span>
-            {vehicleTypeLabel(weighment.vehicle_type, weighment.vehicle_type_label)} · {weighment.vehicle_plate}
+            {vehicleTypeLabel(weighment.vehicle_type, weighment.vehicle_type_label)} ·{' '}
+            {weighment.vehicle_plate}
           </span>
           <span className="tabular">{formatDateTimePkt(weighment.first_weight_at)}</span>
         </div>

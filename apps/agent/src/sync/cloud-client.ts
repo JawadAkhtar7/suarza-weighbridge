@@ -60,7 +60,7 @@ export interface OperatorLogUpload {
   at: string;
   username: string;
   name: string;
-  slot: 'MORNING' | 'NIGHT' | 'ADMIN';
+  role: 'OPERATOR' | 'ADMIN';
   detail: string | null;
   /** Both entries of one shift carry the same id. */
   session_id: string | null;
