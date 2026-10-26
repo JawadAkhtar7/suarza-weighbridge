@@ -390,7 +390,18 @@ function Report({ report }: { report: UserReport }) {
                         </span>
                       </TableCell>
 
-                      <TableCell className="align-top">{describe(activity)}</TableCell>
+                      <TableCell className="align-top">
+                        {describe(activity)}
+                        {/* Whose record this is, when it is not this
+                            person's own. A handover is written down by one
+                            of its two sides, and "I never wrote that" is
+                            exactly what somebody will want to know. */}
+                        {activity.recorded_by && (
+                          <span className="block text-xs italic text-muted-foreground">
+                            recorded by {activity.recorded_by}
+                          </span>
+                        )}
+                      </TableCell>
 
                       <TableCell className="align-top text-muted-foreground">
                         {vehicle || '—'}

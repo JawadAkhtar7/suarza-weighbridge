@@ -181,6 +181,99 @@ describe('what the report counts', () => {
     expect(money.find((line) => line.amount === 4000)?.counterpart).toBe('Bilal');
   });
 
+  it('shows the other side of a handover in the other person’s report', async () => {
+    /*
+     * A handover has two sides and is written down by one of them. Imran
+     * recording "took 4,000 from Bilal" is the same event as Bilal giving
+     * Imran 4,000 — so it belongs in Bilal's report too, the other way
+     * round, or the money would leave his account and appear nowhere.
+     */
+    await saveOperator({
+      name: 'Imran Shah',
+      username: 'imran',
+      password: 'pass-one',
+      role: 'OPERATOR',
+    });
+    await saveOperator({
+      name: 'Bilal Khan',
+      username: 'bilal',
+      password: 'pass-two',
+      role: 'OPERATOR',
+    });
+
+    await pushCash({ person_name: 'Bilal Khan', person_taken: 4000 });
+
+    const imran = await buildUserReport({ operator: 'imran', ...range });
+    expect(imran.money_taken).toBe(4000);
+    expect(imran.money_given).toBe(0);
+
+    const bilal = await buildUserReport({ operator: 'bilal', ...range });
+    expect(bilal.money_given).toBe(4000);
+    expect(bilal.money_taken).toBe(0);
+
+    const [line] = bilal.activities;
+    expect(line).toMatchObject({
+      kind: 'MONEY_GIVEN',
+      amount: 4000,
+      /* Said out loud: it is not his own record. */
+      recorded_by: 'Imran Shah',
+      counterpart: 'Imran Shah',
+    });
+  });
+
+  it('mirrors a handover with the manager, who is an account like any other', async () => {
+    await saveOperator({
+      name: 'Imran Shah',
+      username: 'imran',
+      password: 'pass-one',
+      role: 'OPERATOR',
+    });
+    await saveOperator({
+      name: 'Mr Khan',
+      username: 'boss',
+      password: 'pass-two',
+      role: 'ADMIN',
+    });
+
+    // Imran gave the manager 2,500 at the end of the day.
+    await pushCash({ manager_name: 'Mr Khan', manager_given: 2500 });
+
+    const boss = await buildUserReport({ operator: 'boss', ...range });
+
+    expect(boss.money_taken).toBe(2500);
+    expect(boss.activities[0]).toMatchObject({ kind: 'MONEY_TAKEN', recorded_by: 'Imran Shah' });
+  });
+
+  it('matches the name whatever case it was typed in', async () => {
+    await saveOperator({
+      name: 'Bilal Khan',
+      username: 'bilal',
+      password: 'pass-two',
+      role: 'OPERATOR',
+    });
+
+    await pushCash({ person_name: 'bilal khan', person_given: 1500 });
+
+    const bilal = await buildUserReport({ operator: 'bilal', ...range });
+    expect(bilal.money_taken).toBe(1500);
+  });
+
+  it('leaves the other person alone when the name belongs to nobody', async () => {
+    await saveOperator({
+      name: 'Bilal Khan',
+      username: 'bilal',
+      password: 'pass-two',
+      role: 'OPERATOR',
+    });
+
+    // A driver, a relative, somebody with no account at all.
+    await pushCash({ person_name: 'Someone Else', person_taken: 4000 });
+
+    const bilal = await buildUserReport({ operator: 'bilal', ...range });
+    expect(bilal.activities).toEqual([]);
+    expect(bilal.money_given).toBe(0);
+  });
+
   it('leaves out money somebody else wrote down', async () => {
     await pushCash({ operator: 'bilal', person_taken: 9000 });
 

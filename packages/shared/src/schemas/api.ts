@@ -510,6 +510,15 @@ export const reportActivitySchema = z.object({
   counterpart: z.string().nullable().default(null),
   /** Anything else worth reading on the line — how long a shift ran. */
   detail: z.string().nullable().default(null),
+  /**
+   * Who wrote this down, when it was not the person the report is about.
+   *
+   * A handover has two sides and is recorded by one of them. The other
+   * person's report shows it too — the other way round — and says whose
+   * record it came from, because "I never wrote that" is exactly the thing
+   * somebody will want to know.
+   */
+  recorded_by: z.string().nullable().default(null),
 });
 
 export type ReportActivity = z.infer<typeof reportActivitySchema>;

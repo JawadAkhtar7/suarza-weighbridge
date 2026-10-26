@@ -29,15 +29,20 @@ import { OperatorModel } from '../models/operator.model.js';
  */
 const MAX_ACTIVITIES = 500;
 
+/** A name as a Mongo match: exact, case-insensitive, nothing treated as a pattern. */
+function sameName(name: string): { $regex: string; $options: string } {
+  return { $regex: `^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' };
+}
+
 export async function buildUserReport(query: UserReportQuery): Promise<UserReport> {
   const operator = query.operator.trim().toLowerCase();
   const from = new Date(query.from);
   const to = new Date(query.to);
   const window = { $gte: from, $lte: to };
 
-  const [account, totals, weighings, cash, shiftLog] = await Promise.all([
-    OperatorModel.findOne({ username: operator }).lean(),
+  const account = await OperatorModel.findOne({ username: operator }).lean();
 
+  const [totals, weighings, cash, mirrored, shiftLog, everyone] = await Promise.all([
     /*
      * The headline figures, over the whole period rather than over the
      * lines that fit. VOID is excluded here as everywhere else: a voided
@@ -73,6 +78,26 @@ export async function buildUserReport(query: UserReportQuery): Promise<UserRepor
 
     ShiftCashModel.find({ operator, at: window }).sort({ at: 1 }).lean(),
 
+    /*
+     * The other side of somebody else's handover.
+     *
+     * A movement is written down by one of the two people it was between,
+     * and the other one's report has to show it as well — the other way
+     * round. Matched on the NAME, because that is what the person writing
+     * it chose from the list; a bridge where somebody typed a nickname
+     * instead will not match, which is the honest limit of matching on a
+     * name rather than an account.
+     */
+    account?.name
+      ? ShiftCashModel.find({
+          operator: { $ne: operator },
+          at: window,
+          $or: [{ person_name: sameName(account.name) }, { manager_name: sameName(account.name) }],
+        })
+          .sort({ at: 1 })
+          .lean()
+      : Promise.resolve([]),
+
     LogModel.find({
       kind: { $in: ['SHIFT_START', 'SHIFT_END'] },
       actor: operator,
@@ -80,7 +105,16 @@ export async function buildUserReport(query: UserReportQuery): Promise<UserRepor
     })
       .sort({ at: 1 })
       .lean(),
+
+    /* Usernames to names, so a mirrored line can say who recorded it. */
+    OperatorModel.find().select({ username: 1, name: 1 }).lean(),
   ]);
+
+  const nameFor = new Map(
+    everyone
+      .filter((person) => typeof person.username === 'string')
+      .map((person) => [String(person.username).toLowerCase(), person.name]),
+  );
 
   const activities: ReportActivity[] = [];
 
@@ -96,6 +130,7 @@ export async function buildUserReport(query: UserReportQuery): Promise<UserRepor
       vehicle_plate: row.vehicle_plate ?? null,
       counterpart: null,
       detail: null,
+      recorded_by: null,
     });
   }
 
@@ -112,6 +147,7 @@ export async function buildUserReport(query: UserReportQuery): Promise<UserRepor
       counterpart: null,
       /* "Shift lasted 7h 40m", as the bridge worked it out. */
       detail: entry.detail ?? null,
+      recorded_by: null,
     });
   }
 
@@ -150,7 +186,65 @@ export async function buildUserReport(query: UserReportQuery): Promise<UserRepor
           vehicle_plate: null,
           counterpart: pair.who || null,
           detail: null,
+          recorded_by: null,
         });
+      }
+    }
+  }
+
+  /*
+   * The same again, from the other side.
+   *
+   * Somebody else wrote these down with this person's name on them, so the
+   * directions swap: what they took from this person is money this person
+   * GAVE. The amounts count towards the totals, because a handover that
+   * happened is a handover that happened whoever typed it — and the line
+   * says whose record it is, so a figure can always be traced.
+   */
+  if (account?.name) {
+    const theirName = account.name.trim().toLowerCase();
+
+    for (const entry of mirrored) {
+      const at = new Date(entry.at).toISOString();
+      const writtenBy = nameFor.get(String(entry.operator).toLowerCase()) ?? entry.operator;
+
+      const pairs = [
+        { taken: entry.person_taken ?? 0, given: entry.person_given ?? 0, who: entry.person_name },
+        {
+          taken: entry.manager_taken ?? 0,
+          given: entry.manager_given ?? 0,
+          who: entry.manager_name,
+        },
+      ];
+
+      for (const [index, pair] of pairs.entries()) {
+        /* Only the half of the entry that names this person: the other
+           half was between the writer and somebody else entirely. */
+        if ((pair.who ?? '').trim().toLowerCase() !== theirName) continue;
+
+        /* They took from this person, so this person gave. */
+        moneyGiven += pair.taken;
+        moneyTaken += pair.given;
+
+        for (const [kind, amount] of [
+          ['MONEY_GIVEN', pair.taken],
+          ['MONEY_TAKEN', pair.given],
+        ] as const) {
+          if (amount <= 0) continue;
+          activities.push({
+            id: `m-${String(entry._id)}-${index}-${kind}`,
+            kind,
+            at,
+            amount,
+            slip_number: null,
+            vehicle_type: null,
+            vehicle_type_label: null,
+            vehicle_plate: null,
+            counterpart: writtenBy,
+            detail: null,
+            recorded_by: writtenBy,
+          });
+        }
       }
     }
   }
