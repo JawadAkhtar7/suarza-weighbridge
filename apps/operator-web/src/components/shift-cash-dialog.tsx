@@ -1,21 +1,15 @@
 /**
  * Money changing hands, written down as it happens.
  *
- * FOUR FIGURES, because cash moves both ways and with two sorts of people:
- * an operator can be handed the night's takings and hand back a float in
- * the same minute, and the manager collects at noon. Asking only "what did
- * you take" produced a record that looked wrong whenever the yard did
- * something ordinary.
+ * ONE PERSON AND TWO FIGURES. It began as two blocks — a colleague and the
+ * manager, four figures between them — which asked the operator to decide
+ * which kind of person they were handing money to before they could record
+ * it. The manager is in the same list of accounts as everybody else, so the
+ * question was never worth asking: pick the name, say what went each way.
  *
- * THE WORDING IS THE FEATURE. The people filling this in are weighbridge
- * operators, not accountants, and "received" and "disbursed" would be
- * guessed at rather than read. So the screen says what physically happened:
- * money *you took from* somebody, money *you gave to* somebody.
- *
- * The names come from a list and can be typed over. The operator on the
- * other shift and the manager are the same two people nearly every day, and
- * a dropdown is faster than a keyboard with a truck on the bridge — but a
- * stand-in nobody has entered must never be unenterable.
+ * The two amounts are labelled in Urdu. Every operator here reads it, not all
+ * of them read English, and these two labels are the whole of what the form
+ * asks — getting them the wrong way round is the one mistake it can make.
  *
  * EVERY SUBMISSION IS A NEW ENTRY, not a correction of the last one. Money
  * changes hands more than twice in a day, so the form opens empty each time
@@ -34,7 +28,6 @@ import {
   Button,
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -42,40 +35,23 @@ import {
   Label,
 } from '@suarza/ui';
 import { formatTimePkt, type ShiftCashEntry, type ShiftCashMovement } from '@suarza/shared';
-import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, UserRound } from 'lucide-react';
 
-/** The managers whose names have been typed here before. */
-const MANAGER_KEY = 'suarza.shift.manager-names';
+/** The slip's own Urdu face, already loaded by this app. */
+const URDU = { fontFamily: "'Noto Naskh Arabic', serif" } as const;
 
-function readManagerNames(): string[] {
-  try {
-    const raw = window.localStorage.getItem(MANAGER_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
-    return Array.isArray(parsed)
-      ? parsed.filter((name): name is string => typeof name === 'string')
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function rememberManagerName(name: string): void {
-  const trimmed = name.trim();
-  if (!trimmed) return;
-  try {
-    const kept = [trimmed, ...readManagerNames().filter((old) => old !== trimmed)].slice(0, 5);
-    window.localStorage.setItem(MANAGER_KEY, JSON.stringify(kept));
-  } catch {
-    // Only a convenience; the box still accepts anything typed into it.
-  }
-}
+/** What the two amount boxes are called. */
+const LABELS = {
+  taken: 'رقم جو آپ نے لی',
+  given: 'رقم جو آپ نے دی',
+} as const;
 
 const toAmount = (value: string): number => {
   const parsed = Number(value.replace(/[^0-9.]/g, ''));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
-/** A figure the operator types, with its direction said in words. */
+/** A figure the operator types, with its direction said in the label. */
 function AmountField({
   id,
   label,
@@ -94,84 +70,23 @@ function AmountField({
 
   return (
     <div className="space-y-1">
-      <Label htmlFor={id} className="flex items-center gap-1.5 text-xs font-normal">
+      <Label htmlFor={id} className="flex items-center gap-1.5 text-base font-medium">
         <Icon
-          className={inbound ? 'h-3.5 w-3.5 text-emerald-600' : 'h-3.5 w-3.5 text-amber-600'}
+          className={inbound ? 'h-4 w-4 text-emerald-600' : 'h-4 w-4 text-amber-600'}
           aria-hidden
         />
-        {label}
+        <span dir="rtl" style={URDU}>
+          {label}
+        </span>
       </Label>
       <Input
         id={id}
         inputMode="numeric"
-        className="tabular text-base font-semibold"
+        className="tabular h-12 text-xl font-semibold"
         placeholder="0"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
-    </div>
-  );
-}
-
-/** One counterpart: who they are, what you took, what you gave. */
-function CounterpartBlock({
-  id,
-  heading,
-  whoLabel,
-  names,
-  who,
-  onWho,
-  taken,
-  onTaken,
-  given,
-  onGiven,
-}: {
-  id: string;
-  heading: string;
-  whoLabel: string;
-  names: string[];
-  who: string;
-  onWho: (value: string) => void;
-  taken: string;
-  onTaken: (value: string) => void;
-  given: string;
-  onGiven: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-3 rounded-lg border p-3">
-      <p className="text-sm font-semibold">{heading}</p>
-
-      <div className="space-y-1">
-        <Label htmlFor={`${id}-who`} className="text-xs font-normal text-muted-foreground">
-          {whoLabel}
-        </Label>
-        <Autocomplete
-          id={`${id}-who`}
-          value={who}
-          onValueChange={onWho}
-          options={names.map((name) => ({ value: name, label: name }))}
-          listLabel={whoLabel}
-          emptyMessage="No saved names — type it in"
-          placeholder="Choose a name, or type one"
-        />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <AmountField
-          id={`${id}-taken`}
-          direction="in"
-          label="Money you TOOK (PKR)"
-          value={taken}
-          onChange={onTaken}
-        />
-        <AmountField
-          id={`${id}-given`}
-          direction="out"
-          label="Money you GAVE (PKR)"
-          value={given}
-          onChange={onGiven}
-        />
-      </div>
     </div>
   );
 }
@@ -193,6 +108,8 @@ function AlreadyRecorded({ entries }: { entries: ShiftCashEntry[] }) {
         text: `Gave ${entry.person_given} to ${entry.person_name || 'someone'}`,
         inbound: false,
       },
+      /* Older entries, from when the form asked about the manager
+         separately. Nothing writes these any more. */
       entry.manager_taken > 0 && {
         key: `${entry.id}-mt`,
         at,
@@ -237,7 +154,7 @@ function AlreadyRecorded({ entries }: { entries: ShiftCashEntry[] }) {
 
 export interface ShiftCashDialogProps {
   open: boolean;
-  /** Names to choose from: the other operators on the roster. */
+  /** The other accounts — operators and administrators alike. */
   operatorNames: string[];
   /** What this shift has written down already, oldest first. */
   recorded?: ShiftCashEntry[];
@@ -255,56 +172,53 @@ export function ShiftCashDialog({
   onSubmit,
   onSkip,
 }: ShiftCashDialogProps) {
-  const managerNames = React.useMemo(readManagerNames, [open]);
-
-  const [personName, setPersonName] = React.useState('');
-  const [personTaken, setPersonTaken] = React.useState('');
-  const [personGiven, setPersonGiven] = React.useState('');
-  const [managerName, setManagerName] = React.useState('');
-  const [managerTaken, setManagerTaken] = React.useState('');
-  const [managerGiven, setManagerGiven] = React.useState('');
+  const [who, setWho] = React.useState('');
+  const [taken, setTaken] = React.useState('');
+  const [given, setGiven] = React.useState('');
 
   /*
    * Empty each time the form opens, because each submission is a NEW
-   * handing-over rather than a correction of the last. The manager's name
-   * is the exception: it is the same person nearly every day, and the list
-   * remembers who was typed last.
-   *
-   * Keyed on `open` alone: the names arrive after the first render, and
-   * re-running this when they do would wipe whatever the operator had begun
-   * typing.
+   * handing-over rather than a correction of the last.
    */
   React.useEffect(() => {
     if (!open) return;
-    setPersonName('');
-    setPersonTaken('');
-    setPersonGiven('');
-    setManagerName(managerNames[0] ?? '');
-    setManagerTaken('');
-    setManagerGiven('');
+    setWho('');
+    setTaken('');
+    setGiven('');
   }, [open]);
 
   const submit = () => {
-    rememberManagerName(managerName);
-
+    /*
+     * Written into the `person` pair, which is where everything new goes.
+     * The manager pair beside it in the record is only read, for entries
+     * made when the form asked about the two separately.
+     */
     onSubmit({
-      person_name: personName.trim(),
-      person_taken: toAmount(personTaken),
-      person_given: toAmount(personGiven),
-      manager_name: managerName.trim(),
-      manager_taken: toAmount(managerTaken),
-      manager_given: toAmount(managerGiven),
+      person_name: who.trim(),
+      person_taken: toAmount(taken),
+      person_given: toAmount(given),
+      manager_name: '',
+      manager_taken: 0,
+      manager_given: 0,
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onSkip()}>
-      <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
+      <DialogContent
+        className="max-h-[92vh] max-w-md overflow-y-auto"
+        /*
+         * Nothing is focused when this opens.
+         *
+         * The dialog focuses its first field by default, and the first
+         * field here is the name box — which answered by unfurling its list
+         * over the two amounts, unasked, every single time. It also keeps a
+         * tablet's keyboard down until the operator actually taps a box.
+         */
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Move money</DialogTitle>
-          <DialogDescription>
-            Write down the money that changed hands. Put 0 where nothing did.
-          </DialogDescription>
         </DialogHeader>
 
         {/* What is already written down for this shift. Shown above the
@@ -312,31 +226,45 @@ export function ShiftCashDialog({
             whether they have typed it already. */}
         {recorded.length > 0 && <AlreadyRecorded entries={recorded} />}
 
-        <div className="space-y-3">
-          <CounterpartBlock
-            id="shift-cash-person"
-            heading="Another operator"
-            whoLabel="Their name"
-            names={operatorNames}
-            who={personName}
-            onWho={setPersonName}
-            taken={personTaken}
-            onTaken={setPersonTaken}
-            given={personGiven}
-            onGiven={setPersonGiven}
+        <div className="space-y-4">
+          {/* A dropdown that can also be typed into: the people are the
+              accounts the manager keeps, but a stand-in nobody has entered
+              must never be unenterable.
+              
+              No label above it: "Select Person" in the box says the same
+              thing in the space the label would have taken, and this form is
+              three fields long. */}
+          <Autocomplete
+            id="shift-cash-who"
+            value={who}
+            onValueChange={setWho}
+            options={operatorNames.map((name) => ({ value: name, label: name }))}
+            listLabel="People"
+            emptyMessage="No saved names — type it in"
+            placeholder="Select Person"
+            optionIcon={UserRound}
+            separateOptions
+            /* The dialog does not focus this on open (see DialogContent),
+               but a field that unfurls its list the moment it is touched
+               would still cover the amounts underneath. */
+            openOnFocus={false}
+            className="h-12 text-base"
           />
 
-          <CounterpartBlock
-            id="shift-cash-manager"
-            heading="The manager"
-            whoLabel="Manager's name"
-            names={managerNames}
-            who={managerName}
-            onWho={setManagerName}
-            taken={managerTaken}
-            onTaken={setManagerTaken}
-            given={managerGiven}
-            onGiven={setManagerGiven}
+          <AmountField
+            id="shift-cash-taken"
+            direction="in"
+            label={LABELS.taken}
+            value={taken}
+            onChange={setTaken}
+          />
+
+          <AmountField
+            id="shift-cash-given"
+            direction="out"
+            label={LABELS.given}
+            value={given}
+            onChange={setGiven}
           />
         </div>
 

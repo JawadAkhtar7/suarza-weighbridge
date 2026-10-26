@@ -35,6 +35,15 @@ interface NavItem {
   label: string;
   description: string;
   icon: typeof LayoutDashboard;
+  /**
+   * The tile the icon sits in.
+   *
+   * A colour per destination, so the sidebar is found by shape and hue
+   * before it is read — seven grey outlines in a column all look like each
+   * other. The colours are not data: nothing here is being compared, so they
+   * only have to be distinct and to belong to the same family.
+   */
+  tile: string;
   /** Matched exactly, so /ledger/<customer> does not also light up Dashboard. */
   end?: boolean;
 }
@@ -45,14 +54,51 @@ const NAV: NavItem[] = [
     label: 'Dashboard',
     description: 'Weighings and revenue',
     icon: LayoutDashboard,
+    tile: 'bg-primary/15 text-primary',
     end: true,
   },
-  { to: '/ledger', label: 'Ledger', description: 'Customer accounts', icon: BookOpen },
-  { to: '/customers', label: 'Customers', description: 'Names and companies', icon: Users },
-  { to: '/vehicle-types', label: 'Vehicle types', description: 'Rates per vehicle', icon: Truck },
-  { to: '/operators', label: 'Operators', description: 'Shifts and sign-ins', icon: UserCog },
-  { to: '/logs', label: 'Logs', description: 'Shifts and voided slips', icon: ScrollText },
-  { to: '/reports', label: 'Reports', description: 'Per person, per period', icon: FileText },
+  {
+    to: '/ledger',
+    label: 'Ledger',
+    description: 'Customer accounts',
+    icon: BookOpen,
+    tile: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  },
+  {
+    to: '/customers',
+    label: 'Customers',
+    description: 'Names and companies',
+    icon: Users,
+    tile: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
+  },
+  {
+    to: '/vehicle-types',
+    label: 'Vehicle types',
+    description: 'Rates per vehicle',
+    icon: Truck,
+    tile: 'bg-brand/15 text-brand',
+  },
+  {
+    to: '/operators',
+    label: 'Operators',
+    description: 'Who may sign in',
+    icon: UserCog,
+    tile: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+  },
+  {
+    to: '/logs',
+    label: 'Logs',
+    description: 'Shifts and voided slips',
+    icon: ScrollText,
+    tile: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+  },
+  {
+    to: '/reports',
+    label: 'Reports',
+    description: 'Per person, per period',
+    icon: FileText,
+    tile: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  },
 ];
 
 /**
@@ -70,7 +116,7 @@ function readCollapsed(): boolean {
 function NavItems({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   return (
     <nav className="flex flex-col gap-1">
-      {NAV.map(({ to, label, description, icon: Icon, end }) => (
+      {NAV.map(({ to, label, description, icon: Icon, tile, end }) => (
         <NavLink
           key={to}
           to={to}
@@ -81,7 +127,7 @@ function NavItems({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
           className={({ isActive }) =>
             cn(
               'group relative flex items-center rounded-lg text-sm transition-colors',
-              collapsed ? 'h-11 w-11 justify-center' : 'gap-3 px-3 py-2.5',
+              collapsed ? 'h-11 w-11 justify-center' : 'gap-2.5 px-2 py-2',
               isActive
                 ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -95,7 +141,30 @@ function NavItems({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
               {isActive && !collapsed && (
                 <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r bg-primary-foreground/70" />
               )}
-              <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive && 'drop-shadow-sm')} />
+              {/*
+               * The icon in a tile of its own colour, filled rather than
+               * drawn: at 18px a hairline outline is the first thing lost
+               * on a bright screen in a cabin at noon.
+               *
+               * On the active row the tile turns to glass — the row is
+               * already the brand green, and a coloured square on top of it
+               * would be two competing fills.
+               */}
+              <span
+                className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors',
+                  isActive ? 'bg-primary-foreground/20 text-primary-foreground' : tile,
+                )}
+              >
+                <Icon
+                  className="h-[18px] w-[18px]"
+                  /* Filled, with the outline kept thin so the shape still
+                     reads at this size rather than becoming a blob. */
+                  fill="currentColor"
+                  fillOpacity={0.18}
+                  strokeWidth={2.25}
+                />
+              </span>
               {!collapsed && (
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium leading-tight">{label}</span>

@@ -140,15 +140,31 @@ describe('what the report counts', () => {
     expect(report.takings).toBe(300);
   });
 
-  it('breaks the weighings down by the Pakistan day, not the UTC one', async () => {
+  it('lists a weighing with the truck it was for', async () => {
+    await ingest([weighedBy('imran', '09:00', 300)], []);
+
+    const report = await buildUserReport({ operator: 'imran', ...range });
+    const [line] = report.activities;
+
+    expect(line).toMatchObject({
+      kind: 'WEIGHMENT',
+      amount: 300,
+      vehicle_type: 'truck',
+      vehicle_plate: 'LES-1234',
+    });
+    expect(line?.slip_number).toBeTruthy();
+  });
+
+  it('keeps a weighing from the small hours on the right side of the window', async () => {
     // 02:00 in Pakistan is the previous evening in UTC; it belongs to this day.
     await ingest([weighedBy('imran', '02:00', 100), weighedBy('imran', '23:00', 200)], []);
 
     const report = await buildUserReport({ operator: 'imran', ...range });
-    expect(report.days).toEqual([{ date: DAY, weighments: 2, takings: 300 }]);
+    expect(report.weighments).toBe(2);
+    expect(report.activities).toHaveLength(2);
   });
 
-  it('adds up the money both ways, and lists every movement', async () => {
+  it('adds up the money both ways, and gives each direction its own line', async () => {
     await pushCash({ person_name: 'Bilal', person_taken: 4000 });
     await pushCash({ manager_name: 'Mr Khan', manager_given: 2500, manager_taken: 500 });
 
@@ -156,7 +172,13 @@ describe('what the report counts', () => {
 
     expect(report.money_taken).toBe(4500);
     expect(report.money_given).toBe(2500);
-    expect(report.movements).toHaveLength(2);
+
+    /* Three lines, not two movements: the second entry moved money both
+       ways, and each direction is its own fact. */
+    const money = report.activities.filter((line) => line.kind.startsWith('MONEY_'));
+    expect(money).toHaveLength(3);
+    expect(money.filter((line) => line.kind === 'MONEY_GIVEN')).toHaveLength(1);
+    expect(money.find((line) => line.amount === 4000)?.counterpart).toBe('Bilal');
   });
 
   it('leaves out money somebody else wrote down', async () => {
@@ -164,7 +186,7 @@ describe('what the report counts', () => {
 
     const report = await buildUserReport({ operator: 'imran', ...range });
     expect(report.money_taken).toBe(0);
-    expect(report.movements).toEqual([]);
+    expect(report.activities).toEqual([]);
   });
 
   it('reports the hours they were signed in, and says when one is still open', async () => {
@@ -207,17 +229,48 @@ describe('what the report counts', () => {
       });
 
     const report = await buildUserReport({ operator: 'imran', ...range });
+    const shifts = report.activities.filter((line) => line.kind.startsWith('SHIFT_'));
 
-    expect(report.sessions).toHaveLength(2);
-    expect(report.sessions[0]?.ended_at).not.toBeNull();
-    expect(report.sessions[1]?.ended_at).toBeNull();
+    expect(shifts.map((line) => line.kind)).toEqual(['SHIFT_START', 'SHIFT_END', 'SHIFT_START']);
+  });
+
+  it('tells one story, oldest first, whatever the lines came from', async () => {
+    await ingest([weighedBy('imran', '09:00', 300)], []);
+    await pushCash({ person_name: 'Bilal', person_taken: 4000 });
+    await request(app)
+      .post('/api/sync/operator-logs')
+      .set('x-api-key', TEST_API_KEY)
+      .send({
+        entries: [
+          {
+            id: 'start-only',
+            kind: 'SHIFT_START',
+            at: `${DAY}T08:00:00+05:00`,
+            username: 'imran',
+            name: 'Imran Shah',
+            role: 'OPERATOR',
+            session_id: 'session-1',
+            detail: null,
+          },
+        ],
+      });
+
+    const report = await buildUserReport({ operator: 'imran', ...range });
+
+    // 08:00 the shift, 09:00 the truck, 09:30 the money.
+    expect(report.activities.map((line) => line.kind)).toEqual([
+      'SHIFT_START',
+      'WEIGHMENT',
+      'MONEY_TAKEN',
+    ]);
   });
 
   it('answers with zeroes for somebody who did nothing, rather than failing', async () => {
     const report = await buildUserReport({ operator: 'nobody', ...range });
 
     expect(report).toMatchObject({ weighments: 0, takings: 0, money_taken: 0, money_given: 0 });
-    expect(report.days).toEqual([]);
+    expect(report.activities).toEqual([]);
+    expect(report.truncated).toBe(false);
   });
 });
 

@@ -41,6 +41,23 @@ export interface AutocompleteProps<T = unknown> extends Omit<
   emptyMessage?: string;
   /** Label for the dropdown button, for screen readers. */
   listLabel?: string;
+  /**
+   * An icon drawn beside every option.
+   *
+   * For a list of one KIND of thing — people, trucks — where the icon says
+   * what the list is rather than which row this is. Omitted draws none.
+   */
+  optionIcon?: React.ComponentType<{ className?: string }>;
+  /** A rule between the options, for a short list of equals. */
+  separateOptions?: boolean;
+  /**
+   * Open the list when the box takes focus.
+   *
+   * On by default, which is what a filter wants: clicking it shows what
+   * there is. A form that opens with this field focused wants the opposite
+   * — a list unfurling over the fields below it, unasked, is in the way.
+   */
+  openOnFocus?: boolean;
 }
 
 export function Autocomplete<T = unknown>({
@@ -51,6 +68,9 @@ export function Autocomplete<T = unknown>({
   isLoading = false,
   emptyMessage = 'No matches',
   listLabel = 'Suggestions',
+  optionIcon: OptionIcon,
+  separateOptions = false,
+  openOnFocus = true,
   className,
   onKeyDown,
   onFocus,
@@ -171,7 +191,7 @@ export function Autocomplete<T = unknown>({
         }}
         onFocus={(event) => {
           onFocus?.(event);
-          setOpen(true);
+          if (openOnFocus) setOpen(true);
         }}
         onKeyDown={handleKeyDown}
         onBlur={onBlur}
@@ -196,7 +216,10 @@ export function Autocomplete<T = unknown>({
           id={listId}
           role="listbox"
           aria-label={listLabel}
-          className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md"
+          className={cn(
+            'absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md',
+            separateOptions && 'divide-y divide-border',
+          )}
         >
           {options.length === 0 ? (
             <li className="px-3 py-2 text-sm text-muted-foreground">
@@ -221,6 +244,14 @@ export function Autocomplete<T = unknown>({
                     index === activeIndex && 'bg-accent text-accent-foreground',
                   )}
                 >
+                  {OptionIcon && (
+                    <span
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+                      aria-hidden
+                    >
+                      <OptionIcon className="h-4 w-4" />
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{option.label}</span>
                     {option.description && (

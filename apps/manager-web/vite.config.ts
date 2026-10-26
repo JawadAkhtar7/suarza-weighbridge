@@ -15,7 +15,15 @@ const API_ROUTES = [
   '/analytics',
   '/suggestions',
   '/health',
-  '/r',
+  /*
+   * The public slip page, with its slash.
+   *
+   * `/r` without it also matched `/reports` — a page in this app — so a
+   * browser refresh on Reports was proxied to the API, which answered "No
+   * route for GET /reports" instead of serving the app. The same list feeds
+   * the service worker's navigation denylist, so the slash fixes both.
+   */
+  '/r/',
   /*
    * Everything added from the ledger onwards lives under `/api`, kept apart
    * from the pages on purpose: `/ledger` is also a route in this app, and

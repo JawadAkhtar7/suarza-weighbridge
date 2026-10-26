@@ -1,23 +1,20 @@
 /**
- * Reports: one person, one stretch of time, one page.
+ * Reports: one person, one period, one story.
  *
- * Pick somebody from the list, pick the days, read the report — or print it,
- * which is how a web page becomes a PDF anybody can keep.
+ * Pick somebody, pick the days and hours, read what they did — in the order
+ * they did it. Five kinds of thing happen in a shift (a truck weighed, a
+ * shift begun or ended, money taken or given) and they used to be three
+ * separate tables, which left the reader doing the ordering in their head.
+ * One list, sorted by the clock, with an icon per kind.
  *
- * IT REPLACED an audit screen that laid two shifts side by side, worked out
- * what was left over and pronounced on whether a shift balanced. The client
- * could not read it at a glance, and no wonder: it answered a question
- * nobody had asked, over figures nobody had checked. This answers the plain
- * ones. How many trucks did this person weigh, what did those weighings
- * charge, what money came to them and what did they hand on, and when were
- * they here.
+ * The figures above it are counted over the WHOLE period, not over the lines
+ * listed, so a long report that has been cut still adds up.
  *
- * Built for a phone as much as a desk: the figures stack, the tables scroll
- * rather than squeeze, and the print styles put the whole thing on paper
- * without the chrome around it.
+ * Built for a phone as much as a desk: the cards stack, the table scrolls
+ * rather than squeezes, and the print styles put the report alone on paper
+ * with its colour intact.
  */
 
-import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DayPicker, type DateRange as PickerRange } from 'react-day-picker';
@@ -31,6 +28,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
   Skeleton,
   Table,
   TableBody,
@@ -44,8 +48,9 @@ import {
   formatDatePkt,
   formatPKR,
   formatTimePkt,
-  type Operator,
-  type ShiftCashEntry,
+  vehicleTypeLabel,
+  type ReportActivity,
+  type ReportActivityKind,
   type UserReport,
 } from '@suarza/shared';
 import {
@@ -53,15 +58,21 @@ import {
   ArrowUpRight,
   CalendarDays,
   Clock3,
-  FileText,
+  LogIn,
+  LogOut,
   Printer,
   Scale,
   ShieldCheck,
+  Truck,
+  UserRound,
   Wallet,
   X,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { resolveRange, type RangeKey } from '../lib/date-ranges.js';
+
+const DAY_START = '00:00';
+const DAY_END = '23:59';
 
 /** The ranges offered, in the order a manager reaches for them. */
 const RANGES: { key: RangeKey; label: string }[] = [
@@ -71,13 +82,117 @@ const RANGES: { key: RangeKey; label: string }[] = [
   { key: 'lastMonth', label: 'Last month' },
 ];
 
+/** Minutes past midnight, or null for anything that is not a time of day. */
+function clockMinutes(clock: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(clock.trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
 /**
- * One headline figure.
+ * Narrow a run of days to a stretch of hours inside it.
  *
- * Three tones, not four colours: the yard's own money is the brand green,
- * cash coming in is green, cash going out is amber. A fourth hue would say
- * something, and there is nothing more to say.
+ * Measured from the day boundaries the date buttons already produce — which
+ * are Pakistan midnights — so the clock the manager types means the clock at
+ * the yard rather than the clock on this server.
+ *
+ * On a single day this is exactly "between these two times". Across several
+ * it runs from the first day's start time to the last day's end time, which
+ * is what a range of anything means.
  */
+function withinDay(
+  days: { from?: string; to?: string },
+  fromTime: string,
+  toTime: string,
+): { from?: string; to?: string } {
+  const start = clockMinutes(fromTime);
+  const end = clockMinutes(toTime);
+  if (start === null || end === null || !days.from || !days.to) return days;
+
+  const MINUTE = 60_000;
+  const firstMidnight = new Date(days.from).getTime();
+  /* `to` is the last millisecond of the last day, so its own midnight is
+     that instant less a day. */
+  const lastMidnight = new Date(days.to).getTime() - (24 * 60 * MINUTE - 1);
+
+  return {
+    from: new Date(firstMidnight + start * MINUTE).toISOString(),
+    /* To the end of the chosen minute, so 08:00–20:00 includes 20:00:59. */
+    to: new Date(lastMidnight + end * MINUTE + (MINUTE - 1)).toISOString(),
+  };
+}
+
+/**
+ * How each kind of line looks.
+ *
+ * Colour follows what the line IS, and the same pairing throughout: money in
+ * is green, money out is amber, a weighing is the brand's own green, a shift
+ * boundary is the quiet blue of something that is neither. The icon carries
+ * it as well as the colour, for anyone reading in grey.
+ */
+const ACTIVITY_STYLE: Record<
+  ReportActivityKind,
+  { icon: typeof Scale; label: string; disc: string; amount: string }
+> = {
+  WEIGHMENT: {
+    icon: Truck,
+    label: 'Weighment',
+    disc: 'bg-primary/15 text-primary',
+    amount: 'text-primary',
+  },
+  SHIFT_START: {
+    icon: LogIn,
+    label: 'Shift started',
+    disc: 'bg-sky-500/15 text-sky-700 dark:text-sky-400',
+    amount: 'text-muted-foreground',
+  },
+  SHIFT_END: {
+    icon: LogOut,
+    label: 'Shift ended',
+    disc: 'bg-violet-500/15 text-violet-700 dark:text-violet-400',
+    amount: 'text-muted-foreground',
+  },
+  MONEY_TAKEN: {
+    icon: ArrowDownLeft,
+    label: 'Money taken',
+    disc: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+    amount: 'text-emerald-700 dark:text-emerald-400',
+  },
+  MONEY_GIVEN: {
+    icon: ArrowUpRight,
+    label: 'Money given',
+    disc: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+    amount: 'text-amber-700 dark:text-amber-400',
+  },
+};
+
+/** What the middle column says, which differs by kind. */
+function describe(activity: ReportActivity): string {
+  switch (activity.kind) {
+    case 'WEIGHMENT':
+      return `Slip ${activity.slip_number ?? '—'}`;
+    case 'MONEY_TAKEN':
+      return `From ${activity.counterpart || 'someone unnamed'}`;
+    case 'MONEY_GIVEN':
+      return `To ${activity.counterpart || 'someone unnamed'}`;
+    default:
+      return activity.detail ?? '';
+  }
+}
+
+/** The truck, for the lines that have one. */
+function vehicleOf(activity: ReportActivity): string {
+  if (activity.kind !== 'WEIGHMENT') return '';
+  const type = activity.vehicle_type
+    ? vehicleTypeLabel(activity.vehicle_type, activity.vehicle_type_label ?? '')
+    : '';
+  return [activity.vehicle_plate, type].filter(Boolean).join(' · ');
+}
+
+/** One headline figure. */
 const FIGURE_TONES = {
   brandGreen: {
     wash: 'bg-primary/5 border-primary/30',
@@ -123,103 +238,28 @@ function Figure({
   );
 }
 
-/** Every line one movement produces — a movement may record up to four. */
-function movementLines(entry: ShiftCashEntry) {
-  return [
-    entry.person_taken > 0 && {
-      key: `${entry.id}-pt`,
-      inbound: true,
-      who: entry.person_name || 'someone unnamed',
-      amount: entry.person_taken,
-    },
-    entry.person_given > 0 && {
-      key: `${entry.id}-pg`,
-      inbound: false,
-      who: entry.person_name || 'someone unnamed',
-      amount: entry.person_given,
-    },
-    entry.manager_taken > 0 && {
-      key: `${entry.id}-mt`,
-      inbound: true,
-      who: entry.manager_name || 'the manager',
-      amount: entry.manager_taken,
-    },
-    entry.manager_given > 0 && {
-      key: `${entry.id}-mg`,
-      inbound: false,
-      who: entry.manager_name || 'the manager',
-      amount: entry.manager_given,
-    },
-  ].filter(Boolean) as { key: string; inbound: boolean; who: string; amount: number }[];
-}
-
-/** `8h 15m`, or `—` for a shift still running. */
-function lengthOf(session: { started_at: string; ended_at: string | null }): string {
-  if (!session.ended_at) return 'still signed in';
-  const minutes = Math.max(
-    0,
-    Math.round(
-      (new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60_000,
-    ),
-  );
-  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
-}
-
-/** The whole period in one line: one day reads as that day. */
+/**
+ * The whole period in one line: one day reads as that day.
+ *
+ * The hours are named only when they are not the whole day — but then they
+ * MUST be, including on paper: a report of eight hours that read like a
+ * report of the day would be a misleading thing to hand somebody.
+ */
 function periodLabel(from: string, to: string): string {
   const start = formatDatePkt(from);
   const finish = formatDatePkt(to);
-  return start === finish ? start : `${start} – ${finish}`;
-}
+  const days = start === finish ? start : `${start} – ${finish}`;
 
-/** A section, with the brand's own rule under its heading. */
-function Section({
-  title,
-  aside,
-  children,
-}: {
-  title: string;
-  aside?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-primary/20 pb-1">
-        <h3 className="text-sm font-bold uppercase tracking-wide text-primary">{title}</h3>
-        {aside && <span className="tabular text-xs text-muted-foreground">{aside}</span>}
-      </div>
-      {children}
-    </section>
-  );
+  const opens = formatTimePkt(from);
+  const closes = formatTimePkt(to);
+  const wholeDay = opens === '12:00 AM' && closes === '11:59 PM';
+
+  return wholeDay ? days : `${days} · ${opens} – ${closes}`;
 }
 
 function Report({ report }: { report: UserReport }) {
-  const lines = report.movements.flatMap((entry) =>
-    movementLines(entry).map((line) => ({ ...line, at: entry.at })),
-  );
-
-  /* The whole time signed in, which is the figure a manager totals by hand
-     otherwise. */
-  const workedMinutes = report.sessions.reduce((sum, session) => {
-    if (!session.ended_at) return sum;
-    return (
-      sum +
-      Math.max(
-        0,
-        Math.round(
-          (new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60_000,
-        ),
-      )
-    );
-  }, 0);
-  const workedLabel = `${Math.floor(workedMinutes / 60)}h ${String(workedMinutes % 60).padStart(2, '0')}m`;
-
-  const period = periodLabel(report.from, report.to);
-
   return (
     /*
-     * The report, on screen and on paper alike.
-     *
      * `print-color-adjust: exact` is what keeps the colour: browsers drop
      * background fills when printing to save ink, which would leave a sheet
      * of grey boxes with no brand on it at all.
@@ -250,7 +290,9 @@ function Report({ report }: { report: UserReport }) {
         <div className="flex flex-wrap items-center justify-between gap-3 bg-primary/5 px-4 py-3">
           <div>
             <h2 className="text-xl font-bold text-primary">{report.operator_name}</h2>
-            <p className="tabular text-sm text-muted-foreground">{period}</p>
+            <p className="tabular text-sm text-muted-foreground">
+              {periodLabel(report.from, report.to)}
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -270,14 +312,14 @@ function Report({ report }: { report: UserReport }) {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Figure
-          label="Weighings"
+          label="Weighments"
           value={report.weighments.toLocaleString()}
           note="Voided tickets excluded"
           icon={Scale}
           tone="brandGreen"
         />
         <Figure
-          label="Earned"
+          label="Total profit"
           value={formatPKR(report.takings)}
           note="What those weighings charged"
           icon={Wallet}
@@ -299,121 +341,81 @@ function Report({ report }: { report: UserReport }) {
         />
       </div>
 
-      <Section title={period} aside={`${report.weighments.toLocaleString()} weighings in total`}>
-        {report.days.length === 0 ? (
+      <section className="space-y-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-primary/20 pb-1">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-primary">Activity</h3>
+          <span className="tabular text-xs text-muted-foreground">
+            {report.activities.length.toLocaleString()} entries, oldest first
+          </span>
+        </div>
+
+        {report.activities.length === 0 ? (
           <p className="rounded-lg border p-4 text-sm text-muted-foreground">
-            No weighings in this period.
+            Nothing recorded in this period.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow className="bg-primary/10 hover:bg-primary/10">
-                  <TableHead className="font-semibold text-primary">Day</TableHead>
-                  <TableHead className="text-right font-semibold text-primary">Weighings</TableHead>
-                  <TableHead className="text-right font-semibold text-primary">Earned</TableHead>
+                  <TableHead className="font-semibold text-primary">Time</TableHead>
+                  <TableHead className="font-semibold text-primary">Activity</TableHead>
+                  <TableHead className="font-semibold text-primary">Details</TableHead>
+                  <TableHead className="font-semibold text-primary">Vehicle</TableHead>
+                  <TableHead className="text-right font-semibold text-primary">Amount</TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
-                {report.days.map((day) => (
-                  <TableRow key={day.date}>
-                    <TableCell className="whitespace-nowrap">{formatDatePkt(day.date)}</TableCell>
-                    <TableCell className="tabular text-right">
-                      {day.weighments.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="tabular text-right font-semibold text-primary">
-                      {formatPKR(day.takings)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {report.activities.map((activity) => {
+                  const style = ACTIVITY_STYLE[activity.kind];
+                  const vehicle = vehicleOf(activity);
+
+                  return (
+                    <TableRow key={activity.id}>
+                      <TableCell className="tabular whitespace-nowrap align-top text-muted-foreground">
+                        <span className="block">{formatTimePkt(activity.at)}</span>
+                        <span className="block text-xs">{formatDatePkt(activity.at)}</span>
+                      </TableCell>
+
+                      <TableCell className="align-top">
+                        <span className="flex items-center gap-2 whitespace-nowrap font-medium">
+                          <span
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${style.disc}`}
+                            aria-hidden
+                          >
+                            <style.icon className="h-4 w-4" />
+                          </span>
+                          {style.label}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="align-top">{describe(activity)}</TableCell>
+
+                      <TableCell className="align-top text-muted-foreground">
+                        {vehicle || '—'}
+                      </TableCell>
+
+                      <TableCell
+                        className={`tabular whitespace-nowrap text-right align-top font-semibold ${style.amount}`}
+                      >
+                        {activity.amount > 0 ? formatPKR(activity.amount) : '—'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
         )}
-      </Section>
 
-      <Section
-        title="Money moved"
-        aside={`${formatPKR(report.money_taken)} taken · ${formatPKR(report.money_given)} given`}
-      >
-        {lines.length === 0 ? (
-          <p className="rounded-lg border p-4 text-sm text-muted-foreground">
-            Nothing written down in this period.
+        {report.truncated && (
+          <p className="text-xs text-muted-foreground">
+            Only the first {report.activities.length.toLocaleString()} entries are listed. The
+            figures above count the whole period — narrow the dates to list the rest.
           </p>
-        ) : (
-          <ul className="divide-y overflow-hidden rounded-lg border">
-            {lines.map((line) => (
-              <li
-                key={line.key}
-                className={`flex items-center gap-3 p-3 text-sm ${
-                  line.inbound ? 'bg-emerald-500/5' : 'bg-amber-500/5'
-                }`}
-              >
-                <span
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                    line.inbound
-                      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
-                      : 'bg-amber-500/20 text-amber-700 dark:text-amber-400'
-                  }`}
-                  aria-hidden
-                >
-                  {line.inbound ? '+' : '−'}
-                </span>
-
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">
-                    {line.inbound ? 'Took from' : 'Gave to'}{' '}
-                    <span className="font-medium">{line.who}</span>
-                  </span>
-                  <span className="tabular text-xs text-muted-foreground">
-                    {formatDatePkt(line.at)} · {formatTimePkt(line.at)}
-                  </span>
-                </span>
-
-                <span
-                  className={`tabular shrink-0 font-semibold ${
-                    line.inbound
-                      ? 'text-emerald-700 dark:text-emerald-400'
-                      : 'text-amber-700 dark:text-amber-400'
-                  }`}
-                >
-                  {formatPKR(line.amount)}
-                </span>
-              </li>
-            ))}
-          </ul>
         )}
-      </Section>
-
-      <Section
-        title="Shift Length"
-        aside={workedMinutes > 0 ? `${workedLabel} in total` : undefined}
-      >
-        {report.sessions.length === 0 ? (
-          <p className="rounded-lg border p-4 text-sm text-muted-foreground">
-            They did not sign in during this period.
-          </p>
-        ) : (
-          <ul className="divide-y overflow-hidden rounded-lg border">
-            {report.sessions.map((session) => (
-              <li
-                key={session.started_at}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3 text-sm"
-              >
-                <Clock3 className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
-                <span className="whitespace-nowrap font-medium">
-                  {formatDatePkt(session.started_at)}
-                </span>
-                <span className="tabular text-muted-foreground">
-                  {formatTimePkt(session.started_at)} –{' '}
-                  {session.ended_at ? formatTimePkt(session.ended_at) : 'now'}
-                </span>
-                <span className="tabular ml-auto font-bold text-primary">{lengthOf(session)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      </section>
     </div>
   );
 }
@@ -423,22 +425,31 @@ export function ReportsPage() {
   const [custom, setCustom] = useState<{ from?: Date; to?: Date }>({});
   const [pickerOpen, setPickerOpen] = useState(false);
   const [draftRange, setDraftRange] = useState<PickerRange | undefined>();
-  const [chosen, setChosen] = useState<Operator | null>(null);
+  const [chosen, setChosen] = useState<string>('');
 
-  const range = useMemo(() => resolveRange(rangeKey, custom), [rangeKey, custom]);
+  const days = useMemo(() => resolveRange(rangeKey, custom), [rangeKey, custom]);
+
+  /* The hours within those days. Midnight to midnight until the manager
+     narrows it, which is the whole day and the same answer the days alone
+     would give. */
+  const [fromTime, setFromTime] = useState(DAY_START);
+  const [toTime, setToTime] = useState(DAY_END);
+
+  const range = useMemo(() => withinDay(days, fromTime, toTime), [days, fromTime, toTime]);
+  const narrowed = fromTime !== DAY_START || toTime !== DAY_END;
 
   const roster = useQuery({ queryKey: ['roster'], queryFn: api.roster });
   const people = (roster.data?.operators ?? []).filter((person) => person.username);
 
   const report = useQuery({
-    queryKey: ['user-report', chosen?.username, range.from, range.to],
+    queryKey: ['user-report', chosen, range.from, range.to],
     queryFn: () =>
       api.userReport({
-        operator: chosen?.username ?? '',
+        operator: chosen,
         from: range.from ?? new Date(0).toISOString(),
         to: range.to ?? new Date().toISOString(),
       }),
-    enabled: Boolean(chosen?.username),
+    enabled: chosen !== '',
   });
 
   const customLabel =
@@ -449,39 +460,87 @@ export function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Print styles, scoped to this page: on paper the report is the whole
-          sheet — no sidebar, no buttons, no list of people. */}
+          sheet — no sidebar, no buttons, no controls. */}
       <style>{`
         @media print {
-          /* A white sheet whatever the screen was set to: printing a dark
-             theme puts a page of ink on paper and reads worse for it. */
-          :root { color-scheme: light; }
-          body { background: #fff; }
+          /*
+           * A white sheet whatever the screen was set to.
+           *
+           * Forcing the background alone was not enough: the TEXT colours
+           * come from theme tokens, so a report printed from dark mode put
+           * pale grey type on white paper — technically ink, practically
+           * unreadable. The handful of tokens the report draws with are
+           * redeclared here with the light theme's own values, so what
+           * reaches the printer is the light theme whatever the screen is.
+           */
+          :root,
+          html.dark {
+            color-scheme: light;
+            --background: 0 0% 100%;
+            --foreground: 222 47% 11%;
+            --card: 0 0% 100%;
+            --card-foreground: 222 47% 11%;
+            --popover: 0 0% 100%;
+            --popover-foreground: 222 47% 11%;
+            --primary: 146 62% 22%;
+            --primary-foreground: 0 0% 100%;
+            --brand-orange: 28 92% 55%;
+            --secondary: 210 40% 96%;
+            --secondary-foreground: 222 47% 11%;
+            --muted: 210 40% 96%;
+            --muted-foreground: 215 16% 47%;
+            --border: 214 32% 91%;
+          }
+          body { background: #fff; color: hsl(222 47% 11%); }
           body * { visibility: hidden; }
           [data-report], [data-report] * { visibility: visible; }
           [data-report] { position: absolute; inset: 0; padding: 0; }
           [data-print-hide] { display: none !important; }
-          /* Browsers drop background fills when printing to save ink, which
-             would leave the report's colour behind on screen. */
           [data-report] {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
           /* Nothing should be cut in half across a page break. */
-          [data-report] section, [data-report] li, [data-report] tr {
-            break-inside: avoid;
-          }
+          [data-report] section, [data-report] tr { break-inside: avoid; }
+          [data-report] thead { display: table-header-group; }
         }
       `}</style>
 
       <div data-print-hide>
         <h1 className="text-2xl font-semibold">Reports</h1>
-        <p className="text-sm text-muted-foreground">
-          Pick somebody and a period: what they weighed, what it earned, and what money changed
-          hands.
-        </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2" data-print-hide>
+        {/* Who. A select rather than a table of people to click: the report
+            is about one person at a time, and the list is short. */}
+        <Select value={chosen} onValueChange={setChosen}>
+          <SelectTrigger className="w-60" aria-label="Person">
+            <SelectValue placeholder="Select Person" />
+          </SelectTrigger>
+          <SelectContent>
+            {people.map((person, index) => (
+              <div key={person.id}>
+                {index > 0 && <SelectSeparator />}
+                <SelectItem value={person.username as string}>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+                      aria-hidden
+                    >
+                      {person.role === 'ADMIN' ? (
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                      ) : (
+                        <UserRound className="h-3.5 w-3.5" />
+                      )}
+                    </span>
+                    {person.name}
+                  </span>
+                </SelectItem>
+              </div>
+            ))}
+          </SelectContent>
+        </Select>
+
         {RANGES.map(({ key, label }) => (
           <Button
             key={key}
@@ -506,85 +565,69 @@ export function ReportsPage() {
           <CalendarDays className="h-4 w-4" />
           {rangeKey === 'custom' ? customLabel : 'Pick dates'}
         </Button>
+
+        {/* The hours inside those days. Beside the dates rather than under
+            them, because the two answer one question together. */}
+        <div className="flex items-center gap-2 rounded-md border px-2 py-1">
+          <Clock3 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <label htmlFor="report-from-time" className="sr-only">
+            From this time
+          </label>
+          <Input
+            id="report-from-time"
+            type="time"
+            value={fromTime}
+            onChange={(event) => setFromTime(event.target.value)}
+            className="tabular h-8 w-[7.5rem] border-0 px-1 shadow-none focus-visible:ring-0"
+          />
+          <span className="text-muted-foreground">–</span>
+          <label htmlFor="report-to-time" className="sr-only">
+            To this time
+          </label>
+          <Input
+            id="report-to-time"
+            type="time"
+            value={toTime}
+            onChange={(event) => setToTime(event.target.value)}
+            className="tabular h-8 w-[7.5rem] border-0 px-1 shadow-none focus-visible:ring-0"
+          />
+
+          {narrowed && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-muted-foreground"
+              onClick={() => {
+                setFromTime(DAY_START);
+                setToTime(DAY_END);
+              }}
+              aria-label="Use the whole day"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* The list of people, and the report under it. Under rather than
-          beside, because on a phone a sidebar is a row of nothing. */}
-      <Card data-print-hide>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Username</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead className="text-right">&nbsp;</TableHead>
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {roster.isLoading ? (
-                Array.from({ length: 3 }, (_, index) => (
-                  <TableRow key={index}>
-                    {Array.from({ length: 4 }, (_, cell) => (
-                      <TableCell key={cell}>
-                        <Skeleton className="h-5 w-full" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : people.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
-                    Nobody to report on yet. Add people on the Operators screen.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                people.map((person) => (
-                  <TableRow
-                    key={person.id}
-                    className={`cursor-pointer ${chosen?.id === person.id ? 'bg-muted/60' : ''}`}
-                    onClick={() => setChosen(person)}
-                  >
-                    <TableCell className="font-medium">{person.name}</TableCell>
-                    <TableCell className="tabular text-muted-foreground">
-                      {person.username}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="gap-1.5">
-                        {person.role === 'ADMIN' && <ShieldCheck className="h-3.5 w-3.5" />}
-                        {OPERATOR_ROLE_LABELS[person.role]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
-                        <FileText className="h-4 w-4" />
-                        View report
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {chosen && (
+      {chosen === '' ? (
+        <Card data-print-hide>
+          <CardContent className="p-10 text-center text-muted-foreground">
+            {roster.isLoading
+              ? 'Loading…'
+              : people.length === 0
+                ? 'Nobody to report on yet. Add people on the Operators screen.'
+                : 'Choose somebody to see their report.'}
+          </CardContent>
+        </Card>
+      ) : (
         <Card>
           <CardContent className="p-5">
-            <div className="mb-3 flex justify-end" data-print-hide>
-              <Button variant="ghost" size="sm" onClick={() => setChosen(null)}>
-                <X className="h-4 w-4" />
-                Close
-              </Button>
-            </div>
-
             {report.isLoading || !report.data ? (
               <div className="space-y-3">
-                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-20 w-full" />
                 <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-40 w-full" />
+                <Skeleton className="h-64 w-full" />
               </div>
             ) : (
               <Report report={report.data} />

@@ -23,7 +23,7 @@ import {
   useTheme,
 } from '@suarza/ui';
 import type { NetWeight, Weighment } from '@suarza/shared';
-import { HandCoins, LogOut, Menu as MenuIcon, Moon, Settings, Sun } from 'lucide-react';
+import { HandCoins, LogOut, Menu as MenuIcon, Moon, Settings, Sun, UserRound } from 'lucide-react';
 import { LiveWeightPanel } from './components/live-weight-panel.js';
 import { WeightCapture, type CapturedWeight } from './components/weight-capture.js';
 import { NewWeighmentForm } from './components/new-weighment-form.js';
@@ -254,13 +254,17 @@ export function App() {
             className="mr-auto h-12 w-auto"
           />
 
-          {/* Whose shift it is, beside the way out of it. Named rather than
-              implied: two people use this machine and the records carry
-              whoever is signed in. */}
+          {/* Who is signed in. Named rather than implied: several people use
+              this machine and the records carry whoever saved them. */}
           {shift.session && (
-            <div className="hidden text-right leading-tight sm:block">
-              <p className="text-sm font-medium">{shift.session.name}</p>
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">On shift</p>
+            <div className="hidden items-center gap-2 sm:flex">
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+                aria-hidden
+              >
+                <UserRound className="h-4 w-4" />
+              </span>
+              <p className="text-sm font-medium leading-tight">{shift.session.name}</p>
             </div>
           )}
 

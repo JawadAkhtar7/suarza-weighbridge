@@ -474,15 +474,54 @@ export const shiftCashPushSchema = z.object({
 export type ShiftCashPush = z.infer<typeof shiftCashPushSchema>;
 
 /**
+ * What one person did, one line at a time.
+ *
+ * Five kinds of thing happen in a shift and they are read as one story, in
+ * the order they happened: a truck weighed, a shift begun or ended, money
+ * taken or given. Three separate tables — one per source — made the reader
+ * do the ordering in their head.
+ *
+ * FLAT, not a union per kind. Every line lands in the same table with the
+ * same columns, and the fields a kind does not use are null; a discriminated
+ * union would be tidier in TypeScript and messier everywhere the table is
+ * actually drawn.
+ */
+export const REPORT_ACTIVITY_KINDS = [
+  'WEIGHMENT',
+  'SHIFT_START',
+  'SHIFT_END',
+  'MONEY_TAKEN',
+  'MONEY_GIVEN',
+] as const;
+export type ReportActivityKind = (typeof REPORT_ACTIVITY_KINDS)[number];
+
+export const reportActivitySchema = z.object({
+  id: z.string(),
+  kind: z.enum(REPORT_ACTIVITY_KINDS),
+  at: z.string().datetime({ offset: true }),
+  /** Money: what was charged, taken or given. Zero for a shift event. */
+  amount: z.number().default(0),
+  /** The weighing's own number, for the two kinds that have one. */
+  slip_number: z.string().nullable().default(null),
+  vehicle_type: z.string().nullable().default(null),
+  vehicle_type_label: z.string().nullable().default(null),
+  vehicle_plate: z.string().nullable().default(null),
+  /** Who the money came from or went to. */
+  counterpart: z.string().nullable().default(null),
+  /** Anything else worth reading on the line — how long a shift ran. */
+  detail: z.string().nullable().default(null),
+});
+
+export type ReportActivity = z.infer<typeof reportActivitySchema>;
+
+/**
  * One person's account of a stretch of time.
  *
- * Replaced a screen that laid two shifts side by side and asked the manager
- * to work out whether the money added up. This asks a simpler question and
- * answers it in full: for this person, between these two moments — how many
- * trucks, how much charged, what money came in, what went out, and when.
- *
- * Nothing is stored. Every figure is counted from the records each time, so
- * a report cannot drift from what the records say.
+ * Built from three things that are each recorded for their own reasons — the
+ * weighings, the money written down, and the shift log — and added up here
+ * rather than stored anywhere. A stored total is a total that can disagree
+ * with the records it came from, and the whole value of a report is that it
+ * cannot.
  */
 export const userReportSchema = z.object({
   operator: z.string(),
@@ -495,29 +534,19 @@ export const userReportSchema = z.object({
   weighments: z.number().int().min(0),
   /** What those weighings charged. */
   takings: z.number(),
-
   /** Money handed TO them, and money they handed on. */
   money_taken: z.number(),
   money_given: z.number(),
-  /** Every movement they wrote down, oldest first. */
-  movements: z.array(shiftCashEntrySchema),
 
-  /** A line per day they worked, for the body of the report. */
-  days: z.array(
-    z.object({
-      date: z.string(),
-      weighments: z.number().int().min(0),
-      takings: z.number(),
-    }),
-  ),
-
-  /** When they were signed in, from the shift log. */
-  sessions: z.array(
-    z.object({
-      started_at: z.string().datetime({ offset: true }),
-      ended_at: z.string().datetime({ offset: true }).nullable(),
-    }),
-  ),
+  /** Everything that happened, oldest first. */
+  activities: z.array(reportActivitySchema),
+  /**
+   * True when there was more than one page of it.
+   *
+   * A month of weighings is thousands of lines, and a report nobody can
+   * scroll to the end of is not more honest than one that says so.
+   */
+  truncated: z.boolean().default(false),
 });
 
 export type UserReport = z.infer<typeof userReportSchema>;
