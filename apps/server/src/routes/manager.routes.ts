@@ -3,6 +3,8 @@
 import { Router } from 'express';
 import {
   logQuerySchema,
+  managerCashSchema,
+  managerPocketQuerySchema,
   managerVoidWeighmentSchema,
   saveOperatorSchema,
   userReportQuerySchema,
@@ -18,6 +20,7 @@ import { restoreWeighmentBySlip, voidWeighmentBySlip } from '../services/void-we
 import { listRoster, removeOperator, saveOperator } from '../services/roster.service.js';
 import { listLogs } from '../services/log.service.js';
 import { buildUserReport } from '../services/user-report.service.js';
+import { managerPocket, recordManagerCash } from '../services/manager-cash.service.js';
 import { parse } from './helpers.js';
 
 export function managerRouter(jwtSecret: string): Router {
@@ -157,6 +160,40 @@ export function managerRouter(jwtSecret: string): Router {
    */
   router.get('/api/reports/user', ...guard, async (req, res) => {
     res.json(await buildUserReport(parse(userReportQuerySchema, req.query)));
+  });
+
+  /**
+   * The manager's own pocket, and the movements behind it.
+   *
+   * Keyed on the signed-in manager: two of them keep two pockets, which is
+   * what anybody would expect of a pocket. Behind the dashboard guard, like
+   * everything else that only reads.
+   */
+  router.get('/api/manager/pocket', ...guard, async (req, res) => {
+    const query = parse(managerPocketQuerySchema, req.query);
+    res.json(
+      await managerPocket(
+        { username: req.user?.username ?? 'unknown', displayName: req.user?.display_name ?? '' },
+        new Date(query.from),
+        new Date(query.to),
+      ),
+    );
+  });
+
+  /**
+   * Write down a movement from the manager's side.
+   *
+   * The same guard as reading it: this records what already happened in the
+   * yard rather than changing how the yard is set up, and a manager who can
+   * see the pocket is the person holding it.
+   */
+  router.post('/api/manager/cash', ...guard, async (req, res) => {
+    const input = parse(managerCashSchema, req.body);
+    await recordManagerCash(
+      { username: req.user?.username ?? 'unknown', displayName: req.user?.display_name ?? '' },
+      input,
+    );
+    res.status(201).json({ recorded: true });
   });
 
   /**

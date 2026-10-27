@@ -14,7 +14,7 @@
 
 import mongoose from 'mongoose';
 import type { InferSchemaType, Model } from 'mongoose';
-import { LOG_KINDS, OPERATOR_ROLES } from '@suarza/shared';
+import { LOG_KINDS } from '@suarza/shared';
 
 // Mongoose is CommonJS: Node's ESM interop does not expose every named
 // export, so the runtime values come off the default export.

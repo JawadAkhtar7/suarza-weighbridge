@@ -24,6 +24,7 @@ import {
   Truck,
   UserCog,
   Users,
+  Wallet,
   X,
 } from 'lucide-react';
 import { useAuth } from '../hooks/use-auth.js';
@@ -98,6 +99,13 @@ const NAV: NavItem[] = [
     description: 'Per person, per period',
     icon: FileText,
     tile: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  },
+  {
+    to: '/manager',
+    label: 'Manager',
+    description: 'Your pocket',
+    icon: Wallet,
+    tile: 'bg-teal-500/15 text-teal-600 dark:text-teal-400',
   },
 ];
 

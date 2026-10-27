@@ -15,7 +15,7 @@
  * with its colour intact.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DayPicker, type DateRange as PickerRange } from 'react-day-picker';
 import {
@@ -57,6 +57,8 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   LogIn,
   LogOut,
@@ -257,7 +259,19 @@ function periodLabel(from: string, to: string): string {
   return wholeDay ? days : `${days} · ${opens} – ${closes}`;
 }
 
+/** How many lines a screenful is. The paper takes them all. */
+const PAGE_SIZE = 25;
+
 function Report({ report }: { report: UserReport }) {
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(report.activities.length / PAGE_SIZE));
+
+  /* A new report is a new first page: staying on page 7 of somebody else's
+     fortnight would show an empty table and look broken. */
+  useEffect(() => {
+    setPage(1);
+  }, [report.operator, report.from, report.to]);
+
   return (
     /*
      * `print-color-adjust: exact` is what keeps the colour: browsers drop
@@ -345,7 +359,7 @@ function Report({ report }: { report: UserReport }) {
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-primary/20 pb-1">
           <h3 className="text-sm font-bold uppercase tracking-wide text-primary">Activity</h3>
           <span className="tabular text-xs text-muted-foreground">
-            {report.activities.length.toLocaleString()} entries, oldest first
+            {report.activities.length.toLocaleString()} entries, newest first
           </span>
         </div>
 
@@ -367,12 +381,22 @@ function Report({ report }: { report: UserReport }) {
               </TableHeader>
 
               <TableBody>
-                {report.activities.map((activity) => {
+                {report.activities.map((activity, index) => {
                   const style = ACTIVITY_STYLE[activity.kind];
                   const vehicle = vehicleOf(activity);
+                  const onThisPage = Math.floor(index / PAGE_SIZE) + 1 === page;
 
                   return (
-                    <TableRow key={activity.id}>
+                    /*
+                     * Every row is rendered; the ones not on this page are
+                     * hidden. The printed report is the WHOLE report — a
+                     * PDF of page 3 of 9 is not a report of anything — and
+                     * the print styles below undo this.
+                     */
+                    <TableRow
+                      key={activity.id}
+                      style={onThisPage ? undefined : { display: 'none' }}
+                    >
                       <TableCell className="tabular whitespace-nowrap align-top text-muted-foreground">
                         <span className="block">{formatTimePkt(activity.at)}</span>
                         <span className="block text-xs">{formatDatePkt(activity.at)}</span>
@@ -420,6 +444,44 @@ function Report({ report }: { report: UserReport }) {
           </div>
         )}
 
+        {pageCount > 1 && (
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 text-sm"
+            data-print-hide
+          >
+            <p className="text-muted-foreground">
+              Showing {(page - 1) * PAGE_SIZE + 1}–
+              {Math.min(page * PAGE_SIZE, report.activities.length)} of{' '}
+              {report.activities.length.toLocaleString()}
+              <span className="ml-1 text-xs">(printing gives every page)</span>
+            </p>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(page - 1)}
+                disabled={page <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Newer
+              </Button>
+              <span className="tabular text-muted-foreground">
+                Page {page} of {pageCount}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(page + 1)}
+                disabled={page >= pageCount}
+              >
+                Older
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
         {report.truncated && (
           <p className="text-xs text-muted-foreground">
             Only the first {report.activities.length.toLocaleString()} entries are listed. The
@@ -450,7 +512,16 @@ export function ReportsPage() {
   const narrowed = fromTime !== DAY_START || toTime !== DAY_END;
 
   const roster = useQuery({ queryKey: ['roster'], queryFn: api.roster });
-  const people = (roster.data?.operators ?? []).filter((person) => person.username);
+  /*
+   * The operators, not the managers.
+   *
+   * A manager's money is its own screen now — see the Manager page — and
+   * mixing the two put a person with no weighings in a list of people
+   * reported on by their weighings.
+   */
+  const people = (roster.data?.operators ?? []).filter(
+    (person) => person.username && person.role !== 'ADMIN',
+  );
 
   const report = useQuery({
     queryKey: ['user-report', chosen, range.from, range.to],
@@ -514,6 +585,8 @@ export function ReportsPage() {
           /* Nothing should be cut in half across a page break. */
           [data-report] section, [data-report] tr { break-inside: avoid; }
           [data-report] thead { display: table-header-group; }
+          /* The paper takes every row, whichever page is on screen. */
+          [data-report] tbody tr { display: table-row !important; }
         }
       `}</style>
 

@@ -570,6 +570,65 @@ export const userReportQuerySchema = z.object({
 export type UserReportQuery = z.infer<typeof userReportQuerySchema>;
 
 // ---------------------------------------------------------------------------
+// The manager's own pocket (client request, October 2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * What the manager has in hand.
+ *
+ * A manager is a party to the same handovers the operators record — the
+ * takings come in at the end of a shift, a float goes out at the start —
+ * and until now they could only watch those movements from the other side.
+ * This is the same ledger read from theirs: everything that named them,
+ * whoever wrote it down, plus what they record here themselves.
+ *
+ * `net` is what the arithmetic says they are holding: taken less given. It
+ * is counted from the movements each time, never stored.
+ */
+export const managerPocketSchema = z.object({
+  /** Whose pocket — the signed-in manager's own username. */
+  manager: z.string(),
+  manager_name: z.string(),
+
+  /** Every movement ever, so the headline figure means "in hand now". */
+  all_time_taken: z.number(),
+  all_time_given: z.number(),
+  all_time_net: z.number(),
+
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
+  range_taken: z.number(),
+  range_given: z.number(),
+  range_net: z.number(),
+
+  /** The movements inside the range, newest first. */
+  movements: z.array(reportActivitySchema),
+});
+
+export type ManagerPocket = z.infer<typeof managerPocketSchema>;
+
+export const managerPocketQuerySchema = z.object({
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
+});
+
+export type ManagerPocketQuery = z.infer<typeof managerPocketQuerySchema>;
+
+/**
+ * One movement, as the manager records it.
+ *
+ * The same two figures the operators are asked for, from the manager's own
+ * side: what they took from this person, and what they gave them.
+ */
+export const managerCashSchema = z.object({
+  person_name: z.string().trim().min(1, 'Choose who the money moved with').max(80),
+  taken: z.number().finite().min(0).max(100_000_000).default(0),
+  given: z.number().finite().min(0).max(100_000_000).default(0),
+});
+
+export type ManagerCashInput = z.infer<typeof managerCashSchema>;
+
+// ---------------------------------------------------------------------------
 // The log (client request, October 2026)
 // ---------------------------------------------------------------------------
 

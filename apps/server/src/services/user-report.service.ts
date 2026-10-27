@@ -72,7 +72,9 @@ export async function buildUserReport(query: UserReportQuery): Promise<UserRepor
         vehicle_type_label: 1,
         vehicle_plate: 1,
       })
-      .sort({ first_weight_at: 1 })
+      /* The most recent, not the first: a report that has to be cut keeps
+         the end a manager is asking about rather than the beginning. */
+      .sort({ first_weight_at: -1 })
       .limit(MAX_ACTIVITIES)
       .lean(),
 
@@ -249,9 +251,10 @@ export async function buildUserReport(query: UserReportQuery): Promise<UserRepor
     }
   }
 
-  /* Oldest first, with a stable tiebreak so two things in the same second
-     do not swap places between one reading of the report and the next. */
-  activities.sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+  /* Newest first — the last thing that happened is what a manager opens
+     this for — with a stable tiebreak so two things in the same second do
+     not swap places between one reading of the report and the next. */
+  activities.sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
 
   const headline = totals[0] ?? { weighments: 0, takings: 0 };
 

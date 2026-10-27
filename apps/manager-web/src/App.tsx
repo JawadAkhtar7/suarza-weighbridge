@@ -21,6 +21,7 @@ import { VehicleTypesPage } from './pages/vehicle-types-page.js';
 import { OperatorsPage } from './pages/operators-page.js';
 import { LogsPage } from './pages/logs-page.js';
 import { ReportsPage } from './pages/reports-page.js';
+import { ManagerPage } from './pages/manager-page.js';
 
 function NoAccess() {
   const { user, signOut } = useAuth();
@@ -71,6 +72,8 @@ export function App() {
           {/* One person, one period: what they weighed, what it earned and
               what money changed hands. */}
           <Route path="reports" element={<ReportsPage />} />
+          {/* The manager's own pocket: what they hold, and how it moved. */}
+          <Route path="manager" element={<ManagerPage />} />
           {/* Anything else is a mistyped or stale URL; the dashboard is the
               safe landing place. */}
           <Route path="*" element={<Navigate to="/" replace />} />

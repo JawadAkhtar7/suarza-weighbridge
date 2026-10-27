@@ -327,7 +327,7 @@ describe('what the report counts', () => {
     expect(shifts.map((line) => line.kind)).toEqual(['SHIFT_START', 'SHIFT_END', 'SHIFT_START']);
   });
 
-  it('tells one story, oldest first, whatever the lines came from', async () => {
+  it('tells one story, newest first, whatever the lines came from', async () => {
     await ingest([weighedBy('imran', '09:00', 300)], []);
     await pushCash({ person_name: 'Bilal', person_taken: 4000 });
     await request(app)
@@ -350,11 +350,11 @@ describe('what the report counts', () => {
 
     const report = await buildUserReport({ operator: 'imran', ...range });
 
-    // 08:00 the shift, 09:00 the truck, 09:30 the money.
+    // Newest first: 09:30 the money, 09:00 the truck, 08:00 the shift.
     expect(report.activities.map((line) => line.kind)).toEqual([
-      'SHIFT_START',
-      'WEIGHMENT',
       'MONEY_TAKEN',
+      'WEIGHMENT',
+      'SHIFT_START',
     ]);
   });
 

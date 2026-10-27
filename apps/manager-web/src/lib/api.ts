@@ -8,6 +8,9 @@
 import type {
   Analytics,
   CreateCustomerInput,
+  ManagerCashInput,
+  ManagerPocket,
+  ManagerPocketQuery,
   SaveOperatorInput,
   Operator,
   Roster,
@@ -161,6 +164,16 @@ export const api = {
 
   removeOperator: (id: string) =>
     request<void>(`/api/operators/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** What the signed-in manager has in hand, and how it got there. */
+  managerPocket: (query: ManagerPocketQuery) =>
+    request<ManagerPocket>(`/api/manager/pocket?${toQueryString(query)}`),
+
+  recordManagerCash: (input: ManagerCashInput) =>
+    request<{ recorded: boolean }>('/api/manager/cash', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 
   /** One person's account of a stretch of time. */
   userReport: (query: UserReportQuery) =>
